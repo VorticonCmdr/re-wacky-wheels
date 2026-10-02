@@ -741,7 +741,7 @@ function EnvelopeGenerator(opl){
     this.resolutionMaximum = this.dBtoX(-0.1875);
     this.percentage10 = this.percentageToX(0.1);
     this.percentage90 = this.percentageToX(0.9);
-    
+
     this.envelope = -96;
 }
 EnvelopeGenerator.Stage = {
