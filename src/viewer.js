@@ -272,7 +272,7 @@ async function loadFiles(files) {
   const token = ++state.loadId; cleanup(); status('Reading your original files…');
   const entries = [], warnings = []; const limit = 64 * 1024 * 1024;
   for (const file of files) {
-    const name = file.name.toLowerCase(), ext = extension(name), source = file.path ?? file.webkitRelativePath ?? file.name;
+    const name = file.name.toLowerCase(), ext = extension(name), source = file.path || file.webkitRelativePath || file.name;
     if (name.startsWith('.') || !['dat', 'pcx', 'sp', 'par', 'voc', 'mid', 'klm', 'cfg', 'hi', 'tim', 'dtt', 'gam', 'm', 'rd', 'spw', 'pos', 'tab', 'atr', 'bmc', 'htt', 'ott', 'bin', 'inf', 'ing', 'sdx', 'fx', 'mov', 'xy', ''].includes(ext)) continue;
     if (file.size > limit) { warnings.push(`${name} exceeds the 64 MB per-file limit`); continue; }
     try {
@@ -315,6 +315,10 @@ async function loadLocal() {
   } catch (e) { status(e.message, true); } finally { $('local').disabled = false; }
 }
 $('local').onclick = loadLocal; $('welcome-load').onclick = loadLocal;
+for (const label of document.querySelectorAll('label.button')) {
+  label.tabIndex = 0; label.setAttribute('role', 'button');
+  label.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.getElementById(label.htmlFor).click(); } };
+}
 for (const id of ['files', 'folder']) $(id).onchange = async event => { await loadFiles([...event.target.files]); event.target.value = ''; };
 $('search').oninput = renderList; $('format').onchange = renderList;
 $('download').onclick = () => { if (state.selected) download(state.selected.data, state.selected.name); };
