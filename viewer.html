@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="theme-color" content="#151d22"><title>Wacky Wheels · Asset garage</title><link rel="stylesheet" href="./src/style.css"></head>
+<body>
+  <header class="masthead">
+    <a class="brand" href="./viewer.html"><span class="brand-icon" aria-hidden="true">WW</span><span>WACKY WHEELS<small>THE ASSET GARAGE</small></span></a>
+    <span class="edition">1994 → THE BROWSER</span>
+    <div class="load-actions"><button id="local" class="primary">Load local game</button><label class="button" for="files">Open files<input id="files" type="file" multiple accept=".dat,.pcx,.sp,.par,.voc,.mid,.klm,.cfg,.hi,.tim,.dtt" hidden></label><label class="button secondary" for="folder">Open folder<input id="folder" type="file" webkitdirectory multiple hidden></label></div>
+  </header>
+  <div class="intro"><div><p class="eyebrow">UNDER THE HOOD</p><h1>Every pixel. Every engine note.</h1><p>Explore the original graphics, tracks and sounds. Straight from the game files.</p></div><div class="collection"><strong id="asset-total">—</strong><span>ASSETS IN THE GARAGE</span></div></div>
+  <p id="status" class="status" role="status" aria-live="polite">Load your local game, or open WACKY.DAT. Files stay in this browser.</p>
+  <main class="workspace">
+    <aside class="library">
+      <div class="library-head"><h2>Collection</h2><span id="result-count">0</span></div>
+      <label class="search"><span aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Find an asset…" aria-label="Search assets"></label>
+      <nav id="filters" aria-label="Asset categories"></nav>
+      <label class="format-filter">File format<select id="format"><option value="">All formats</option></select></label>
+      <div id="asset-list" class="asset-list" aria-label="Assets"><p class="empty-list">Your collection will appear here.</p></div>
+      <div class="library-footer">Original files · Read only</div>
+    </aside>
+    <section class="inspector" aria-label="Asset preview">
+      <header class="asset-head"><div><p id="asset-category" class="eyebrow">READY WHEN YOU ARE</p><h2 id="asset-name">Welcome to the garage</h2><p id="asset-meta">Load WACKY.DAT to get started.</p></div><div><button id="download" disabled>↓ Original</button><button id="export-png" hidden>↓ PNG</button></div></header>
+      <div class="preview-shell"><div id="preview"><div class="welcome"><div class="welcome-mark" aria-hidden="true">🏁</div><h3>A little nostalgia, byte by byte.</h3><p>Browse sprites and palettes, inspect all 42 tracks, and listen to the soundtrack. Your original game files power everything.</p><button id="welcome-load" class="primary">Open the garage</button><small>On a hosted copy, choose Open files or Open folder.</small></div></div></div>
+      <section id="controls" class="controls" aria-label="Preview controls" hidden></section>
+      <section class="details-section"><div class="section-head"><h3>Asset details</h3><button id="hex-toggle" aria-expanded="false">Show bytes</button></div><div id="details"><p class="muted">Select an asset to see its dimensions, format and related files.</p></div><pre id="hex" hidden></pre></section>
+    </section>
+  </main>
+  <footer class="page-footer"><span>A first step toward a vanilla JavaScript port.</span><a href="https://moddingwiki.shikadi.net/wiki/Wacky_Wheels" target="_blank" rel="noreferrer">Format research ↗</a></footer>
+  <script type="module" src="./src/viewer.js"></script>
+</body>
+</html>
