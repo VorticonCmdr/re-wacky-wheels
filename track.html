@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10181d" />
+    <title>Track workshop · Wacky Wheels</title>
+    <link rel="stylesheet" href="./src/track.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="./viewer.html" title="Go to the asset viewer"
+        ><span class="brand-icon">W</span
+        ><span>Wacky Wheels<small>TRACK WORKSHOP</small></span></a
+      >
+      <div class="file-actions">
+        <button id="local">Load local game</button
+        ><button id="open">Open WACKY.DAT</button
+        ><input id="file" type="file" accept=".dat,.lid" hidden />
+      </div>
+      <span id="save-state" class="save-state"
+        >Your originals stay untouched</span
+      >
+      <button id="help" title="Tools and keyboard shortcuts (?)">?</button>
+      <div class="export-actions">
+        <button id="save-draft" disabled>Save project</button
+        ><button id="export" class="primary" disabled>
+          Export edited DAT ↓
+        </button>
+      </div>
+    </header>
+    <div id="draft-banner" class="banner" hidden>
+      <span>A saved draft was found for these game files.</span
+      ><button id="restore-draft">Restore draft</button
+      ><button id="discard-draft">Discard</button>
+    </div>
+    <main class="workshop">
+      <aside class="library panel">
+        <div class="section-heading">
+          <h1>Track workshop</h1>
+          <span id="track-count" class="badge">—</span>
+        </div>
+        <div class="track-picker">
+          <button
+            id="previous"
+            title="Previous track"
+            aria-label="Previous track"
+            disabled
+          >
+            ‹</button
+          ><select id="track" aria-label="Track" disabled>
+            <option>Load game files to begin</option></select
+          ><button
+            id="next"
+            title="Next track"
+            aria-label="Next track"
+            disabled
+          >
+            ›
+          </button>
+        </div>
+        <p id="track-meta" class="muted">
+          Build with the original tiles, routes and objects.
+        </p>
+        <div class="tabs" role="tablist" aria-label="Asset palette">
+          <button
+            id="tiles-tab"
+            role="tab"
+            aria-selected="true"
+            aria-controls="tile-panel"
+          >
+            Tiles</button
+          ><button
+            id="objects-tab"
+            role="tab"
+            aria-selected="false"
+            aria-controls="object-panel"
+          >
+            Objects
+          </button>
+        </div>
+        <div
+          id="tile-panel"
+          class="palette-panel"
+          role="tabpanel"
+          aria-labelledby="tiles-tab"
+        >
+          <div class="palette-controls">
+            <input
+              id="tile-search"
+              type="search"
+              placeholder="Find tile by number…"
+              aria-label="Find tile by number"
+            /><label class="check"
+              ><input id="used-only" type="checkbox" /> Used in track</label
+            >
+          </div>
+          <div id="tiles" class="tile-grid">
+            <p class="muted empty-palette">The tile palette appears here.</p>
+          </div>
+        </div>
+        <div
+          id="object-panel"
+          class="palette-panel"
+          role="tabpanel"
+          aria-labelledby="objects-tab"
+          hidden
+        >
+          <input
+            id="object-search"
+            type="search"
+            placeholder="Find an object…"
+            aria-label="Find an object"
+          />
+          <div id="objects" class="object-grid"></div>
+        </div>
+        <div class="library-footer">
+          <button id="import-draft">Open project</button
+          ><input id="project-file" type="file" accept=".json" hidden /><a
+            href="./viewer.html"
+            >Asset viewer ↗</a
+          >
+        </div>
+      </aside>
+      <section class="workspace" aria-label="Track editing area">
+        <div class="toolbar" role="toolbar" aria-label="Editing tools">
+          <div class="tools">
+            <button data-tool="brush" class="active" title="Brush (B)">
+              <span>✎</span> Brush
+            </button>
+            <button data-tool="rectangle" title="Rectangle (R)">
+              <span>▧</span> Box
+            </button>
+            <button data-tool="fill" title="Fill connected tiles (F)">
+              <span>▨</span> Fill
+            </button>
+            <button
+              data-tool="eyedropper"
+              title="Pick a tile (I); Alt also picks while painting"
+            >
+              <span>⌖</span> Pick
+            </button>
+            <button data-tool="route" title="Edit AI waypoints (V)">
+              <span>⌁</span> Route
+            </button>
+            <button data-tool="object" title="Place and move objects (O)">
+              <span>◆</span> Object
+            </button>
+            <button data-tool="start" title="Move the start position (S)">
+              <span>⚑</span> Start
+            </button>
+            <button
+              data-tool="pan"
+              title="Pan (H); hold Space or use the middle mouse button"
+            >
+              <span>✥</span> Pan
+            </button>
+          </div>
+          <div class="history">
+            <button
+              id="settings"
+              aria-expanded="false"
+              aria-controls="inspector"
+            >
+              Details</button
+            ><button
+              id="undo"
+              title="Undo (Ctrl/⌘ Z)"
+              disabled
+              aria-label="Undo"
+            >
+              ↶</button
+            ><button
+              id="redo"
+              title="Redo (Ctrl/⌘ Shift Z)"
+              disabled
+              aria-label="Redo"
+            >
+              ↷
+            </button>
+          </div>
+        </div>
+        <div class="optionsbar">
+          <label
+            >Brush
+            <select id="brush-size" aria-label="Brush size">
+              <option value="1">1 × 1</option>
+              <option value="2">2 × 2</option>
+              <option value="3">3 × 3</option>
+              <option value="5">5 × 5</option>
+              <option value="8">8 × 8</option>
+            </select></label
+          ><span id="tool-hint">Brush · drag to paint. Alt picks a tile.</span
+          ><button id="fit" title="Fit track (0)">Fit</button
+          ><button id="zoom-out" aria-label="Zoom out">−</button
+          ><output id="zoom">—</output
+          ><button id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+        <div id="viewport" class="viewport">
+          <canvas
+            id="map"
+            tabindex="0"
+            aria-label="Track canvas. Use pointer tools to edit; keyboard shortcuts are listed in Help."
+          ></canvas>
+          <div id="welcome" class="welcome">
+            <span class="welcome-mark">⚑</span>
+            <h2>Your next great race starts here.</h2>
+            <p>
+              Open your original WACKY.DAT, or drop it anywhere.<br />Pick a
+              track, grab a tile, and start building.
+            </p>
+            <button id="welcome-open" class="primary">Open game files</button
+            ><small
+              >Everything is edited locally. Original files are never
+              overwritten.</small
+            >
+          </div>
+          <div class="minimap-box" id="minimap-box" hidden>
+            <canvas
+              id="minimap"
+              width="160"
+              height="160"
+              aria-label="Track overview. Click or drag to navigate."
+              tabindex="0"
+            ></canvas
+            ><span>OVERVIEW</span>
+          </div>
+          <div id="drop-hint" hidden>Drop WACKY.DAT here</div>
+        </div>
+        <footer class="statusbar">
+          <span id="status" role="status" aria-live="polite"
+            >Ready when you are.</span
+          ><span id="coordinates">64 × 64 tiles · 2,048 × 2,048 pixels</span>
+        </footer>
+      </section>
+      <aside class="inspector panel" id="inspector">
+        <button id="close-settings" aria-label="Close track details">×</button>
+        <h2>At a glance</h2>
+        <div id="selection" class="selection">
+          <p class="muted">Load a track to see its details.</p>
+        </div>
+        <h2>Layers</h2>
+        <div class="layer-controls">
+          <label
+            ><input id="layer-grid" type="checkbox" checked /> Tile grid</label
+          ><label
+            ><input id="layer-route" type="checkbox" checked /> AI route</label
+          ><label
+            ><input id="layer-objects" type="checkbox" checked /> Objects</label
+          ><label
+            ><input id="layer-start" type="checkbox" checked /> Start
+            position</label
+          >
+        </div>
+        <label class="snap"
+          ><input id="snap" type="checkbox" /> Snap objects & route to tile
+          centers</label
+        >
+        <h2>Track actions</h2>
+        <div class="track-actions">
+          <button id="close-route" disabled>Close AI route loop</button
+          ><button id="export-map" disabled>Save track image ↓</button
+          ><button id="reset" class="danger" disabled>Reset this track…</button>
+        </div>
+        <div class="note">
+          <strong>Before racing</strong>
+          <p>
+            Surface painting uses the original tile properties. The wrong-way
+            progress grid and preview image stay as supplied. Major layout
+            changes need those updated before playing in DOS.
+          </p>
+        </div>
+        <details class="quick-help">
+          <summary>Quick controls</summary>
+          <p>
+            Scroll to zoom. Space + drag to pan. Alt + click to pick a tile.
+            Delete removes a selected object or waypoint.
+          </p>
+          <p>
+            Route: drag a node to move it; click elsewhere to insert one into
+            the nearest segment. Object: choose one in the palette, then click
+            to place it or drag an existing marker.
+          </p>
+        </details>
+      </aside>
+    </main>
+    <dialog id="help-dialog">
+      <button class="dialog-close" id="close-help" aria-label="Close help">
+        ×
+      </button>
+      <h2>Make yourself at home</h2>
+      <p>
+        Choose a track, pick a tile in the palette, and drag on the map. One
+        stroke is one undo step.
+      </p>
+      <div class="shortcut-grid">
+        <span>Brush / box / fill / pick</span><kbd>B / R / F / I</kbd
+        ><span>Route / object / start / pan</span><kbd>V / O / S / H</kbd
+        ><span>Pan temporarily</span><kbd>Space + drag</kbd
+        ><span>Pick temporarily</span><kbd>Alt + click</kbd
+        ><span>Zoom / fit</span><kbd>Scroll / 0</kbd><span>Undo / redo</span
+        ><kbd>Ctrl/⌘ Z / Shift Z</kbd><span>Save project</span
+        ><kbd>Ctrl/⌘ S</kbd><span>Delete selected item</span><kbd>Delete</kbd
+        ><span>Duplicate selected object</span><kbd>Ctrl/⌘ D</kbd
+        ><span>Cancel gesture / clear selection</span><kbd>Esc</kbd>
+      </div>
+      <p>
+        Drafts save in this browser when storage is available.
+        <strong>Save project</strong> downloads a portable draft; reopen it with
+        the same original archive. <strong>Export edited DAT</strong> includes
+        changes across every edited track. It downloads a new archive, leaving
+        your source files untouched.
+      </p>
+      <p class="muted">
+        The editor preserves unknown fields, original object attributes, and all
+        untouched archive assets. Wrong-way grids, collision masks, and
+        thumbnail previews are not regenerated. The playable browser port is
+        still to come.
+      </p>
+    </dialog>
+    <dialog id="reset-dialog">
+      <h2>Reset this track?</h2>
+      <p>
+        This restores the selected track to the loaded archive. You can undo the
+        reset.
+      </p>
+      <div class="dialog-actions">
+        <button id="cancel-reset">Keep editing</button
+        ><button id="confirm-reset" class="danger">Reset track</button>
+      </div>
+    </dialog>
+    <script type="module" src="./src/track-editor.js"></script>
+  </body>
+</html>

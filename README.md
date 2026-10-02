@@ -1,6 +1,6 @@
 # Wacky Wheels · browser port
 
-The first milestone is `viewer.html`: a read-only asset garage built with HTML, CSS and vanilla JavaScript. Vite handles local development and static builds. The playable racing game is the next milestone; this repository currently contains the asset viewer, not a complete gameplay port.
+The project includes `viewer.html`, a read-only asset garage, and `track.html`, a track workshop built with HTML, CSS and vanilla JavaScript. Vite handles local development and static builds. The playable racing game is the next milestone; this repository currently contains the viewer and track editor, not a complete gameplay port.
 
 ## Run locally
 
@@ -27,6 +27,12 @@ Alternatively, use **Open files**, **Open folder**, or drop `WACKY.DAT` onto the
 - Render KLM with its original instruments through an OPL emulator. Render MIDI notes with an approximate synthesizer. Render in a cancellable worker; preview 30 seconds, 2 minutes, or the full song, and export WAV.
 - Read high-score tables, sprite attributes, routes, spawns, demo controls, and known saved-game fields. Plot motion, trig, acceleration and numeric tables. Render B800 exit screens.
 
+## Track workshop
+
+Open **Track workshop** from the viewer, or visit `track.html`. It automatically loads your local originals in development, and accepts your own WACKY.DAT on static hosting. Paint tiles with a variable-size brush, rectangles and flood fill; sample tiles; zoom, pan and navigate with a minimap. Edit AI waypoints, object placement/types, and start positions with optional tile-center snapping. Each track keeps its own undo/redo history.
+
+Browser drafts offer recovery after reopening. Download portable projects or export an edited DAT containing changes across all modified tracks. Originals and unknown fields remain untouched. Wrong-way progress grids, thumbnail previews and property masks are preserved rather than regenerated, so major layout changes still need those updated before racing in DOS. Read the [editor guide and shortcuts](docs/track-editor.md).
+
 ## Accuracy and current limits
 
 Not every original layout is fully understood. Uncatalogued SP sheets can contain mixed-size frames, so their initial dimensions are estimates and can be adjusted. Select the appropriate track/screen palette for raw sprites. POS has unexplained extra bytes; SIN and several projection tables conflict with the wiki. Their uncertain fields are labelled rather than assigned guessed meanings. Unknown metadata is available as raw bytes/numeric or byte-intensity previews.
@@ -44,15 +50,16 @@ Read the [format references](docs/README.md). Implementation observations:
 ```sh
 npm test
 npm run check:assets
+npm run check:tracks
 npm run build
 npm run preview
 ```
 
-Unit tests use synthetic binary fixtures, so they run without copyrighted files. `check:assets` validates every archive member handled by a documented decoder and smoke-renders all local songs. It requires your own game files; pass a different DAT path as an argument if needed.
+Unit tests use synthetic binary fixtures, so they run without copyrighted files. `check:assets` validates every archive member handled by a documented decoder and smoke-renders all local songs. The separate `check:tracks` command verifies all local track roundtrips, edit/undo/project restoration, and archive preservation. Both require your own game files; pass a different DAT path as an argument if needed.
 
 ## Future GitHub Pages deployment
 
-`npm run build` produces static `dist/index.html` and `dist/viewer.html`, plus relative asset links (`base: './'`) that work under a repository subpath. Deploy **only `dist/`** when a GitHub repository is ready. No remote or deployment has been configured yet.
+`npm run build` produces static `dist/index.html`, `dist/viewer.html`, and `dist/track.html`, plus relative asset links (`base: './'`) that work under a repository subpath. Deploy **only `dist/`** when a GitHub repository is ready. No remote or deployment has been configured yet.
 
 Visitors supply their own originals through **Open files** or **Open folder**. **Load local game** is a development-only convenience; static hosting cannot read the ignored directory on your computer. A future Pages workflow can run `npm ci`, `npm test`, and `npm run build` without needing the original files.
 
