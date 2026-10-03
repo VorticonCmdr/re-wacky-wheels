@@ -21,6 +21,8 @@
 //   keys  (--held 75,56) (game paused after those scancodes were held) the keyboard handler's key table words, last code and fixed flag bytes
 //   midi  (game paused, a MIDI song playing through the General MIDI sequencer) the sequencer's track records
 //   image  (WWHELP.EXE running, --segment N --bytes N) page CRC-32s of the program image in memory
+//   player  (a played race, paused; --script '[[frame,"KBD_x",true],...]' --stops N) consecutive stops at the player control routine's entry with the throttle and speed at each
+//   drive  (a played race, paused; --phases '[[["KBD_leftalt"],10],...]') random-time samples of the player's car and the input words while key groups are held
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -32,7 +34,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { ms: { type: 'string' }, phases: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -289,6 +291,51 @@ const scenarios = {
     for (let at = 0; at < length; at += pageBytes) pageCrcs.push(hex8(crc32(live.subarray(at, Math.min(at + pageBytes, length)))));
     const file = await readFile(resolve('analysis/dosbox/WACKY/WWHELP.EXE')); // the copy of the installed program that was run
     return { ...header, program: 'WWHELP.EXE', file: { size: file.length, sha1: sha1(file) }, segment: Number(values.segment), imageAt, pageBytes, bytes: length, pageCrcs };
+  },
+  async player() {
+    // (a played race, paused) consecutive stops at the entry of the player control routine (obj1+0x190a0, claim car.speed-model) while keys are held and released through the input
+    // interface: at each stop the throttle, speed, button words, boost words and terrain, then the next call's. Leaves the game paused at the last stop.
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = (path, body) => fetch(`${API}/api/v1${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) }), jget = async path => (await fetch(`${API}/api/v1${path}`)).json();
+    const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const ENTRY = 0x190a0, SELECTOR = 0x180, script = JSON.parse(values.script ?? '[]'), count = Number(values.stops ?? 200);
+    // Execute breakpoints added after the race code has run are not honoured (translated blocks are cached): arm one before the race is entered and pass --armed.
+    if (!values.armed) { await post('/debug/pause'); await fetch(`${API}/api/v1/debug/breakpoints`, { method: 'DELETE' }); await post('/debug/breakpoints', { type: 'execute', segment: SELECTOR, offset: b1 + ENTRY }); }
+    const events = script.flatMap(([frame, key, pressed]) => ({ type: 'key', key, pressed, frame }));
+    if (events.length) await post('/input/sequence', { events });
+    const waitStop = async since => { for (let i = 0; i < 600; i++) { const d = await jget('/debug/status'); if (d.debugging && d.stop.stop_id > since) return d.stop; await sleep(50); } return null; };
+    let last = values.armed ? (await jget('/debug/status')).stop.stop_id - 1 : (await jget('/debug/status')).stop?.stop_id ?? 0; // @math take the stop the game is already at when armed
+    if (!values.armed) await post('/debug/continue');
+    const samples = [];
+    for (let k = 0; k < count; k++) {
+      const stop = await waitStop(last); if (!stop) break; last = stop.stop_id;
+      const car = await i32(b2 + 0x1d5b0);
+      samples.push([stop.linear_eip - b1, await i16(car + 0x42), await i16(car + 0x26), await u16(b2 + 0x28b40), await u16(b2 + 0x28b44), await u16(b2 + 0x28be2), await i32(b2 + 0x1ec74), await i32(b2 + 0x1edb0), await i32(b2 + 0x1e568), await i16(car + 0xb4), await i16(car + 0xb6), await i16(b2 + 0x1e730 + 2 * (await i16(car + 0x42)))]);
+      await post('/debug/continue');
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), entry: ENTRY, script, columns: ['eip', 'throttle', 'speed', 'accelerate', 'brake', 'slowWord', 'modeDword', 'itemDword', 'terrain', 'boostActive', 'boostTimer', 'tableEntry'], samples };
+  },
+  async drive() {
+    // (a played race, paused) samples of the player's car while keys are held through the input interface: --phases '[[["KBD_leftalt"],10],[["KBD_left"],6],...]' holds the listed keys
+    // (releasing the previous group) for the given number of samples, each taken by resuming for a random 0.4 to 1.5 s and pausing again. Per sample: throttle, speed and the table entry for
+    // the throttle, accelerate and brake words, terrain, boost words, the steering bytes and words, and the key table's high bytes.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = (path, body) => fetch(`${API}/api/v1${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
+    const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), u8 = async a => (await readMemory(a, 1))[0];
+    const phases = JSON.parse(values.phases ?? '[]'), samples = [];
+    let down = [];
+    for (const [keys, n] of phases) {
+      for (let k = 0; k < n; k++) {
+        const events = [...(k ? [] : down.map(key => ({ type: 'key', key, pressed: false, frame: 1 }))), ...(k ? [] : keys.map(key => ({ type: 'key', key, pressed: true, frame: 2 })))];
+        if (events.length) await post('/input/sequence', events.length ? { events } : undefined);
+        await post('/debug/continue'); const [lo, hi] = (values.ms ?? '400,1500').split(',').map(Number); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(100); // @math a random run (default 0.4 to 1.5 s)
+        const car = await i32(b2 + 0x1d5b0), throttle = await i16(car + 0x42), keyTable = Buffer.from(await readMemory(b2 + 0x1b6d8, 12)), highs = []; for (let i = 0; i < 6; i++) highs.push(keyTable[i * 2 + 1]); // @math six words of player 1's table
+        samples.push([phases.indexOf(phases.find(p => p[0] === keys)), throttle, await i16(car + 0x26), await i16(b2 + 0x1e730 + 2 * throttle), await u16(b2 + 0x28b40), await u16(b2 + 0x28b44), await i32(b2 + 0x1e568), await i16(car + 0xb4), await i16(car + 0xb6),
+          await u8(b2 + 0x28cd5), await u8(b2 + 0x28cdd), await u16(b2 + 0x28b8c), await u16(b2 + 0x28b98), await u16(b2 + 0x28b90), await u16(b2 + 0x28b92), await u16(b2 + 0x28c7c), await u16(b2 + 0x28c0c), await u16(b2 + 0x1ea58), await i32(car + 0x36), await i16(car + 0x56), await i32(b2 + 0x1d5d4), ...highs]);
+      }
+      down = keys;
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.

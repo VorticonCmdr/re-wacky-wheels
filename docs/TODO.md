@@ -114,7 +114,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `input.key-handler` [STATIC] — the keyboard interrupt (vector 9, obj1+0x30907) writes the down flag to the high byte of the key table word whose low byte is the scancode
   - Gap: the table, last code and five fixed flag bytes were observed (`input.key-state`, PROVEN); the extended-key (0xe0) prefix handling and the steering flags are read, not run (the demo race overrides the keyboard, `demo.input-byte`).
 - [ ] `input.steer-flags` [STATIC] — key table words 0 and 1 (player 1) become the steering amounts obj2+0x28b92 (left, subtracted) and +0x28b90 (right, added); right wins
-  - Gap: read, not run; player 2's steering path and the mode-specific routines that write the same flags are not followed.
+  - Gap: the chain (key to byte to word to amount) and its sign were observed in a played race (`input.steer-observed`, PROVEN); player 2's steering path and the mode-specific routines that write the same flags are not followed.
 - [ ] `setup.sound-options` [STATIC] — voices (cfg 0x796: 2/4/6/8), mixing bits (0x79a: 8/16), MIDI address (0x7a2) and menu position (0x7a6); the game hands them to the sound library's init
   - Gap: read, not run; the library routines `obj1+0x31820` and `obj1+0x31fc8` are unread, the word 0x79e and the entry values of the MIDI address list are unknown. Next: read the library init, or run with a changed voice count (DOSBox run copy).
 - [ ] `setup.score-reset` [STATIC] — "Reset score tables" deletes WACKY1.TIM, WACKY2.TIM, WACKY1.HI, WACKY2.HI and WACKY.DTT
@@ -163,6 +163,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `car.speed-observed` and `input.steer-observed` PROVEN (check `obs-drive`, records `drive-1`, `drive-2`): a played race driven through the input interface: the throttle indexes the loaded VEL.TAB, the speed is that entry lowered by the surface fraction, and the left/right keys set the steering bytes, words and amounts and lower/raise the heading
 - [x] `lzexe.decode` and `wwhelp.image` PROVEN (check `obs-wwhelp`, record `wwhelp-1`): `WWHELP.EXE`'s packed image decodes to the program that runs under DOSBox (Simply Docs, the help viewer)
 - [x] `midi.driver-state` PROVEN (check `obs-midi`, records `midi-1` to `midi-5`): the General MIDI sequencer's track records at run time match the walk of the game's grammar for MAINMENU.MID and DANCE.MID
 - [x] `voc.rate-observed`, `klm.driver-state` and `input.key-state` PROVEN from DOSBox records (`voices-1/2`, `klm-1..5`, `keys-1..7`; checks `obs-voices`, `obs-klm`, `obs-keys`): the library's VOC rate rule (including rounding down: 13157, not 13158, after one byte of a loaded sound was changed), the AdLib driver's shadow tables against the product's KLM decoder, and the keyboard handler's table, last code and flag bytes

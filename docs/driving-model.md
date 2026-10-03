@@ -12,6 +12,9 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [STATIC] `input.steer-flags`: the high bytes of key table words 0 and 1 (player 1) become the bytes `obj2+0x28cd5` (left) and `+0x28cdd` (right), then the words `+0x28b8c`/`+0x28b98`, then the heading amounts `+0x28b92` (subtracted) and `+0x28b90` (added); with both keys down right wins.
 - [STATIC] `input.joystick`: with a stick selected the routine at `obj1+0x2784b` times the game port 0x201 and sets the same left, right, up and down bytes from calibrated thresholds, so the stick steers like the first two keys; up and down can also act as hand brake turn and brake.
 
+- [PROVEN] `car.speed-observed`: in a played race the loaded speed table holds `VEL.TAB`'s entry for the throttle (0 to the cap 100), the car record holds the surface's SDX fraction, and the speed is the entry minus `(entry x fraction) >> 16` (54 of 58 samples; the other 4 have a throttle already cleared).
+- [PROVEN] `input.steer-observed`: left alone sets the left byte, word and amount (20 or 40) and lowers the heading, right alone the right ones and raises it (a quarter turn is 480 of 1920); after a hand brake turn the amount was 120.
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.
