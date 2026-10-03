@@ -404,6 +404,14 @@ const scenarios = {
       const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
       floor = { columns, camera: [await i16(0x28b0a), await i16(0x28b0e)], heading: await i32(0x1d5d4), page: await i16(0x28b24), mode: await i16(0x28c20), drawList: list, track: await cstr(b2 + 0x1d770) };
     }
+    // The sky: the CRC-32 of each row of the rectangle spec.sky = [firstRow, lastRow, firstColumn, lastColumn] of the displayed page, with the heading and the sky name of the track.
+    let sky;
+    if (spec.sky) {
+      const [r0, r1, c0, c1] = spec.sky, rows = [];
+      for (let y = r0; y <= r1; y++) rows.push(hex8(crc32(image.subarray(y * W + c0, y * W + c1 + 1))));
+      const cstr2 = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+      sky = { rect: spec.sky, rows, heading: await i32(0x1d5d4), track: await cstr2(b2 + 0x1d770) };
+    }
     // The minimap (obj1+0x1a4ac): the 78 x 50 picture the routine redraws sits at the dword obj2+0x1eb3c (column by column); every screen pixel of its rectangle at (0, 60) that differs from it is a racer's dot.
     let minimap;
     if (spec.minimap) {
@@ -412,7 +420,7 @@ const scenarios = {
       const racers = []; for (let n = 0; n < 8; n++) racers.push([await i16(0xaaa6 + n * 0x68), await i16(0xaaa8 + n * 0x68)]); // @math eight racer records of 0x68 bytes: the x and y words
       minimap = { dots, racers, count: await i16(0x28c40), mode: await i16(0x28c0c), pictureCrc: hex8(crc32(buf)), tables: { x: [0x202cc, hex8(crc32(Buffer.from(await readMemory(b2 + 0x202cc, 2048))))], y: [0x1faca, hex8(crc32(Buffer.from(await readMemory(b2 + 0x1faca, 2048))))] } }; // @math the two 2048-byte tables of the minimap
     }
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}) };
   },
   async carframes() {
     // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.
