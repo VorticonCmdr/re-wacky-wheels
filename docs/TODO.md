@@ -111,6 +111,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: read, and seen to override the steering bytes in the attract-mode demo; where the byte is loaded from the `.BMC` demo file is unread, so the `.BMC` layout stays the wiki's lead.
 - [ ] `setup.joystick-poll` [STATIC] — SETUP's stick polling is the game's (port 0x201 timing loop, buttons from bits 0x10 to 0x80, direction bytes from the doubled totals), with a failure word for "Cannot find a joystick!"
   - Gap: read, not run; the stick test screen's drawing is unread.
+- [ ] `comm.config-use` [STATIC] — the words at 0x4f6/0x4fa are the modem and serial COM numbers, 0x4fe/0x53e/0x57e the modem strings and 0x606 the phone book, as SETUP's menus and the game's reads show
+  - Gap: read, not run; the modem dialling and connection test code, the serial protocol, the baud word the game uses and the rest of the modem menus are unread.
 - [ ] `manual.script` [STATIC] — Xview's script words are numbered 0 to 8 (comment, Loadpcx, Fade, Display, nomove, bounce, help, Echo, Waitkey) and parsed into 0x48-byte records, then run
   - Gap: read, not run; the page loader and display code, Fade and bounce are unread (Xview is a manual viewer, not game behavior).
 - [ ] `setup.joystick-calibration` [STATIC] — SETUP asks for centre, top-left and bottom-right stick positions and stores the centre and half-way thresholds (in the order the game loads them)
