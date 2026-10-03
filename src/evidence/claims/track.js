@@ -249,9 +249,9 @@ export default [
   },
   {
     id: 'UNKNOWN_SPW_FIELDS', tag: 'UNKNOWN',
-    statement: 'What the .SPW words mean is not established beyond where the loader puts them: the word at +0 is a sprite-catalogue index (sp.read proves the sprites loaded are the entries named there), +4 and +6 are coordinates with 0x0400 added (the map-to-world origin, terrain.lookup), and +2 is cleared. By the sprite-preparation routine (spw.frame) +8 is a tick counter and +0x0a the frame index of the object\'s sprite, which the game rewrites while running; what +2 is (cleared by the loader, 0xFFFF in some records later) and what the coordinates are for beyond drawing is not established.',
+    statement: 'What the .SPW words mean is established only in part: the word at +0 is a sprite-catalogue index (sp.read proves the sprites loaded are the entries named there), +4 and +6 are coordinates with 0x0400 added (the map-to-world origin, terrain.lookup), +8 is a tick counter and +0x0a the frame index of the object\'s sprite, which the game rewrites while running (spw.frame), and +2, cleared by the loader, is set to 0xffff when the player car takes the object (atr.kind-effects, obj1+0x1329c and +0x13309). What else reads or writes +2 (other users of the table at obj2+0x13938 are the routines at obj1+0x216a0, +0x218a4, +0x25a78 and +0x261fc) and what the coordinates are used for beyond drawing and the pickup test is not read.',
     evidence: {},
     leads: ['docs/spw.md'],
-    todo: 'Find the readers and writers of the object table word at +2 (obj2+0x1393a + 12 k) and what the objects do besides being drawn (collision, pickups).',
+    todo: 'Read the other users of the object table (obj1+0x216a0, +0x218a4, +0x25a78, +0x261fc) for their use of word +2.',
   },
 ];

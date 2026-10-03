@@ -1,7 +1,7 @@
 import { bytes, view, need, ascii } from './binary.js';
 import { parseAtr as parseAtrStrict } from './formats/atr.js';
 // The catalogue is read by the traced parser (src/formats/atr.js, claims atr.*); this adds the lower-cased
-// name and the type word the viewer shows. The record's other words stay unread (UNKNOWN_ATR_FIELDS).
+// name and the type word the viewer shows. The record's other words stay unread (atr.derived-words, atr.kind-effects).
 export function parseAtr(data) {
   return parseAtrStrict(bytes(data)).map(({ id, name, width, height, frames, raw }) => ({ id, type: view(raw).getInt16(0, true), width, height, frames, name: name.toLowerCase() }));
 }

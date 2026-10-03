@@ -41,9 +41,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `UNKNOWN_SIN_KEPT_FIELDS` [UNKNOWN] — what the property values mean as surfaces (track 2 yields 4, 5 and 7), and what the 4 discarded `.SIN` bytes hold
   - Gap: the kept 8 bytes are two dwords, one per mask value (`terrain.lookup`, proven); the lookup never reads the discarded 4.
   - Next: what the SDX fields and the compare cases (2, 3, 6, 0xa, 0xf) do, and whether anything reads the discarded bytes (consumers found: `terrain.sdx-index`).
-- [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what the `.SPW` words mean (id matches a sprite-catalogue index; +4/+6 are coordinates; +8 is a tick counter and +0x0a the frame index by `spw.frame`; +2 is cleared by the loader and set to 0xFFFF in some records later)
-  - Gap: what word +2 is and what the objects do besides being drawn (collision, pickups) is not read. Two recordings disagreed on which records the game rewrites (see `docs/spw.md`).
-  - Next: readers and writers of word +2 (obj2+0x1393a + 12 k).
+- [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 0xffff on pickup, `atr.kind-effects`) and what the coordinates are used for beyond drawing and pickups
+  - Next: the other users of the object table (obj1+0x216a0, +0x218a4, +0x25a78, +0x261fc).
 - [ ] `UNKNOWN_PAR_USE` [UNKNOWN] — what draws the uploaded pixels afterwards; lead: the file is a 1280 x 20 panorama shown as a 320-pixel window on screen rows 110 to 129 (seen once by comparing a frame, not wiki's 640 x 40)
   - Next: find the code that addresses video memory at 0xa0000 + 0x7d00 (latch copies like obj1+0x26f14), cite how it picks the window, and add a check that compares a recorded frame with the file; then fix the viewer's 640 x 40.
 
@@ -65,10 +64,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ### Sprites (`SPRITE.ATR`, `.SP`)
 
-- [ ] `atr.kind-use` [STATIC] — the catalogue word +0 is an object kind a routine at obj1+0x13227 branches on (≤ 0, 1, 2, others each go to different code)
-  - Gap: read only as branch structure; the routine's purpose (collision with objects?) is not established and nothing was observed.
-- [ ] `UNKNOWN_ATR_FIELDS` [UNKNOWN] — what the catalogue kind word +0 does (values 0 to 7); every other word is accounted for
-  - Next: read what the kinds 1, 2 and the others do in the routine of atr.kind-use and the other readers of the table (obj1+0x3ec0, +0x1143a, +0x11455).
+- [ ] `atr.kind-use` [STATIC] — the catalogue word +0 is an object kind that a routine at obj1+0x13227 branches on (the branches are `atr.kind-effects`)
+- [ ] `atr.kind-effects` [STATIC] — kind 0 obstacle (wrecks a fast car), 1 one-off pickup, 2 counter pickup (+4, cap 99), 3 to 7 held item; `.SPW` word +2 set to 0xffff on pickup
+  - Gap: read in full, not run. Next: a run that drives the car into a pickup (or force the zone words at a breakpoint) and compare the car words +0x6a/+0x16 and the `.SPW` word +2.
 - [ ] `sp.draw` [STATIC] — the blitter `FUN_00036fd0` consumes a frame column by column (word +4 columns of word +6 bytes), index 0 transparent
   - Gap: no screen pixel was compared with a frame. Next: after a race starts, compare VRAM rows of a visible sprite with the frame (the VRAM read from `par.upload` works) and add a check.
 - [ ] `spw.frame` [STATIC] — frame address = sprite buffer + `.SPW` word +0x0a × (word +4 × word +6); word +8 is the tick counter
@@ -122,6 +120,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `UNKNOWN_ATR_FIELDS` resolved into `atr.derived-words` (PROVEN: +2, +8, +0x0a, +0x0c) and `atr.kind-effects` (STATIC, `FUN_00022bf4`: what each kind does to the player car)
 - [x] `atr.derived-words` PROVEN (check `atr-derived`, archive data only): +2 is the constant 10, +8/+0x0a repeat the dimensions, +0x0c is a shape code, +0 takes 0 to 7; `UNKNOWN_ATR_FIELDS` narrowed to the kind word
 - [x] `rd.derived-words` PROVEN (check `rd-derived`, archive data only): in every route record the angle word is a TRIG index pointing along the segment, the length word is the segment length (within 1) and the compass word is the angle's octant; so TRIG 480 is the +y direction and the two words the loader ignores are redundant
 - [x] `dat.sentinel-bytes` PROVEN (check `dat-sentinel`): the 22 bytes after the directory are a zero byte, the last entry's name from its second byte (`WREG.BIN`) and zero length and offset fields
