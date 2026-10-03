@@ -71,10 +71,11 @@ export default [
     leads: ['docs/audiohed-fx.md'],
   },
   {
-    id: 'UNKNOWN_AUDIO_RECORD_FIELDS', tag: 'UNKNOWN',
-    statement: 'What the dword +0x08 of the sound records is for is not established: audio.record-roles shows it is passed to the sound library\'s play call and is 0 in both loaders. The other fields are read (pointer, length, priority, handle, play counter); what the library does with the chunk bytes is not.',
-    evidence: {},
-    todo: 'Read the sound library routines obj1+0x31bc8 (play) and obj1+0x31dd4 (is active), and how the PC-speaker and AdLib banks are played (where the chunk header bytes are read).',
+    id: 'audio.play-param', tag: 'STATIC',
+    statement: 'Read in full: the game\'s play call (obj1+0x1c58 to obj1+0x1c78, the is-playing/play routine of audio.record-roles) loads the data pointer (record +0) into eax, the record\'s dword +0x08 into edx and pushes the record\'s priority (dword +0x0c) and two other values to the library\'s play routine (obj1+0x31bc8). The PC-speaker player (device 7, audio.speaker-player) overwrites edx with the priority argument at obj1+0x31c32 and never reads the +0x08 value, which is also 0 in both loaders; the player for devices 0, 1 and 6 (obj1+0x39615) stores edx (obj1+0x39623) and passes it to the converter at obj1+0x3f140 (obj1+0x39691), whose result it keeps in the voice record (obj1+0x396a0). That converter returns the word at obj2+0x30ff4 for an argument of 0 and otherwise reduces it modulo 0x4b0 and divides the result by 0x64, so the argument reads as a pitch offset in cents (1200 to the octave, 100 to the semitone). So the record dword +0x08 is a pitch parameter that only the digital-style players use. Those players cannot receive chunks from this loader: it runs only for sound mode 7 or 2 (audio.mode-select), mode 2 is rejected (audio.device-gate-run) and mode 7 is the PC speaker. Not observed at run time.',
+    value: { paramAt: 0x08, priorityAt: 0x0c, playLibrary: 0x31bc8, pitchModulus: 0x4b0, pitchDivisor: 0x64, defaultScaleAt: 0x30ff4 },
+    evidence: { at: ['WW.EXE:obj1+0x1c58 fp=66df9aff', 'WW.EXE:obj1+0x1c78 fp=ea0e06da', 'WW.EXE:obj1+0x31c32 fp=84c8ad41', 'WW.EXE:obj1+0x39623 fp=b014abb9', 'WW.EXE:obj1+0x39691 fp=2ebd47f5', 'WW.EXE:obj1+0x396a0 fp=e3306b28', 'WW.EXE:obj1+0x3f140 fp=fedcdf3f'] },
+    leads: ['docs/audiohed-fx.md'],
   },
   {
     id: 'audio.speaker-player', tag: 'STATIC',

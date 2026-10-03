@@ -13,8 +13,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 - [ ] `dat.entry-compare` [STATIC] — the compare function is a NUL-terminated string compare after an in-place upper-case of a-z (obj1+0x32df0, +0x32dd0)
   - Gap: the tail-insensitivity (`dat.entry-tail`) and the upper-casing range (`dat.uppercase-range`) are observed; the word-wise compare function itself (obj1+0x32df0) is read, not exercised beyond that.
-- [ ] `UNKNOWN_DAT_SENTINEL_ENTRY` [UNKNOWN] — whether the packer writes the 22-byte sentinel after the directory on purpose
-  - Gap: the game does not load it (the 22 bytes after its table are zero), so it is irrelevant to the game; only archive rewriting cares.
+- [ ] `UNKNOWN_DAT_SENTINEL_ENTRY` [UNKNOWN] — why the packer leaves the previous entry's name tail in the 22-byte sentinel (its content is `dat.sentinel-bytes`)
+  - Gap: the game does not load it (the 22 bytes after its table are zero), so it is irrelevant to the game; only archive rewriting cares, and `patchArchive` keeps it byte for byte.
 
 ### Images (PCX, tiles, masks)
 
@@ -100,9 +100,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `UNKNOWN_AUDIO_CHUNK_FIELDS` [UNKNOWN] — what the 2 skipped header bytes and the second bank's 19 header bytes mean, and how the other players use their chunks
   - Next: read the players behind the other dispatch entries (obj1+0x39615, +0x37d34 and their is-active routines).
 - [ ] `audio.record-roles` [STATIC] — the sound records: +0 data pointer, +4 length (bank mode), +8 a parameter for the library's play call, +0xc priority, +0x10 voice handle, +0x14 play counter; read in the reset, is-playing and play routines
-  - Gap: not isolated beyond `audio.record-play`; the sound library routines (obj1+0x31bc8, +0x31dd4) are unread.
-- [ ] `UNKNOWN_AUDIO_RECORD_FIELDS` [UNKNOWN] — what the record dword +0x08 is for (passed to the play call, 0 in both loaders)
-  - Next: read the library play routine obj1+0x31bc8 and the bank-mode player.
+  - Gap: the roles are observed field by field (pointer, length and priority in `audio.load`, handle and count in `audio.record-play`, the priority again in `audio.speaker-tick`); the library routines are read (`audio.speaker-player`) and +0x08 is `audio.play-param`. What stays STATIC is the code that resets and tests the records (obj1+0x1adc, +0x1bbc).
+- [ ] `audio.play-param` [STATIC] — the record dword +0x08 is a pitch parameter (cents) used only by the digital-style players of devices 0, 1 and 6; the PC-speaker player ignores it
+  - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
 
 ## Work items (no claim)
 
@@ -121,6 +121,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `dat.sentinel-bytes` PROVEN (check `dat-sentinel`): the 22 bytes after the directory are a zero byte, the last entry's name from its second byte (`WREG.BIN`) and zero length and offset fields
+- [x] `UNKNOWN_AUDIO_RECORD_FIELDS` resolved into `audio.play-param` (STATIC, from the play call, the PC-speaker player and the converter at obj1+0x3f140): the record dword +0x08 is a pitch parameter ignored by the player this game can use
 - [x] `cars.slot-records` PROVEN (`cars-1`, check `obs-cars`): the CARS.SP buffer holds the file whole and each slot's pointer record starts with that slot's 12 frame pointers, 0x428 apart
 - [x] `gam.load-words` PROVEN (`gamload-1`, check `obs-gamload`): at the .GAM parser's exit the value words, both start tables (all eight pairs), the flag word and the three extra words equal the file's lines plus the biases
 - [x] `dat.uppercase-range` PROVEN (`gamslot-2`, check `obs-uppercase`): the lookup upper-cases exactly the bytes 0x61 to 0x7a of the requested name in place; the bytes at 0x40, 0x5b, 0x60 and 0x7b stay

@@ -65,8 +65,15 @@ export default [
     leads: ['docs/dat.md (wiki: null-padded names; refuted for 496 entries, see Verification notes)'],
   },
   {
+    id: 'dat.sentinel-bytes', tag: 'PROVEN',
+    statement: 'In the user\'s WACKY.DAT the 22-byte stretch after the directory (file offset 2 + 22 x count, the gap before the first member) is an entry whose first byte is 0, whose name field from its second byte on repeats the last directory entry\'s name field from its second byte (the last entry is "WWREG.BIN", the sentinel holds a 0 byte and then "WREG.BIN"), and whose length and offset fields are zero. So it is the end-marker entry the lookup would stop on, with the name tail of the previous entry left behind; the game does not load it (dat.directory-read).',
+    value: { endMarker: 0x00, nameBytes: 0x0e, tailFrom: 0x01 },
+    evidence: { checks: ['dat-sentinel'] },
+    leads: ['docs/dat.md'],
+  },
+  {
     id: 'UNKNOWN_DAT_SENTINEL_ENTRY', tag: 'UNKNOWN',
-    statement: 'The 22 bytes after the directory (file offset 2 + 22*count) belong to no member; in the user\'s archive they begin with a 0 byte followed by "WREG.BIN". The running game does not load them (dat.directory-read: the 22 bytes after its table are zero, because it reads only count*0x16 bytes); the lookup\'s zero-first-byte end marker therefore ends on zeroed memory. Whether the packer writes the sentinel on purpose is not established.',
+    statement: 'Why the packer leaves the previous entry\'s name tail in the 22-byte sentinel (dat.sentinel-bytes) is not established; it looks like an entry buffer reused with its first byte and numeric fields cleared, but the packer is not available. The running game does not load the sentinel (dat.directory-read: the 22 bytes after its table are zero, because it reads only count*0x16 bytes); the lookup\'s zero-first-byte end marker therefore ends on zeroed memory.',
     evidence: {},
     leads: ['dat.entry-lookup (end marker at obj1+0x41a9)'],
     todo: 'Nothing in the game reads the file sentinel; decide whether it matters for rewriting archives (src/track-model.js patchArchive keeps it byte-for-byte).',
