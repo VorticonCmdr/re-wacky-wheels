@@ -360,6 +360,20 @@ const scenarios = {
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], n = Number(values.bytes ?? 8194), live = Buffer.from(await readMemory(b2 + 0xbd00, n)); // @math 4097 words of two bytes
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableAt: 0xbd00, bytes: n, crc: hex8(crc32(live)) };
   },
+  async drawlist() {
+    // The draw list of the race (view.draw-order): at 40 random pauses of a played race, the count word obj2+0x28b78 and the records from obj2+0x19a50 (0x28 bytes each, read as 20 words).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const samples = [];
+    await post('/debug/pause');
+    for (let k = 0; k < 40; k++) { // @math forty pauses
+      await post('/debug/continue'); await sleep(150 + Math.floor(Math.random() * 350)); await post('/debug/pause'); await sleep(50); // @math a random run of 0.15 to 0.5 s
+      const count = Buffer.from(await readMemory(b2 + 0x28b78, 2)).readInt16LE(0), n = Math.min(Math.max(count, 0), 30), raw = Buffer.from(await readMemory(b2 + 0x19a50, 0x28 * n)), records = []; // @math at most 30 records
+      for (let r = 0; r < n; r++) { const w = []; for (let i = 0; i < 20; i++) w.push(raw.readInt16LE(r * 0x28 + i * 2)); records.push(w); } // @math twenty words of two bytes in a record of 0x28 bytes
+      samples.push({ count, records });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), listAt: 0x19a50, recordBytes: 0x28, samples };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).
