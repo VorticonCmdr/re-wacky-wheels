@@ -80,4 +80,11 @@ export default [
     leads: ['docs/spw.md', 'docs/atr.md'],
   },
 
+  {
+    id: 'sp.loader-sizes', tag: 'PROVEN',
+    statement: 'The program loads 14 sprite files of the archive with a size fixed in its code: each of these code sites does `mov eax, name` (the name of the .SP member in the data object) and, in the next instruction, `mov edx, size`, and the archive member is exactly that many bytes (the sites are in the value; all are within the start-up loaders at obj1+0x36fb to +0x3c18 except CARS.SP at obj1+0x1053d and ACTION.SP at obj1+0x1805b): GIGGLES.SP 46816, DOPE.SP 11895, WFONT1.SP 8190, AJ.SP and PUF.SP 4256, HANDLE.SP 3680, LAP.SP 19542, HOGMIS.SP 6084, SPARK.SP 360, CRACK.SP 5208, GENEF.SP 14692, ICONS.SP 5574, CARS.SP 102144 and ACTION.SP 1506. So these files are loaded whole into buffers and their sizes are the game\'s, but the sizes do not give the width and height of a frame. OFONT.SP, EFFECTS.SP, the medal sprites and the other driver files are loaded by code of another shape and are not covered.',
+    value: { codeObject: 1, dataObject: 2, movEax: 0xb8, movEdx: 0xba, movLength: 5, members: 14, loaders: [{ name: 'GIGGLES.SP', site: 0x36fb, size: 46816 }, { name: 'DOPE.SP', site: 0x378c, size: 11895 }, { name: 'WFONT1.SP', site: 0x3a7c, size: 8190 }, { name: 'AJ.SP', site: 0x3aa0, size: 4256 }, { name: 'PUF.SP', site: 0x3ac4, size: 4256 }, { name: 'HANDLE.SP', site: 0x3ae8, size: 3680 }, { name: 'LAP.SP', site: 0x3b0c, size: 19542 }, { name: 'HOGMIS.SP', site: 0x3b30, size: 6084 }, { name: 'SPARK.SP', site: 0x3b54, size: 360 }, { name: 'GENEF.SP', site: 0x3bd0, size: 14692 }, { name: 'CRACK.SP', site: 0x3bf4, size: 5208 }, { name: 'ICONS.SP', site: 0x3c18, size: 5574 }, { name: 'CARS.SP', site: 0x1053d, size: 102144 }, { name: 'ACTION.SP', site: 0x1805b, size: 1506 }] },
+    evidence: { checks: ['sp-loaders'] },
+    leads: ['docs/sp.md'],
+  },
 ];
