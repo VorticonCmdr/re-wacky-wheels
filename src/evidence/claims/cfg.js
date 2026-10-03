@@ -22,4 +22,11 @@ export default [
     evidence: { checks: ['cfg-key-names'] },
     leads: ['docs/cfg.md'],
   },
+  {
+    id: 'cfg.modem-defaults', tag: 'PROVEN',
+    statement: 'In all three installed WACKY.CFG files the modem and serial words that SETUP.EXE\'s two defaults routines (obj1+0x1c3a to +0x1ca8 and obj1+0x1e52 to +0x1fe1) store are at the file offset of the stored address minus 0x7c56 (SETUP keeps the configuration at obj2+0x7c56, so obj2+0x8100 is file offset 0x4aa; the third piece, cfg.read, starts there): 24 `mov dword [address], value` stores (the values 0x2580, 0x4b00, 0x9600, 0xe100 and 0x1c200 at 0x4c2 to 0x4d2; 1 at 0x4f6 and 0x4fa; the four records of 12 bytes from 0x5ca, each a record number 1 to 4, a port 0x3f8, 0x2f8, 0x3e8 or 0x2e8 and an interrupt 4, 3, 4 or 3, followed by a zero dword; 1 in front of each phone book entry at 0x606 and every 0x30 bytes up to 0x726; 0x2580 at 0x960 and 1 at 0x964) all hold the stored value, and 10 of the 11 string copies hold the copied text: ATDT at 0x53e, AT Z H0 at 0x57e, SERIAL at 0x60a, LINK at 0x620 and BLANK at 0x63a, 0x66a, 0x69a, 0x6ca, 0x6fa and 0x72a. The eleventh copy, the modem initialisation string at 0x4fe (default AT &F &K0 %C0), differs in the installed files, which hold AT &F &C1 &D1 &K0 &Q6 S36=3 (so the user\'s setting, not the default); it is only required to begin with AT. SETUP\'s menu strings name these as the baud rate list, the communication port table (the port address and interrupt), the dialling and hang-up commands and the phone directory of six entries preceded by the serial link entry; that naming is a lead, not proven here.',
+    value: { base: 0x7c56, from: 0x4c2, to: 0x968, dwordBytes: 4, ranges: [[0x1c3a, 0x1ca8], [0x1e52, 0x1fe1]], dwordCount: 24, stringCount: 11, edited: [0x4fe], editedPrefix: 'AT', storeDword: [0xc7, 0x05], storeLength: 10, movEdi: 0xbf, movEsi: 0xbe, movLength: 5, records: { at: 0x5ca, stride: 12, count: 4 } },
+    evidence: { checks: ['cfg-modem'] },
+    leads: ['docs/cfg.md'],
+  },
 ];

@@ -153,6 +153,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `cfg.modem-defaults` PROVEN (check `cfg-modem`): the modem and serial words and strings that SETUP.EXE's defaults routines store are at the stored address minus 0x7c56 in all three installed files (except the user's init string); what each word means is still a lead
 - [x] `cfg.key-names` PROVEN (check `cfg-key-names`): the CFG's twelve 14-byte key-name entries from 0x7b4 equal the names SETUP.EXE's key table builder gives the key words' scancodes in all three installed files
 - [x] `track.value-ranges` PROVEN (check `track-ranges`, archive data only): every terrain value is in 0 to 27 (valid SDX indices), and every object, route and start coordinate lies inside the 2048-pixel map, all 36 catalogue sprites being placed
 - [x] `cfg.default-keys` PROVEN (check `cfg-keys`): the config's key table is six PC scancodes per player (player 1 Left, Right, Alt, Ctrl, Down, Space; player 2 D, F, A, S, G, H) in all three installed files
