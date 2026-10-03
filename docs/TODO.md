@@ -107,6 +107,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 - [ ] `input.buttons` [STATIC] — key table words 2 to 5 are buttons 1 to 4 in obj2+0x28b40..46 (accelerate, fire, brake, hand brake turn); the game port 0x201 sets the same words
   - Gap: read, not run. Next: sample the table and the button words while a key is held (DOSBox).
+- [ ] `input.joystick` [STATIC] — the stick is read through game port 0x201 into direction bytes using calibrated thresholds (CFG 0x1c..0x26 for player 1, 0x4b2..0x4bc for player 2)
+  - Gap: read, not run; SETUP's calibration screens (which fill the thresholds) and the stick test are unread, and no installed file has a calibrated stick.
 - [ ] `input.key-handler` [STATIC] — the keyboard interrupt (vector 9, obj1+0x30907) writes the down flag to the high byte of the key table word whose low byte is the scancode
   - Gap: read, not run; a PROVEN version needs a DOSBox record of the table's high byte while a key is held and released. Player 2's handling of extended (0xe0) codes is not followed.
 - [ ] `input.steer-flags` [STATIC] — key table words 0 and 1 (player 1) become the steering amounts obj2+0x28b92 (left, subtracted) and +0x28b90 (right, added); right wins

@@ -10,6 +10,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [STATIC] `input.buttons`: buttons 1 to 4 are the words `obj2+0x28b40`, `+0x28b42`, `+0x28b44`, `+0x28b46` (accelerate, fire, brake, hand brake turn), set from key table words 2 to 5 or from the joystick port 0x201.
 - [STATIC] `input.key-handler`: the keyboard interrupt (vector 9, handler `obj1+0x30907`) writes 1 or 0 to the high byte of the key table word whose low byte equals the scancode; a code above 0x52 is a release. Up, Down, Enter, Space and F10 also set fixed flag bytes.
 - [STATIC] `input.steer-flags`: the high bytes of key table words 0 and 1 (player 1) become the bytes `obj2+0x28cd5` (left) and `+0x28cdd` (right), then the words `+0x28b8c`/`+0x28b98`, then the heading amounts `+0x28b92` (subtracted) and `+0x28b90` (added); with both keys down right wins.
+- [STATIC] `input.joystick`: with a stick selected the routine at `obj1+0x2784b` times the game port 0x201 and sets the same left, right, up and down bytes from calibrated thresholds, so the stick steers like the first two keys; up and down can also act as hand brake turn and brake.
 
 ## One frame
 
