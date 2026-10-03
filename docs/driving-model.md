@@ -32,6 +32,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [PROVEN] `terrain.sdx-index`: the terrain value selects the `WACKY.SDX` record (0x12e bytes) whose dword `+0x120` is copied to the car record's `+0x36`.
 - [STATIC] `ai.surface-slowdown`: the computer racers' speeds are lowered by that dword as a 16.16 fraction.
 
+- [STATIC] `car.steer-states`: the input routine turns the two key flags into the heading changes; with a throttle of 100 a steering key held for N calls (N is the surface's SDX word `+0x124`, 0 meaning at once) starts a slide, and a hop turns the car by 120 per call for up to 16 calls; a spin turn (a separate key word) turns by 120 per call for 5 calls; the surface's SDX dword `+0x120` also slows the player's speed every call, as it does the computer racers'. Read, not run.
+
 ## Objects
 
 - [STATIC] `atr.kind-effects`: each static object's sprite has a catalogue *kind* (0 to 7): kind 0 is an obstacle that wrecks a fast car, 1 a one-off pickup, 2 a counter pickup that adds 4 (to 99), 3 to 7 a held item taken only when none is held; a taken pickup sets its `.SPW` word `+2` to 0xffff.
@@ -39,4 +41,4 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 ## What is not known
 
-The input handling beyond the steering amounts (which keys or devices set the accelerate, brake and steering flags; many mode-specific routines write them) and the hop and drift states (`FUN_000224ec`), the car state words (`+0x44`, `+0x18` and the animation machine), the AI step (`FUN_00028cac`, `ai.step-rules`), lap counting beyond the ranking keys (`pos.progress`), the minimap and HUD, and every sound the routines trigger by number. See [TODO.md](TODO.md).
+The input handling beyond the steering amounts (which keys or devices set the accelerate, brake and steering flags; many mode-specific routines write them) and what the keys are called, the car state words (`+0x44`, `+0x18` and the animation machine), the AI step (`FUN_00028cac`, `ai.step-rules`), lap counting beyond the ranking keys (`pos.progress`), the minimap and HUD, and every sound the routines trigger by number. See [TODO.md](TODO.md).
