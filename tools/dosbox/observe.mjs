@@ -395,7 +395,15 @@ const scenarios = {
     const i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0); hud.ticks = await i32(0x1e71c); hud.now = await i32(0x1ec64); hud.timerMode = await i16(0x28c44); // @math the timer word of the report, the tick counter and the mode word
     const hudWords = []; for (let k = 0; k < 130; k++) hudWords.push(await i16(0x8426 + 2 * k)); // @math the 0x104-byte record as 130 words
     const carWords = { speed: await c16(0x26), throttle: await c16(0x42) };
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites };
+    // The minimap (obj1+0x1a4ac): the 78 x 50 picture the routine redraws sits at the dword obj2+0x1eb3c (column by column); every screen pixel of its rectangle at (0, 60) that differs from it is a racer's dot.
+    let minimap;
+    if (spec.minimap) {
+      const ptr = Buffer.from(await readMemory(b2 + 0x1eb3c, 4)).readUInt32LE(0), buf = Buffer.from(await readMemory(ptr, 78 * 50)), dots = []; // @math the 78 x 50 picture
+      for (let i = 0; i < 78; i++) for (let j = 0; j < 50; j++) if (buf[i * 50 + j] !== image[(60 + j) * W + i]) dots.push([i, j, image[(60 + j) * W + i]]); // @math the rectangle's origin row is 60
+      const racers = []; for (let n = 0; n < 8; n++) racers.push([await i16(0xaaa6 + n * 0x68), await i16(0xaaa8 + n * 0x68)]); // @math eight racer records of 0x68 bytes: the x and y words
+      minimap = { dots, racers, count: await i16(0x28c40), mode: await i16(0x28c0c), pictureCrc: hex8(crc32(buf)), tables: { x: [0x202cc, hex8(crc32(Buffer.from(await readMemory(b2 + 0x202cc, 2048))))], y: [0x1faca, hex8(crc32(Buffer.from(await readMemory(b2 + 0x1faca, 2048))))] } }; // @math the two 2048-byte tables of the minimap
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(minimap ? { minimap } : {}) };
   },
   async carframes() {
     // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.
