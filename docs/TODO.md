@@ -103,6 +103,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `audio.play-param` [STATIC] — the record dword +0x08 is a pitch parameter (cents) used only by the digital-style players of devices 0, 1 and 6; the PC-speaker player ignores it
   - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
 
+- [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
+  - Gap: read in full, not run; the writers of obj2+0x1ea58 and obj2+0x28c20 and what their values mean in the menus are unread. Next: read them (SETUP.EXE's detail level may write the config word behind obj2+0x28c20).
 - [ ] `car.speed-model` [STATIC] — the player's throttle index (+10 accelerating, -4 coasting, -8 braking, boost 160 for 16 frames) and the speed as `VEL.TAB[index]`
   - Gap: read in full, not run; the input words obj2+0x28b40/0x28b44 and where they are set are unread. Next: with DOSBox, hold the accelerate key and sample the car's +0x42 and +0x26 words against `VEL.TAB`.
 - [ ] `car.move-step` [STATIC] — the player's per-frame move: heading index, position by TRIG x speed, collision bounce, wall probes (terrain 3), terrain value stored in the car record, hazard terrains 6 and 0xf
