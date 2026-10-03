@@ -8,6 +8,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 - [PROVEN] `cfg.default-keys`: the key table in `WACKY.CFG` is six PC scancodes per player in the order steer left, steer right, button 1 to 4. Player 1 defaults: Left, Right, Alt (accelerate), Ctrl (fire), Down (brake), Space (hand brake turn); player 2: D, F, A, S, G, H.
 - [STATIC] `input.buttons`: buttons 1 to 4 are the words `obj2+0x28b40`, `+0x28b42`, `+0x28b44`, `+0x28b46` (accelerate, fire, brake, hand brake turn), set from key table words 2 to 5 or from the joystick port 0x201.
+- [STATIC] `input.key-handler`: the keyboard interrupt (vector 9, handler `obj1+0x30907`) writes 1 or 0 to the high byte of the key table word whose low byte equals the scancode; a code above 0x52 is a release. Up, Down, Enter, Space and F10 also set fixed flag bytes.
+- [STATIC] `input.steer-flags`: the high bytes of key table words 0 and 1 (player 1) become the bytes `obj2+0x28cd5` (left) and `+0x28cdd` (right), then the words `+0x28b8c`/`+0x28b98`, then the heading amounts `+0x28b92` (subtracted) and `+0x28b90` (added); with both keys down right wins.
 
 ## One frame
 
@@ -46,4 +48,4 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 ## What is not known
 
-The input handling beyond the steering amounts (which keys or devices set the accelerate, brake and steering flags; many mode-specific routines write them) and what the keys are called, the car state words (`+0x44`, `+0x18` and the animation machine), the AI step (`FUN_00028cac`, `ai.step-rules`), lap counting beyond the ranking keys (`pos.progress`), the minimap and HUD, and every sound the routines trigger by number. See [TODO.md](TODO.md).
+The player 2 and mode-specific input paths (other routines write the same flags), the car state words (`+0x44`, `+0x18` and the animation machine), the AI step (`FUN_00028cac`, `ai.step-rules`), lap counting beyond the ranking keys (`pos.progress`), the minimap and HUD, and every sound the routines trigger by number. See [TODO.md](TODO.md).

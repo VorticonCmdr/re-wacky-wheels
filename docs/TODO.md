@@ -104,7 +104,11 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
 
 - [ ] `input.buttons` [STATIC] — key table words 2 to 5 are buttons 1 to 4 in obj2+0x28b40..46 (accelerate, fire, brake, hand brake turn); the game port 0x201 sets the same words
-  - Gap: read, not run; the routine that marks keys down and sets the steering flags (obj2+0x28b8c/0x28b98) is unread. Next: read the keyboard handler, or sample the table while a key is held (DOSBox).
+  - Gap: read, not run. Next: sample the table and the button words while a key is held (DOSBox).
+- [ ] `input.key-handler` [STATIC] — the keyboard interrupt (vector 9, obj1+0x30907) writes the down flag to the high byte of the key table word whose low byte is the scancode
+  - Gap: read, not run; a PROVEN version needs a DOSBox record of the table's high byte while a key is held and released. Player 2's handling of extended (0xe0) codes is not followed.
+- [ ] `input.steer-flags` [STATIC] — key table words 0 and 1 (player 1) become the steering amounts obj2+0x28b92 (left, subtracted) and +0x28b90 (right, added); right wins
+  - Gap: read, not run; player 2's steering path and the mode-specific routines that write the same flags are not followed.
 - [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
   - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
