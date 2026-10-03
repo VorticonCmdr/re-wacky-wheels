@@ -4,7 +4,11 @@
 
 ## Verification notes
 
-Local observation: 15360 bytes, matching 1920×8.
+Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x18180, read in full), the parsers are in `src/formats/static-tables.js`. "Observed" is record `race-3` (the running game under dosbox-automation 0.84.0-vc1, cross-validated by `obs-race`).
+
+- [PROVEN] (`static-tables`): `TRIG.DAT` is exactly 0x3c00 = 15360 bytes, which is 1920 x 8 as the wiki says.
+- [PROVEN] (observed, `static.read`): the loader reads the whole member into a buffer (address in the dword at obj2+0x1d6a0), and it equals the file at run time.
+- [UNKNOWN] the pair layout and meaning (the wiki's circular lookup of INT32 x,y pairs): `UNKNOWN_STATIC_TABLE_MEANING`.
 
 ## Sources
 

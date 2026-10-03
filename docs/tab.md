@@ -6,6 +6,10 @@
 
 Local observation: both files are 400 bytes.
 
+## Verification notes
+
+- [PROVEN] (`obs-buffers`, `small.read`): the game reads the archive member `VEL.TAB` and `VEL2.TAB` whole (400 bytes each bytes) into the buffer at obj2+0x1e8c4` and obj2+`0x1e584; in a running race the buffer equals the member (CRC-32 equal). What the values mean is not established (lead above).
+
 ## Sources
 
 - [Miscellaneous formats](https://moddingwiki.shikadi.net/wiki/Miscellaneous_Wacky_Wheels_File_Formats)

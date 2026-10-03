@@ -25,6 +25,10 @@ Settings outside this saved-game table are not specified by the source.
 
 ## Verification notes
 
+- [PROVEN] (`obs-race`, `cfg.read`): the game reads `wacky.cfg` as three consecutive pieces after requiring a size of 0xada (2778) bytes: file offsets 0 to 0x491 go to obj2+0x1ee1c, 0x492 to 0x4a9 to obj2+0x1b6d8 and 0x4aa to 0xad9 to obj2+0x17128. In a running race the memory equals the installed file except six 16-byte blocks (file offsets 0x30, 0x86a, 0x87a, 0x89a, 0x8aa, 0x8ba) that the game writes at run time; those lie among the saved-game fields in the table above (a lead, not a claim). After the reads the game compares the word at file offset 0x7b2 with 0xfa; all installed files hold 0xfa there.
+- [STATIC] The sound mode used by the audio loader is the dword at file offset 0x786 (obj2+0x17404). The three installed variants (root, `SB16/`, `SC55/`) all hold 0 there; values tried by hand in the DOSBox run copy gave: 1 "MVSOUND.SYS not loaded.", 2 to 4 "Invalid Sound Fx device.", 5 "UltraSound card not found", 6 "Could not detect Sound Source.", 7 start with the AudioT bank loaded (2026-10-03, leads); `SB16/` is byte-identical to the root file and `SC55/` differs at 0x78a, 0x792, 0x7a2 and 0x7a3 (what those mean is not established; `UNKNOWN_AUDIO_MODE_VALUES`).
+- [PROVEN] (experiment, `obs-cmdline`, `cmdline.words`): `WW.EXE` also reads command-line words, case-insensitively: `TURBO`, `JUMP`, `HOG`, `ICE` and `FIRE` set bits 1, 2, 4, 8 and 0x10 of one mask, `NOW` sets a flag, `/2` and `/3` set a class word to 6 and 0 (the last one wins; `/1` sets 12, the default, `cmdline.class-one`) and `/DEBUG` sets a debug word. There is no word that chooses a track. What the bits and the class word do is not established.
+
 Source discrepancy: horsepower/pack offsets are two bytes apart, conflicting with the blanket INT32LE description. Confirm field widths before writing; a four-byte write could overlap the adjacent setting.
 
 ## Sources

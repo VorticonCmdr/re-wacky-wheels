@@ -16,7 +16,11 @@ Selectors: 1=28×28,2=14×28,3=32×24. Pickup types: 0=none,1=tires,2=hedgehogs,
 
 ## Verification notes
 
-Source typo: height2 is described as equal to itself. The first local entry repeats width1 and height1 at offsets 8 and 10; that observation does not establish every entry’s semantics.
+Tags as in [evidence.md](evidence.md). Parser: `parseAtr` in `src/formats/atr.js`; the legacy `parseAtr` in `src/sprites.js` still serves the viewer.
+
+- [PROVEN] (`atr-sprites`, claim `atr.layout`): `SPRITE.ATR` is a 2-byte count (36) plus exactly count records of 0x28 bytes. The words at +4, +6 and +0x0e multiply to the size of the `.SP` member named at +0x10 in all 36 records (the member exists and has exactly that many bytes); the name is NUL-terminated inside a 0x18-byte field that runs to the record's end, and the wiki's duplicate dimensions at +8 and +0x0a equal +4 and +6 in all 36. The product is symmetric in +4 and +6, so the archive does not say which is width and which is height; the wiki's order (width first) is a lead.
+- [PROVEN] (observed in the running game, `atr.read`, `sp.read`): the loader reads the count and the records into a table; its sprite loader then reads, for each catalogue entry whose index equals the word at +0 of some `.SPW` record, exactly width x height x frames bytes of the named `.SP` file to a running cursor, storing the buffer address in the dword at +0x24 of the entry (in the name field's unused tail). For track 2 that is 10 sprites, 24,608 bytes, contiguous, and equal to the files in index order. The first loaded entry whose word at +0 is 2 is remembered.
+- [UNKNOWN] the other words: `UNKNOWN_ATR_FIELDS` (the wiki's pickup types, "usually 10" word and size selector). The sprite loader reads only +0, +4, +6, +0x0e and the name.
 
 ## Sources
 
