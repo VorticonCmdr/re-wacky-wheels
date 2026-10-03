@@ -139,6 +139,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `track.value-ranges` PROVEN (check `track-ranges`, archive data only): every terrain value is in 0 to 27 (valid SDX indices), and every object, route and start coordinate lies inside the 2048-pixel map, all 36 catalogue sprites being placed
 - [x] `cfg.default-keys` PROVEN (check `cfg-keys`): the config's key table is six PC scancodes per player (player 1 Left, Right, Alt, Ctrl, Down, Space; player 2 D, F, A, S, G, H) in all three installed files
 - [x] `UNKNOWN_AUDIO_MODE_VALUES` resolved into `audio.device-numbers` (STATIC, from SETUP.EXE's card table and config writes): the device values are the card list positions, 7 being the PC speaker
 - [x] `UNKNOWN_ATR_FIELDS` resolved into `atr.derived-words` (PROVEN: +2, +8, +0x0a, +0x0c) and `atr.kind-effects` (STATIC, `FUN_00022bf4`: what each kind does to the player car)

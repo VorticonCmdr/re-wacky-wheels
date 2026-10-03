@@ -103,6 +103,13 @@ export default [
     leads: ['docs/cfg.md', 'docs/tab.md'],
   },
   {
+    id: 'track.value-ranges', tag: 'PROVEN',
+    statement: 'Over the 42 tracks of the user\'s archive: the terrain values (both dwords of every .SIN record) lie in 0 to 27, all below the 30 records of WACKY.SDX, so they are valid indices of the terrain.sdx-index lookup; the 838 object records of the .SPW files have x words 45 to 2003 and y words 49 to 2007 and sprite ids 0 to 35, every one of the 36 catalogue sprites being placed in some track; the route records of the .RD files have x words 37 to 1997 and y words 51 to 2011; and the eight start pairs of the .GAM files have x and y 126 to 1980. Every coordinate is inside the 2048 x 2048 map (64 tiles of 32 pixels), before the 0x400 world bias of rd.route, spw.read and gam.read.',
+    value: { tracks: 42, spwRecords: 838, sdxRecords: 30, catalogue: 36, mapPixels: 2048, terrain: [0, 27], spwX: [45, 2003], spwY: [49, 2007], rdX: [37, 1997], rdY: [51, 2011], startX: [126, 1980], startY: [126, 1980] },
+    evidence: { checks: ['track-ranges'] },
+    leads: ['docs/sin.md', 'docs/spw.md'],
+  },
+  {
     id: 'rd.unused-words', tag: 'STATIC',
     statement: 'The .RD loader (Ghidra FUN_000279e8, obj1+0x79e8) never reads the record words at +0x08 and +0x0c (the wiki\'s angle and distance): it reads the 14-byte record into a buffer and uses only the words at +0, +2, +4, +6 and +0x0a. The observed route table and point array are independent of them (rd.route reproduces them from the other words). The relocation records name only the words at +0, +2, +4, +6 and +0x0a of the buffer (rd.record-references), all in the loader. A reader of the record buffer through a computed address is not ruled out; the count below 1 case (loop skipped) is not observed.',
     value: { notRead: [0x08, 0x0c] },
