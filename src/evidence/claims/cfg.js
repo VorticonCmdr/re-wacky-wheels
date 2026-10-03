@@ -15,4 +15,11 @@ export default [
     evidence: { checks: ['cfg-keys'] },
     leads: ['docs/cfg.md'],
   },
+  {
+    id: 'cfg.key-names', tag: 'PROVEN',
+    statement: 'In all three installed WACKY.CFG files the third piece holds, from file offset 0x7b4, twelve 14-byte entries (the dword at 0x7b2 holds the 0xfa version word, cfg.read, in its first two bytes) with the NUL-padded name of each key of the key table (cfg.default-keys), in the order of the key words: LEFT CURSOR, RIGHT CURSOR, ALT, CTRL, DOWN CURSOR, SPACE, D, F, A, S, G, H. The names are the ones SETUP.EXE gives the scancodes: its key table builder (obj1+0x11c2 to +0x189b) is a run of `mov edi, record; mov esi, name; movsd...` blocks, with each record holding the name copied from obj2 (up to 13 bytes, padded with spaces in SETUP) and the scancode byte stored by a `mov byte [record + 0x28], scancode`, and the check decodes the instruction bytes that way and compares every key word of the CFG with its name. How SETUP uses the table beyond that, and the keys without a record, are not read.',
+    value: { tableAt: 0x7b4, entries: 12, entryBytes: 14, from: 0x11c2, to: 0x189b, movEdi: 0xbf, movEsi: 0xbe, movLength: 5, store: [0xc6, 0x05], storeLength: 7, recordCodeOffset: 0x28, nameBytes: 13 },
+    evidence: { checks: ['cfg-key-names'] },
+    leads: ['docs/cfg.md'],
+  },
 ];
