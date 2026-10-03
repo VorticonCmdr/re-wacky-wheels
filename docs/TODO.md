@@ -103,8 +103,10 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `audio.play-param` [STATIC] — the record dword +0x08 is a pitch parameter (cents) used only by the digital-style players of devices 0, 1 and 6; the PC-speaker player ignores it
   - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
 
+- [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
+  - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
-  - Gap: read in full, not run; the writers of obj2+0x1ea58 and obj2+0x28c20 and what their values mean in the menus are unread. Next: read them (SETUP.EXE's detail level may write the config word behind obj2+0x28c20).
+  - Gap: read in full, not run; the two words are the detail level and the engine choice (`setup.race-options`).
 - [ ] `car.steer-states` [STATIC] — the input routine: forced turn (120 x 5), hop (120 x up to 16), drift after N held calls (N = SDX word +0x124), the player's speed slowed by SDX dword +0x120 every call
   - Gap: read in full, not run; the key flags' names and the byte array they come from are unread. Next: with DOSBox, hold a steering key at full throttle on two surfaces and sample +0x22/+0x3c/+0x20 against the SDX word.
 - [ ] `car.speed-model` [STATIC] — the player's throttle index (+10 accelerating, -4 coasting, -8 braking, boost 160 for 16 frames) and the speed as `VEL.TAB[index]`

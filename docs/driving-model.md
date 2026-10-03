@@ -19,12 +19,12 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 ## Speed and throttle
 
 - [STATIC] `car.speed-model`: the car's throttle word `+0x42` rises by 10 a call while the accelerate flag (`obj2+0x28b40`) is set (6 in some modes), falls by 4 otherwise and by 8 while the brake flag (`obj2+0x28b44`) is set, capped at 100; the speed word `+0x26` is `VEL.TAB[throttle]` (read from the copy at `obj2+0x1e730`). A terrain-2 strip sets the throttle to 160 for 16 calls.
-- [STATIC] `race.class-setup`: at the race start the active speed table is filled from the `VEL2.TAB` buffer when the word `obj2+0x1ea58` is 2 and from `VEL.TAB` otherwise; where that word is set is not read.
+- [STATIC] `race.class-setup`: at the race start the active speed table is filled from the `VEL2.TAB` buffer when the engine choice (`obj2+0x1ea58`) is 2, the 6 horsepower engines, and from `VEL.TAB` otherwise (12 horsepower); `SETUP.EXE` writes the choice (`setup.race-options`).
 - [PROVEN] `ai.race-speeds`: the computer racers' speed words are the same `VEL.TAB` entries.
 
 ## Moving and colliding
 
-- [STATIC] `race.class-setup`: the heading changes by 40, 36 or 32 of 1920 per call while a steering key is held (by the word `obj2+0x28c20`, 1 to 3; 36 in some modes), half of that in the hop state; the input routine (`FUN_000224ec`) applies these amounts, hop and drift states are not described here.
+- [STATIC] `race.class-setup`: the heading changes by 40, 36 or 32 of 1920 per call while a steering key is held (by the full-screen detail level high, medium or low, `setup.race-options`; 36 in some modes), half of that in the hop state; the input routine (`FUN_000224ec`) applies these amounts, hop and drift states are not described here.
 
 - [STATIC] `car.move-step`: steering subtracts the word `obj2+0x28b92` from, or adds `obj2+0x28b90` to, the heading (mod 1920); the car moves `speed` units along the heading vector, `(vector × distance + 0x8000) >> 16`, as a line walk from the old to the new position.
 - [STATIC] `car.collision-test`: at each step of the walk, terrain 3 is a wall (code 1), terrain 10 a pit the car falls into (code 4), a static object within a Manhattan distance of 14 is code 2 (the object's `.SPW` word `+2` becomes 1) and another racer within 14 is code 3. When a move is blocked the car is thrown back 0x20 units, its throttle is cleared, and it is turned 0x12 of 1920 away from whichever side probe (heading ± 0x12, 0x7c ahead) sees terrain 3.
