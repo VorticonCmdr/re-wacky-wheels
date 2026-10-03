@@ -347,6 +347,14 @@ const scenarios = {
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build, forced: A.forced, gateBefore: A.gateBefore, gateAfter: A.gateAfter,
       columns: ['boostActive', 'boostTimer', 'throttle', 'speed', 'terrain', 'row', 'fraction', 'surface', 'tableEntry', 'carWordA', 'heading'], samples: A.samples };
   },
+  async strip() {
+    // A strip of one terrain value laid over the map of track 1 in the run copy (tools/dosbox/strip-run.mjs passes --args {build, samples}); nothing is written into the game.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], runDat = await readFile(resolve(values.run));
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const A = JSON.parse(values.args);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build,
+      columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain'], samples: A.samples };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).

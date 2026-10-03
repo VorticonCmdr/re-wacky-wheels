@@ -150,7 +150,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `car.move-step` [STATIC] — the player's per-frame move: heading index, position by TRIG x speed, collision bounce, wall probes (terrain 3), terrain value stored in the car record, hazard terrains 6 and 0xf
   - Gap: read in full, not run; the walk and probe vectors are `car.collision-test`; what the car state word +0x44 is stays unread. Next: sample position, heading and the terrain value over a drive.
 - [ ] `car.collision-test` [STATIC] — the Bresenham walk and the per-step collision codes (1 wall, 2 object, 3 racer, 4 pit) with touch distance 14
-  - Gap: read in full, not run. Next: with DOSBox, watch the collision word during a bump into a wall or an object.
+  - Gap: read in full; the wall code was observed on a wall strip made in a run copy (`car.wall-observed`: collision word 1, throttle cleared, the car rests 32 units before the wall). Not observed: the object (2), racer (3) and pit (4) codes, the turn away from a wall seen by one side probe. Next: the same with strips of value 10 (a pit) and cars or objects in the way (`tools/dosbox/strip-run.mjs`).
 - [ ] `view.setup` [STATIC] — the view fan: 320 TRIG entries around the heading, reaching 1122 units (the largest NDIST dword), and a bounding box of the visible points
   - Gap: read, not run; `FUN_00037bb1` is `car.move-step`'s advance helper (offset = (vector x distance + 0x8000) >> 16), the box's use is unread.
 - [ ] `race.frame-calls` [STATIC] — the race frame routine FUN_0002fd8c: its call order (floor, objects, cars, terrain lookup, progress, AI)

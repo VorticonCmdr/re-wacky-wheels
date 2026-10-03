@@ -1,0 +1,24 @@
+// node tools/dosbox/strip-run.mjs --id wall-1 --build '{"track":1,"id":56,"rows":[26,27],"cols":[3,9],"value":3}'
+// Prerequisites: the DOSBox bridge is running the run copy made with tools/dosbox/make-test-sin.mjs (the same --id/--rows/--cols/--value as --build) with a played race on track 1 running and
+// paused at its start. The accelerate key is held and the car drives into the strip (a wall, value 3, or a pit, value 10); the game is paused every 40 ms to read the car's words and the
+// collision word, then the `strip` scenario of observe.mjs records them. Nothing is written into the game.
+import { spawnSync } from 'node:child_process';
+import { parseArgs } from 'node:util';
+import { resolve } from 'node:path';
+import { readMemory } from './live.mjs';
+const { values } = parseArgs({ options: { id: { type: 'string' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, build: { type: 'string', default: '{"track":1,"id":56,"rows":[26,27],"cols":[3,9],"value":3}' } } });
+const API = 'http://127.0.0.1:8386/api/v1', sleep = ms => new Promise(r => setTimeout(r, ms));
+const post = async (path, body) => (await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })).json();
+const put = (addr, bytes) => fetch(`${API}/memory/${addr}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: bytes });
+const BASE = 0x239000; // @math the data object's live base in this DOSBox build (obj2, bases in the record)
+const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+await post('/debug/pause');
+const car = await i32(BASE + 0x1d5b0);
+const forced = [];
+const sample = async () => [await i16(car + 0x42), await i16(car + 0x26), await i16(BASE + 0xaa90 + 0x16), await i16(BASE + 0xaa90 + 0x18), await i32(BASE + 0x1d5d4), await i16(BASE + 0x28bae), await i16(car + 0xa), await i16(car + 0x7c), await i32(BASE + 0x1e568)];
+const samples = [];
+await post('/input/sequence', { events: [{ type: 'key', key: 'KBD_leftalt', pressed: true, frame: 2 }] });
+for (let k = 0; k < 60; k++) { await post('/debug/continue'); await sleep(k ? 40 : 400); await post('/debug/pause'); samples.push(await sample()); }
+const args = JSON.stringify({ build: JSON.parse(values.build), samples });
+const out = spawnSync('npm', ['run', '-s', 'observe', '--', 'strip', '--id', values.id, '--run', values.run, '--moment', 'played race on track 1 on the run copy with tile 56 laid over a strip of the map as the terrain value in the build; accelerate held, nothing written into the game, sampled every 40 ms', '--args', args], { encoding: 'utf8' });
+console.log(out.stdout.trim().split('\n').pop(), out.stderr.trim());

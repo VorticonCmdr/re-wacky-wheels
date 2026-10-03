@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { parseDatDirectory } from '../../formats/dat.js';
 import { view } from '../../binary.js';
-import { replaceMember } from '../patch.js';
+import { rebuildStrip, stripRows } from '../strip.js';
 import { assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
@@ -11,24 +10,14 @@ const values = () => ({ boost: expected('car.boost-observed'), model: expected('
 
 const COLUMNS = ['boostActive', 'boostTimer', 'throttle', 'speed', 'terrain', 'row', 'fraction', 'surface', 'tableEntry', 'carWordA', 'heading'], C = Object.fromEntries(COLUMNS.map((n, i) => [n, i]));
 
-// Rebuild the run copy from the user's archive: the tile's two kept SIN dwords set to the terrain value, the strip's cells set to the tile, and compare it with the record's.
+// Rebuild the run copy from the user's archive (src/verify/strip.js) and check the experiment is the strip of the claim.
 function rebuild(dat, r, V) {
-  const B = V.boost, S = B.strip, members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data])), name = `${r.build.track}`;
-  assert.deepEqual([r.build.id, r.build.rows, r.build.cols, r.build.value], [S.tile, S.rows, S.cols, B.terrain], 'the experiment built the strip and nothing else');
-  const map = Uint8Array.from(members.get(`${name}.M`)), sin = Uint8Array.from(members.get(`${name}.SIN`)), dv = view(sin);
-  assert.ok(!map.includes(S.tile), 'the track does not use the tile');
-  for (let row = S.rows[0]; row <= S.rows[1]; row++) for (let col = S.cols[0]; col <= S.cols[1]; col++) map[row * V.map.columns + col] = S.tile;
-  for (let k = 0; k < V.sin.kept / 4; k++) dv.setUint32(S.tile * V.sinLayout.recordBytes + V.sin.skipped + k * 4, B.terrain, true); // @math the kept bytes are dwords
-  const run = replaceMember(replaceMember(dat, `${name}.M`, map), `${name}.SIN`, sin);
-  assert.equal(run.length, r.modified.size, 'the rebuilt run copy has the recorded size');
-  assert.equal(createHash('sha1').update(run).digest('hex'), r.modified.sha1, 'the rebuilt run copy is the one the game ran from');
-  return members;
+  const B = V.boost, S = B.strip;
+  assert.deepEqual([r.build.id, r.build.rows, r.build.cols, r.build.value, r.build.track], [S.tile, S.rows, S.cols, B.terrain, B.track], 'the experiment built the strip and nothing else');
+  return rebuildStrip(dat, r, V);
 }
 
-function strip(V) {
-  const S = V.boost.strip, origin = V.map.mapOrigin * V.sheet.size, edge = V.sheet.size;
-  return [origin + S.rows[0] * edge, origin + (S.rows[1] + 1) * edge];
-}
+const strip = V => stripRows(V.boost.strip, V);
 
 // Common to both runs: columns, the terrain-2 cells are exactly the strip's rows, a boost is never half-recorded.
 function common(dat, r, V) {
