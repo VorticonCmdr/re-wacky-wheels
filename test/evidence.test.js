@@ -389,3 +389,16 @@ test('route and object parsers are exact by default and keep unknown trailing by
   assert.throws(() => parseRouteKeepingTail(rd.subarray(0, 10)), /at least 16/, 'a file shorter than its count is still an error');
   assert.throws(() => parseSpwKeepingTail(new Uint8Array(1)), /truncated/);
 });
+
+test('the viewer and editor parseGam uses the strict parser for the game\'s shape and falls back for other files', async () => {
+  const { parseGam } = await import('../src/tracks.js');
+  const lines = ['F1.PCX', 'F2.PCX', 'MA1.PCX', 'MA2.PCX', 'BACK1.PCX', '1250', '1500', '1', ...Array.from({ length: 16 }, (_, i) => String(100 + i)), '1', '4', '4', '3'];
+  const crlf = new TextEncoder().encode(lines.join('\r\n') + '\r\n'), g = parseGam(crlf);
+  assert.equal(g.strict, true, 'a CRLF file in the game\'s shape is read by the strict parser');
+  assert.deepEqual([g.tiles, g.masks, g.sky, g.startX, g.startY, g.cycling], [['a_f1.pcx', 'a_f2.pcx'], ['a_ma1.pcx', 'a_ma2.pcx'], 'back1.pcx', 100, 101, true]);
+  assert.deepEqual(g.starts[1], { x: 102, y: 103 });
+  const lf = parseGam(new TextEncoder().encode(lines.join('\n') + '\n'));
+  assert.equal(lf.strict, false, 'a bare-LF file is not the game\'s shape, so the lenient fallback reads it');
+  assert.deepEqual([lf.tiles, lf.startX, lf.startY, lf.cycling], [['a_f1.pcx', 'a_f2.pcx'], 100, 101, true]);
+  assert.throws(() => parseGam(new TextEncoder().encode(lines.slice(0, 20).join('\r\n'))), /at least 25/);
+});

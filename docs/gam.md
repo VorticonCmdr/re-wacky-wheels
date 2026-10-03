@@ -18,7 +18,7 @@ Lines 1–4 omit `a_`; line 5 does not. Cycling uses beach.pcx; delays cover ste
 ## Verification notes
 
 
-Tags as in [evidence.md](evidence.md); citations are against the user's WW.EXE ([binaries.md](binaries.md)). Parser: `parseGam` in `src/formats/gam.js` (strict; integers returned as read); the legacy `parseGam` in `src/tracks.js` still serves the viewer and editor.
+Tags as in [evidence.md](evidence.md); citations are against the user's WW.EXE ([binaries.md](binaries.md)). Parser: `parseGam` in `src/formats/gam.js` (strict; integers returned as read); `parseGam` in `src/tracks.js`, which the viewer and editor use, reads through it first and falls back to a lenient reader for files in another shape (for example LF-only line endings, which the game itself would misread).
 
 - [PROVEN] (observed in the running game, `gam.read`): for track 2 the parser `FUN_0002717c` left lines 1 and 2 in the tileset name slots and lines 3 and 4 in the mask slots, each rewritten as `A_` plus the line (case kept), line 5 in its own buffer, the first tileset's name upper-cased as the palette source, lines 26 to 28 as three words, and the first coordinate pair (lines 9 and 10) in the word tables with 0x03e0 added. The tile buffer then holds the split tilesets from lines 1-2 followed by the masks from lines 3-4 (`tiles.buffer`).
 - [STATIC] (`gam.read-rest`): lines 6 and 7 are converted (+0x0400), line 8 is dropped, pairs 2 to 8 go into the tables (+0x03e0) and line 25 is stored, set to 1 when non-zero. The game rewrites these after loading, so they were not seen as loaded: the value words differ from the file lines, the table holds a derived start grid (x stepping by 20 from the first pair, y equal) and the flag word reads 2.
