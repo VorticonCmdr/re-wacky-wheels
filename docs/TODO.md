@@ -38,9 +38,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: read in full; observed: racers on route points (`ai.route-follow`), the initial words (`ai.speed-setup`), the state machine's relations and the speed-table lookup (`ai.state-machine`, `ai.race-speeds`). Still unseen: state 3, the rubber-band helper, the push rule and the contact flag.
 - [ ] `UNKNOWN_RD_FIELD_USE` [UNKNOWN] — what sets the level word obj2+0x28b84, what reads the heading word, and what the mode words obj2+0x1ec74, +0x1ece0, +0x1edb0 mean
   - Next: the writers of those words (the AI start values themselves are `ai.speed-setup`, proven).
-- [ ] `UNKNOWN_SIN_KEPT_FIELDS` [UNKNOWN] — what the property values mean as surfaces (track 2 yields 4, 5 and 7), and what the 4 discarded `.SIN` bytes hold
-  - Gap: the kept 8 bytes are two dwords, one per mask value (`terrain.lookup`, proven); the lookup never reads the discarded 4.
-  - Next: what the SDX fields and the compare cases (2, 3, 6, 0xa, 0xf) do, and whether anything reads the discarded bytes (consumers found: `terrain.sdx-index`).
+- [ ] `UNKNOWN_SIN_KEPT_FIELDS` [UNKNOWN] — what the surface values other than 2, 3, 5, 6, 0xf mean (track 2 yields 4, 5 and 7), and what the 4 discarded `.SIN` bytes hold
+  - Gap: the kept 8 bytes are two dwords, one per mask value (`terrain.lookup`, proven); 2 is a boost strip, 3 the wall, 6 and 0xf a special state (`car.speed-model`, `car.move-step`), 5 shortens a stopped car's drawing; the lookup never reads the discarded 4.
+  - Next: the remaining readers of the car words +0x36, +0x3a, +0x56 for 4, 7 and the rest, and whether anything reads the discarded bytes.
 - [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 0xffff on pickup, `atr.kind-effects`) and what the coordinates are used for beyond drawing and pickups
   - Next: the other users of the object table (obj1+0x216a0, +0x218a4, +0x25a78, +0x261fc).
 - [ ] `UNKNOWN_PAR_USE` [UNKNOWN] — what draws the uploaded pixels afterwards; lead: the file is a 1280 x 20 panorama shown as a 320-pixel window on screen rows 110 to 129 (seen once by comparing a frame, not wiki's 640 x 40)
@@ -102,6 +102,15 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: the roles are observed field by field (pointer, length and priority in `audio.load`, handle and count in `audio.record-play`, the priority again in `audio.speaker-tick`); the library routines are read (`audio.speaker-player`) and +0x08 is `audio.play-param`. What stays STATIC is the code that resets and tests the records (obj1+0x1adc, +0x1bbc).
 - [ ] `audio.play-param` [STATIC] — the record dword +0x08 is a pitch parameter (cents) used only by the digital-style players of devices 0, 1 and 6; the PC-speaker player ignores it
   - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
+
+- [ ] `car.speed-model` [STATIC] — the player's throttle index (+10 accelerating, -4 coasting, -8 braking, boost 160 for 16 frames) and the speed as `VEL.TAB[index]`
+  - Gap: read in full, not run; the input words obj2+0x28b40/0x28b44 and where they are set are unread. Next: with DOSBox, hold the accelerate key and sample the car's +0x42 and +0x26 words against `VEL.TAB`.
+- [ ] `car.move-step` [STATIC] — the player's per-frame move: heading index, position by TRIG x speed, collision bounce, wall probes (terrain 3), terrain value stored in the car record, hazard terrains 6 and 0xf
+  - Gap: read in full, not run; `FUN_00021de0` (the collision decision) and `FUN_000283a4` (the probe vectors) are unread. Next: read those two, and sample position, heading and the terrain value over a drive.
+- [ ] `view.setup` [STATIC] — the view fan: 320 TRIG entries around the heading, reaching 1122 units (the largest NDIST dword), and a bounding box of the visible points
+  - Gap: read, not run; `FUN_00037bb1` is `car.move-step`'s advance helper (offset = (vector x distance + 0x8000) >> 16), the box's use is unread.
+- [ ] `race.frame-calls` [STATIC] — the race frame routine FUN_0002fd8c: its call order (floor, objects, cars, terrain lookup, progress, AI)
+  - Gap: static order of calls, not a traced frame; most callees are unread (FUN_000133d8, FUN_00032cf8, FUN_00028480, FUN_000287ec, FUN_000255d4, FUN_00025a78, FUN_000266a8, FUN_0002632c, FUN_000253d8, FUN_00028668, FUN_0002a92c, FUN_0002602c). Next: read the player-car physics among them.
 
 ## Work items (no claim)
 
