@@ -10,7 +10,7 @@
 - [PROVEN] (`obs-audio`, `audio.record-play`) and [STATIC] (`audio.record-roles`): the player stores the voice handle the sound library returns at record dword +0x10 (-1 when none) and counts plays in +0x14; of the 26 records at the title screen, 10 held a handle, all with a counted play, and never-played records had -1. Record +8 is passed to the library's play call (0 in both loaders), +0xc is the priority, and +0 is the data pointer. The library routines are unread.
 - The earlier note that 25 of the 78 slots are empty counted slots 52 to 76 (size 0); slot 77 subtracts to −4. Slots 0 to 7 and 26 to 33 are not empty by byte size (they have headers) but carry a zero-length payload. The overview's claim of 54 unnamed files does not describe this file.
 
-Open: [TODO.md](TODO.md) (`UNKNOWN_AUDIO_MODE_VALUES`).
+The device numbers are `audio.device-numbers` (read in `SETUP.EXE`); open items are in [TODO.md](TODO.md).
 
 ## Sources
 

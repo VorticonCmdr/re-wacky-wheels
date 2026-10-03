@@ -43,7 +43,7 @@ The cpu field is 2 and the os field is 1. Their meanings (80386; the LE "OS/2" v
 
 ## Other executables
 
-Layout only: what each program does is not analysed (see [TODO.md](TODO.md)). `npm run dump:le -- --exe NAME` dumps the objects of the two LE programs for Ghidra; the citation form is the same (`SETUP.EXE:obj1+0x...` once something is cited).
+Layout only, apart from `SETUP.EXE`'s sound-card table (`audio.device-numbers`; `DISASM_DIR=analysis/setup npm run disasm` reads its dumped objects): what each program does is not analysed (see [TODO.md](TODO.md)). `npm run dump:le -- --exe NAME` dumps the objects of the two LE programs for Ghidra; the citation form is the same (`SETUP.EXE:obj1+0x...` once something is cited).
 
 | Program | Format | Facts | Tag | Check |
 | --- | --- | --- | --- | --- |
