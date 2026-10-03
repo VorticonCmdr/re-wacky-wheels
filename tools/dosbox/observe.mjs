@@ -353,7 +353,7 @@ const scenarios = {
     const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
     const A = JSON.parse(values.args);
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build,
-      columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain', ...(A.wide ?? []), ...(A.object ?? []), ...(A.shots ?? [])], samples: A.samples, ...(A.stops ? { stopAt: A.stopAt, stops: A.stops } : {}), ...(A.lists ? { lists: A.lists, fireAt: A.fireAt } : {}), ...(A.racers ? { racers: A.racers, racerWords: A.racerWords } : {}) };
+      columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain', ...(A.wide ?? []), ...(A.object ?? []), ...(A.shots ?? [])], samples: A.samples, ...(A.stops ? { stopAt: A.stopAt, stops: A.stops } : {}), ...(A.lists ? { lists: A.lists, fireAt: A.fireAt, hold: A.hold } : {}), ...(A.racers ? { racers: A.racers, racerWords: A.racerWords } : {}) };
   },
   async projtable() {
     // The distance-to-screen-row table the race builds at obj2+0xbd00 (the routine at obj1+0x174a4): its CRC-32 over `--bytes` bytes (default 8194, 4097 words), read in a race.
