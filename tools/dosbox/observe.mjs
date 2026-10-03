@@ -337,6 +337,28 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async steps() {
+    // (a played race, paused) tick-resolution samples of the player's car while keys are held: --phases '[[["KBD_leftalt"],40],[[],40],...]' (keys, samples), --ms 'lo,hi' the random run in ms between the samples.
+    // Per sample: the tick counter obj2+0x1ec64, the car's throttle +0x42 and speed +0x26, the player's world x and y (obj2+0xaaa6, +0xaaa8), the angle dword obj2+0x1d5d4, the accelerate and brake words
+    // obj2+0x28b40 and +0x28b44, the steering amounts obj2+0x28b90 and +0x28b92, the collision-related car words +0x7c and +0x7e, and the terrain dword obj2+0x1e568.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = (path, body) => fetch(`${API}/api/v1${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
+    const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const phases = JSON.parse(values.phases ?? '[]'), [lo, hi] = (values.ms ?? '60,120').split(',').map(Number), samples = []; // @math a random run of 60 to 120 ms by default
+    let down = [];
+    await post('/debug/pause');
+    for (const [keys, n] of phases) {
+      for (let k = 0; k < n; k++) {
+        const events = [...(k ? [] : down.map(key => ({ type: 'key', key, pressed: false, frame: 1 }))), ...(k ? [] : keys.map(key => ({ type: 'key', key, pressed: true, frame: 2 })))];
+        if (events.length) await post('/input/sequence', { events });
+        await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(30); // @math a short settle after the pause
+        const car = await i32(b2 + 0x1d5b0);
+        samples.push([phases.findIndex(p => p[0] === keys && p[1] === n), await i32(b2 + 0x1ec64), await i16(car + 0x42), await i16(car + 0x26), await u16(b2 + 0xaaa6), await u16(b2 + 0xaaa8), await i32(b2 + 0x1d5d4), await u16(b2 + 0x28b40), await u16(b2 + 0x28b44), await u16(b2 + 0x28b90), await u16(b2 + 0x28b92), await i16(car + 0x7c), await i16(car + 0x7e), await i32(b2 + 0x1e568)]);
+      }
+      down = keys;
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'tick', 'throttle', 'speed', 'x', 'y', 'angle', 'accelerate', 'brake', 'rightAmount', 'leftAmount', 'collisionA', 'collisionB', 'terrain'], samples };
+  },
   async boost() {
     // The boost of the player's car (tools/dosbox/boost-run.mjs passes --args {build, forced, samples}): the run archive is the user's with one tile of track 1 given the terrain value in
     // `build` (tools/dosbox/make-test-sin.mjs) and laid over a strip of the map, and the boost's gate inputs (the car word +0xa and the heading range words) were written before the car
@@ -399,6 +421,8 @@ const scenarios = {
     const sprites = (spec.sprites ?? []).map(sp => { const data = members.get(sp.member), picked = []; for (let j = 0; j < sp.h; j++) for (let i = 0; i < sp.w; i++) { if (data[sp.at + i * sp.h + j] === 0) continue; const x = sp.x + i, y = sp.y + j; if ((sp.exclude ?? []).some(([ex, ey, ew, eh]) => x >= ex && x < ex + ew && y >= ey && y < ey + eh)) continue; picked.push(image[y * W + x]); } return { ...sp, pixels: picked.length, crc: hex8(crc32(Buffer.from(picked))) }; });
     // Tile fonts (`--args` field `tiles`: { member, w, h, count, positions: [{ x, y, tag }] }): for every position and every tile of the member (w x h pixels, column-major, tile k at byte w * h * k, zero pixels transparent) the number and the CRC-32 of the screen pixels under the tile's non-zero pixels.
     const tiles = (spec.tiles ?? []).map(tf => { const data = members.get(tf.member); return { ...tf, positions: tf.positions.map(pos => ({ ...pos, c: Array.from({ length: tf.count }, (_, k) => { const picked = []; for (let j = 0; j < tf.h; j++) for (let i = 0; i < tf.w; i++) { if (data[tf.w * tf.h * k + i * tf.h + j] === 0) continue; picked.push(image[(pos.y + j) * W + pos.x + i]); } return [picked.length, hex8(crc32(Buffer.from(picked)))]; }) })) }; });
+    // Extra obj2 words by offset (`--args` field `words`: [offsets]), read while the game is paused.
+    const words = spec.words ? Object.fromEntries(await Promise.all(spec.words.map(async off => [off, Buffer.from(await readMemory(b2 + off, 2)).readInt16LE(0)]))) : undefined;
     const i16 = async a => Buffer.from(await readMemory(b2 + a, 2)).readInt16LE(0), car = Buffer.from(await readMemory(b2 + 0x1d5b0, 4)).readUInt32LE(0), c16 = async off => Buffer.from(await readMemory(car + off, 2)).readInt16LE(0);
     const hud = {}; for (const [name, off] of Object.entries({ item: 0x8426, speedTarget: 0x8436, speedShown: 0x8438, counterA: 0x847a, counterB: 0x847c, place: 0x84bc })) hud[name] = await i16(off); // @math the racer HUD record words of the report
     const i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0); hud.ticks = await i32(0x1e71c); hud.now = await i32(0x1ec64); hud.timerMode = await i16(0x28c44); // @math the timer word of the report, the tick counter and the mode word
@@ -438,7 +462,7 @@ const scenarios = {
       const racers = []; for (let n = 0; n < 8; n++) racers.push([await i16(0xaaa6 + n * 0x68), await i16(0xaaa8 + n * 0x68)]); // @math eight racer records of 0x68 bytes: the x and y words
       minimap = { dots, racers, count: await i16(0x28c40), mode: await i16(0x28c0c), pictureCrc: hex8(crc32(buf)), tables: { x: [0x202cc, hex8(crc32(Buffer.from(await readMemory(b2 + 0x202cc, 2048))))], y: [0x1faca, hex8(crc32(Buffer.from(await readMemory(b2 + 0x1faca, 2048))))] } }; // @math the two 2048-byte tables of the minimap
     }
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(tiles.length ? { tiles } : {}), ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}), ...(horizon ? { horizon } : {}) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(tiles.length ? { tiles } : {}), ...(words ? { words } : {}), ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}), ...(horizon ? { horizon } : {}) };
   },
   async carframes() {
     // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.
