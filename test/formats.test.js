@@ -59,7 +59,7 @@ test('track tiles use ten image-stride columns, not nine; tile 107 is valid', ()
   function sheet(bias) { const indices = new Uint8Array(320 * 200); for (let y = 0; y < 192; y++) for (let x = 0; x < 320; x++) indices[y * 320 + x] = bias + Math.floor(y / 32) * 10 + Math.floor(x / 32); return { width: 320, height: 200, indices, palette: new Uint8Array(768) }; }
   const map = new Uint8Array(4096); map[0] = 10; map[1] = 107;
   const track = composeTrack(map, sheet(0), sheet(54)); assert.equal(track.indices[0], 10); assert.equal(track.indices[32], 107);
-  map[0] = 108; assert.throws(() => composeTrack(map, sheet(0), sheet(54)), /Invalid tile/);
+  map[0] = 108; assert.throws(() => composeTrack(map, sheet(0), sheet(54)), /exceeds/);
 });
 test('route and spawn counts reject incomplete records', () => {
   assert.throws(() => parseRoute(new Uint8Array([1, 0, 0])), /records/); assert.throws(() => parseSpawns(new Uint8Array([1, 0, 0])), /records/);

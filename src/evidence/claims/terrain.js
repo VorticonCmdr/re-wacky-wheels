@@ -9,9 +9,9 @@ export default [
     leads: ['docs/sin.md (ModdingWiki: property choices for mask indices 0/1)', 'docs/pcx.md (a_ma* are per-pixel property masks)'],
   },
   {
-    id: 'terrain.clamp', tag: 'STATIC',
-    statement: 'Before the cell is computed the lookup clamps the row and the column each to 0..0xfff (compare with 0xfff and with 0 at obj1+0x27b10, then the same for the column), so every position reads some cell of the 128x128 table (the padding cells point at tile 0). Not observed: no sampled position is near the edges of that range.',
+    id: 'terrain.clamp', tag: 'PROVEN',
+    statement: 'Observed in the running game (record terrain-4: an execute breakpoint at the terrain lookup\'s entry, obj1+0x27b04, where the row and column inputs at obj2+0x1d7a8 and +0x1d7a4 were overwritten with forced values, the routine single-stepped out and the result at obj2+0x1e568 read; 19 forced pairs, each coordinate set to values below 0, at 0, at 0xffe, 0xfff and 0x1000, above 0xfff and far outside): every result equals the one the position clamped to 0..0xfff on each axis predicts (cell computed from the clamped values, the 128x128 table\'s padding cells at tile 0). The disassembly compares with 0xfff and with 0 at obj1+0x27b10 and the following instructions; stepping showed row -7 become 0 and column 123456 become 0xfff in the registers.',
     value: { limit: 0xfff },
-    evidence: { at: ['WW.EXE:obj1+0x27b10 fp=ec3ad705'] },
+    evidence: { checks: ['obs-terrain'], obs: ['terrain-4'], at: ['WW.EXE:obj1+0x27b10 fp=ec3ad705'] },
   },
 ];

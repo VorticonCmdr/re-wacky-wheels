@@ -60,12 +60,30 @@ function validate(dat, record, V, { swap = false } = {}) {
   assert.equal(V.spw.coordBias, origin);
 }
 
+// A `terrain-4` record: the lookup's row and column forced at its entry to values on each side of both ends of the clamp. Every result must be the one the
+// clamped position predicts, and every side of the range must be outside at least once, with the exact limit and its neighbours present.
+function validateForced(dat, record, V) {
+  assertArchive(record, dat);
+  assert.equal(record.forced, true, 'the record holds forced inputs');
+  const predict = predictor(dat, record.names.track, V), limit = V.clamp.limit, outside = { rowLow: false, rowHigh: false, colLow: false, colHigh: false };
+  assert.equal(record.rowOffset, V.terrain.rowOffset);
+  assert.equal(record.columnOffset, V.terrain.columnOffset);
+  assert.equal(record.resultOffset, V.terrain.resultOffset);
+  for (const [row, col, result, track] of record.samples) {
+    assert.equal(String(track), record.names.track, 'every forced sample was taken in the same race');
+    assert.equal(result, predict(row, col).value, `forced (${row}, ${col})`);
+    outside.rowLow ||= row < 0; outside.rowHigh ||= row > limit; outside.colLow ||= col < 0; outside.colHigh ||= col > limit; // @math negative is below the range
+  }
+  assert.deepEqual(Object.values(outside), [true, true, true, true], 'each side of the range was exceeded');
+  for (const edge of [limit - 1, limit, limit + 1]) assert.ok(record.samples.some(s => s[0] === edge) && record.samples.some(s => s[1] === edge), `both coordinates were forced to ${edge}`); // @math the limit and its neighbours
+}
+
 export default {
   id: 'obs-terrain',
-  claims: ['terrain.lookup'],
-  obs: ['terrain-3'],
+  claims: ['terrain.lookup', 'terrain.clamp'],
+  obs: ['terrain-3', 'terrain-4'],
   reviewed: { by: 'main-session', date: '2026-10-03' },
-  async run(ctx) { validate(await ctx.open('WACKY.DAT'), ctx.obs('terrain-3'), values()); },
+  async run(ctx) { const dat = await ctx.open('WACKY.DAT'), V = values(); validate(dat, ctx.obs('terrain-3'), V); validateForced(dat, ctx.obs('terrain-4'), V); },
   // Each parameter changed on its own, and the swapped coordinate roles, must fail.
   async discriminate(ctx) {
     const dat = await ctx.open('WACKY.DAT'), record = ctx.obs('terrain-3'), V = values();
@@ -77,6 +95,9 @@ export default {
       tweak(`entry ${V.terrain.entryBytes / 2} bytes`, 'terrain', { entryBytes: V.terrain.entryBytes / 2 }), // @math alternative: half-size entries
       tweak('mask region 0x1A000', 'terrain', { maskRegion: V.terrain.maskRegion - V.buffer.tileBytes }),
       tweak(`map origin ${V.map.mapOrigin - 1}`, 'map', { mapOrigin: V.map.mapOrigin - 1 }),
+      { label: 'clamp limit one lower', fn: () => validateForced(dat, ctx.obs('terrain-4'), { ...V, clamp: { limit: V.clamp.limit - 1 } }) },
+      { label: 'clamp limit one higher', fn: () => validateForced(dat, ctx.obs('terrain-4'), { ...V, clamp: { limit: V.clamp.limit + 1 } }) },
+      { label: 'clamp limit 0x1fff', fn: () => validateForced(dat, ctx.obs('terrain-4'), { ...V, clamp: { limit: V.clamp.limit * 2 + 1 } }) }, // @math the next power-of-two limit
     ];
   },
 };

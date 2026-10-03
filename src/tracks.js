@@ -1,34 +1,31 @@
 import { bytes, view, need, ascii } from './binary.js';
+import { parseMap, parseRouteKeepingTail as parseRouteStrict, parseSpwKeepingTail as parseSpwStrict } from './formats/track-files.js';
+import { splitTiles } from './formats/pcx.js';
 export function parseGam(data) {
   const lines = ascii(data).split(/\r?\n/).map(s => s.trim());
   if (lines.length < 25) throw new Error('GAM needs at least 25 lines');
   return { lines, tiles: lines.slice(0, 2).map(n => 'a_' + n.toLowerCase()), masks: lines.slice(2, 4).map(n => 'a_' + n.toLowerCase()), sky: lines[4].toLowerCase(), startX: Number(lines[8]), startY: Number(lines[9]), cycling: Number(lines[24]) === 1 };
 }
+// Route and object files are read by the traced parsers (src/formats/track-files.js, claims rd.* and spw.*), which
+// require the exact size the count implies; these adapters give the words their viewer and editor names.
+const ROUTE_WORDS = ['x1', 'y1', 'x2', 'y2', 'angle', 'direction', 'distance'];
 export function parseRoute(data) {
-  const b = bytes(data), v = view(b); need(b, 0, 2, 'RD');
-  const n = v.getUint16(0, true); need(b, 2, n * 14, 'RD records');
-  return Array.from({ length: n }, (_, i) => {
-    const p = 2 + i * 14;
-    return Object.fromEntries(['x1', 'y1', 'x2', 'y2', 'angle', 'direction', 'distance'].map((k, j) => [k, v.getUint16(p + j * 2, true)]));
-  });
+  return parseRouteStrict(data).map(record => Object.fromEntries(ROUTE_WORDS.map((name, i) => [name, record[i]])));
 }
 export function parseSpawns(data) {
-  const b = bytes(data), v = view(b); need(b, 0, 2, 'SPW');
-  const n = v.getUint16(0, true); need(b, 2, n * 12, 'SPW records');
-  return Array.from({ length: n }, (_, i) => { const p = 2 + i * 12; return { id: v.getUint16(p, true), x: v.getUint16(p + 4, true), y: v.getUint16(p + 6, true), unknown1: v.getUint16(p + 2, true), unknown2: v.getUint16(p + 8, true), unknown3: v.getInt16(p + 10, true) }; });
+  // Word +0x0a is read as signed here; the loader copies it unchanged (UNKNOWN_SPW_FIELDS).
+  return parseSpwStrict(data).map(r => ({ id: r[0], x: r[2], y: r[3], unknown1: r[1], unknown2: r[4], unknown3: (r[5] << 16) >> 16 }));
 }
+// The 2048x2048 track surface: the map's tile ids index the 108 tiles of the two sheets in order (first sheet's 54, then the
+// second's), exactly the game's tile buffer (claims m.layout, tiles.sheet-split, tiles.buffer).
 export function composeTrack(data, first, second) {
-  const map = bytes(data); need(map, 0, 4096, 'Track map');
-  const width = 2048, height = 2048, indices = new Uint8Array(width * height);
-  for (let my = 0; my < 64; my++) for (let mx = 0; mx < 64; mx++) {
-    const tile = map[my * 64 + mx], sheet = tile < 54 ? first : second, n = tile % 54;
-    if (tile > 107 || !sheet.indices) throw new Error('Invalid tile index or non-indexed tileset');
-    // Tile numbering follows the image stride (10 columns in a 320px sheet).
-    // Only the first 54 of the 60 full tiles belong to each track tileset.
-    const columns = Math.floor(sheet.width / 32);
-    const tx = (n % columns) * 32, ty = Math.floor(n / columns) * 32;
-    if (sheet.width < tx + 32 || sheet.height < ty + 32) throw new Error('Tileset is too small');
-    for (let y = 0; y < 32; y++) indices.set(sheet.indices.subarray((ty + y) * sheet.width + tx, (ty + y) * sheet.width + tx + 32), (my * 32 + y) * width + mx * 32);
+  const { rows, columns, tiles: map } = parseMap(data);
+  if (!first.indices || !second.indices) throw new Error('Invalid tile index or non-indexed tileset');
+  const sheets = [...splitTiles(first), ...splitTiles(second)], size = Math.round(Math.sqrt(sheets[0].length)), width = columns * size, height = rows * size;
+  const indices = new Uint8Array(width * height);
+  for (let my = 0; my < rows; my++) for (let mx = 0; mx < columns; mx++) {
+    const tile = sheets[map[my * columns + mx]];
+    for (let y = 0; y < size; y++) indices.set(tile.subarray(y * size, (y + 1) * size), (my * size + y) * width + mx * size);
   }
   return { width, height, indices, palette: first.palette };
 }

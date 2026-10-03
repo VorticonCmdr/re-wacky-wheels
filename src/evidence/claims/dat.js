@@ -18,10 +18,18 @@ export default [
     evidence: { checks: ['obs-race'], obs: ['race-3'], at: ['WW.EXE:obj1+0x41e9 fp=47b0a754', 'WW.EXE:obj1+0x41f4 fp=9a403e60'] },
   },
   {
-    id: 'dat.entry-notfound', tag: 'STATIC',
-    statement: 'The same lookup (Ghidra FUN_0001418c) ends the walk as not-found when an entry\'s first byte is 0 (obj1+0x41a9); the table is zero beyond its count*0x16 loaded bytes (dat.directory-read), so a name that is not in the archive reaches that zeroed entry. Not observed: no lookup in the record fails.',
-    value: { endMarker: 0x00 },
-    evidence: { at: ['WW.EXE:obj1+0x41a9 fp=bc85a927'] },
+    id: 'dat.notfound-behavior', tag: 'PROVEN',
+    statement: 'Experiment in the running game (record gamslot-1, see gam.trailing-space): when the sky picture is asked for by a name that matches no member ("BACK2.PCX " with a trailing space; the compare is exact up to the NUL, dat.entry-compare), the game does not stop. The failed lookup does not move the file position, so the next reads continue from where the previous read ended: the game\'s sky buffer holds the 33339 bytes that start 0x80 bytes (one PCX header) after the end of the member read just before, 2.SIN, i.e. the archive bytes at 3462824 inside 3.RD, and not BACK2.PCX\'s stream. A request for a missing name therefore yields wrong data, silently.',
+    value: { previousMember: '2.SIN' },
+    evidence: { checks: ['obs-gamslot'], obs: ['gamslot-1'], at: ['WW.EXE:obj1+0x41a9 fp=bc85a927'] },
+    leads: ['docs/dat.md'],
+  },
+  {
+    id: 'dat.entry-notfound', tag: 'PROVEN',
+    statement: 'Observed in the running game (record miss-1: the first demo race with the sky-name line of 2.GAM edited to "back2.pcx ", the run archive rebuilt and hash-compared by the check; an execute breakpoint on the lookup\'s not-found path, obj1+0x41b2 of the routine Ghidra calls FUN_0001418c): the lookup, asked for "BACK2.PCX " (no member has that name), took that path once; the walk index word at obj2+0x28b00 was 577, the archive\'s entry count, so the walk ended on the entry after the last; that entry (obj2+0x5080 plus 577 x 0x16) starts with a 0 byte and the last loaded entry does not. So a name that is not in the archive is not found by walking past the loaded entries onto the zeroed one; the game then continues without seeking (dat.notfound-behavior).',
+    value: { endMarker: 0x00, missPath: 0x41b2, walkIndexAt: 0x28b00, tableAt: 0x5080 },
+    evidence: { checks: ['obs-miss'], obs: ['miss-1'], at: ['WW.EXE:obj1+0x41a9 fp=bc85a927'] },
+    leads: ['docs/dat.md'],
   },
   {
     id: 'dat.entry-size', tag: 'PROVEN',

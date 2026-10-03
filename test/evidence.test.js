@@ -375,3 +375,17 @@ test('VOC parser follows the proven structure and fails loudly', async () => {
   assert.throws(() => parseVoc(voc([1, 9, 0, 0, 1, 2], { tail: [0] })), /truncated|block/, 'a block longer than the file');
   assert.throws(() => parseVoc(new Uint8Array(30)), /Not a Creative Voice file/);
 });
+
+test('route and object parsers are exact by default and keep unknown trailing bytes only when asked', async () => {
+  const { parseRoute, parseRouteKeepingTail, parseSpw, parseSpwKeepingTail } = await import('../src/formats/track-files.js');
+  const rd = new Uint8Array([1, 0, ...Array(14).fill(7)]), spw = new Uint8Array([1, 0, ...Array(12).fill(3)]);
+  assert.equal(parseRoute(rd).length, 1);
+  assert.equal(parseSpw(spw).length, 1);
+  const rdTail = new Uint8Array([...rd, 9, 9, 9]), spwTail = new Uint8Array([...spw, 9]);
+  assert.throws(() => parseRoute(rdTail), /expected 16/);
+  assert.throws(() => parseSpw(spwTail), /expected 14/);
+  assert.equal(parseRouteKeepingTail(rdTail).length, 1);
+  assert.equal(parseSpwKeepingTail(spwTail).length, 1);
+  assert.throws(() => parseRouteKeepingTail(rd.subarray(0, 10)), /at least 16/, 'a file shorter than its count is still an error');
+  assert.throws(() => parseSpwKeepingTail(new Uint8Array(1)), /truncated/);
+});

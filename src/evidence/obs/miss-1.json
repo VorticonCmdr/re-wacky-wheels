@@ -1,0 +1,66 @@
+{
+ "id": "miss-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "first demo race (track 2) with a trailing space on the sky name line of 2.GAM in the run copy; execute breakpoint on the lookup not-found path (obj1+0x41b2); read at its first stop",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "member": "2.GAM",
+ "edits": [
+  [
+   4,
+   "back2.pcx "
+  ]
+ ],
+ "modified": {
+  "size": 7772052,
+  "sha1": "115a7638d37259f53ec40c6f1bfa3df1ffc4ec06"
+ },
+ "stoppedAt": 16818,
+ "name": "BACK2.PCX ",
+ "walkIndex": [
+  166656,
+  577
+ ],
+ "breakpoints": [
+  [
+   16818,
+   1
+  ]
+ ],
+ "table": {
+  "offset": 20608,
+  "entryBytes": 22,
+  "lastLoaded": [
+   87,
+   87,
+   82,
+   69
+  ],
+  "atIndex": [
+   0,
+   0,
+   0,
+   0
+  ],
+  "afterIndex": [
+   0,
+   0,
+   0,
+   0
+  ]
+ }
+}

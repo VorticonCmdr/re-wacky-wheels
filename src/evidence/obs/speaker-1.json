@@ -1,0 +1,70 @@
+{
+ "id": "speaker-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "start-up (title screen) with the WACKY.CFG sound-mode dword at 0x786 set to 7 in the run copy",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "cfg": {
+  "offset": 1926,
+  "sha1": "1cbb6bcadcd08e0df0f07be24c6b37436ce18fc1"
+ },
+ "words": {
+  "device": [
+   16360,
+   7
+  ],
+  "error": [
+   16364,
+   0
+  ],
+  "volume": [
+   17200,
+   240
+  ],
+  "handle": [
+   17208,
+   1
+  ],
+  "callback": [
+   17196,
+   0
+  ],
+  "byteMode": [
+   168144,
+   1
+  ],
+  "priority": [
+   168140,
+   0
+  ],
+  "remaining": [
+   168136,
+   0
+  ],
+  "pointer": [
+   17192,
+   0
+  ],
+  "mode": [
+   95236,
+   7
+  ]
+ },
+ "tableOffset": 167620,
+ "tableBytes": 512,
+ "tableCrc": "3aa6d753"
+}

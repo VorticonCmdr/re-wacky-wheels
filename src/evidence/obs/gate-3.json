@@ -1,0 +1,63 @@
+{
+ "id": "gate-3",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 3 in the run copy; execute breakpoints at the library check, init, their error stubs, the bank-load routine and the loader; read at the error-stub stop",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "selector": 384,
+ "stoppedAt": 202968,
+ "words": {
+  "mode": [
+   95236,
+   3
+  ],
+  "device": [
+   16360,
+   3
+  ],
+  "error": [
+   16364,
+   0
+  ]
+ },
+ "breakpoints": [
+  [
+   8088,
+   0
+  ],
+  [
+   8484,
+   0
+  ],
+  [
+   202308,
+   1
+  ],
+  [
+   202722,
+   0
+  ],
+  [
+   202784,
+   1
+  ],
+  [
+   202968,
+   1
+  ]
+ ]
+}

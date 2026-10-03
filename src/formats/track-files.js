@@ -44,21 +44,23 @@ export function parseSinWith(data, L, littleEndian = true) {
   });
 }
 
-export function parseRouteWith(data, L, littleEndian = true) {
+export function parseRouteWith(data, L, littleEndian = true, { allowTrailing = false } = {}) {
   const b = bytes(data), dv = view(b);
   if (L.words * L.wordBytes !== L.recordBytes) throw new Error('RD record size is not a whole number of words');
   if (b.length < L.countBytes) throw new Error('RD is truncated');
   const count = dv.getUint16(0, littleEndian);
-  if (b.length !== L.countBytes + count * L.recordBytes) throw new Error(`RD is ${b.length} bytes, expected ${L.countBytes + count * L.recordBytes} for ${count} records`);
+  const exact = L.countBytes + count * L.recordBytes;
+  if (allowTrailing ? b.length < exact : b.length !== exact) throw new Error(`RD is ${b.length} bytes, expected ${allowTrailing ? 'at least ' : ''}${exact} for ${count} records`);
   return Array.from({ length: count }, (_, i) => Uint16Array.from({ length: L.words }, (_, w) => dv.getUint16(L.countBytes + i * L.recordBytes + w * L.wordBytes, littleEndian)));
 }
 
-export function parseSpwWith(data, L, littleEndian = true) {
+export function parseSpwWith(data, L, littleEndian = true, { allowTrailing = false } = {}) {
   const b = bytes(data), dv = view(b);
   if (L.words * L.wordBytes !== L.recordBytes) throw new Error('SPW record size is not a whole number of words');
   if (b.length < L.countBytes) throw new Error('SPW is truncated');
   const count = dv.getUint16(0, littleEndian);
-  if (b.length !== L.countBytes + count * L.recordBytes) throw new Error(`SPW is ${b.length} bytes, expected ${L.countBytes + count * L.recordBytes} for ${count} records`);
+  const exact = L.countBytes + count * L.recordBytes;
+  if (allowTrailing ? b.length < exact : b.length !== exact) throw new Error(`SPW is ${b.length} bytes, expected ${allowTrailing ? 'at least ' : ''}${exact} for ${count} records`);
   return Array.from({ length: count }, (_, i) => Uint16Array.from({ length: L.words }, (_, w) => dv.getUint16(L.countBytes + i * L.recordBytes + w * L.wordBytes, littleEndian)));
 }
 
@@ -66,4 +68,7 @@ export const parseMap = data => parseMapWith(data, MAP());
 export const parsePos = data => parsePosWith(data, POS());
 export const parseSin = data => parseSinWith(data, SIN());
 export const parseRoute = data => parseRouteWith(data, RD());
+// For tools that keep unknown trailing bytes (the editor): the records the count names, then anything.
+export const parseRouteKeepingTail = data => parseRouteWith(data, RD(), true, { allowTrailing: true });
 export const parseSpw = data => parseSpwWith(data, SPW());
+export const parseSpwKeepingTail = data => parseSpwWith(data, SPW(), true, { allowTrailing: true });

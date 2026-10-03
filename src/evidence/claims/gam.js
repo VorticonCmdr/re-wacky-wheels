@@ -38,8 +38,15 @@ export default [
     leads: ['docs/gam.md'],
   },
   {
+    id: 'gam.trailing-space', tag: 'PROVEN',
+    statement: 'Experiment in the running game (record gamslot-1: a copy of the user\'s archive with line 5 of 2.GAM edited to "back2.pcx " with a trailing space, rebuilt and hash-checked by the check; the first demo race, track 2): the game\'s copy of that line, in the slot at obj2+0xa4e0, is "BACK2.PCX " (upper-cased in place by the archive lookup) followed by a 0 byte. So the .GAM line reader keeps trailing spaces and ends the stored line with a NUL.',
+    value: { skyLine: 0x04, skyText: 'back2.pcx ', caseDelta: 0x20, terminator: 0x00 },
+    evidence: { checks: ['obs-gamslot'], obs: ['gamslot-1'], at: ['WW.EXE:obj1+0x16ff0 fp=c0013f8f', 'WW.EXE:obj1+0x17008 fp=d4d79688', 'WW.EXE:obj1+0x17020 fp=bbbe3968'] },
+    leads: ['docs/gam.md'],
+  },
+  {
     id: 'gam.line-reader-tail', tag: 'STATIC',
-    statement: 'The same line reader writes a NUL over the position of the CR, keeps trailing spaces in the line and has no end-of-file test, so a file that ends without a CR makes it read past the end. Read in full in disassembly; the experiment of gam.line-reader did not isolate these properties.',
+    statement: 'The same line reader has no end-of-file test, so a file that ends without a CR makes it read past the end, and it writes its NUL over the position of the CR. Read in full in disassembly; gam.trailing-space shows the stored line keeps trailing spaces and ends in a NUL, but nothing was run that reads past the end of a file.',
     value: { terminated: 0x00 },
     evidence: { at: ['WW.EXE:obj1+0x16ff0 fp=c0013f8f', 'WW.EXE:obj1+0x17008 fp=d4d79688', 'WW.EXE:obj1+0x17020 fp=bbbe3968'] },
     leads: ['docs/gam.md'],
@@ -55,7 +62,7 @@ export default [
 
   {
     id: 'UNKNOWN_GAM_NUMBERS', tag: 'UNKNOWN',
-    statement: 'What the numeric lines mean is not established: lines 6 and 7 (1250 and 1500 in track 2, stored +0x0400), the 8 coordinate pairs (stored +0x03e0; the wiki calls only the first pair the start position; they land in the word tables obj2+0x1d7cc / +0x1d7e0, from which racer.init sets the racers\' start positions, and in one branch racer.start-grid rebuilds seven of the eight from pair 0, so the file\'s other pairs are overwritten there; which branch the real game takes, and what the first pair is relative to the grid, is not established), the flag on line 25 (the wiki says palette cycling) and lines 26 to 28 (the wiki says delays; they are read into three words).',
+    statement: 'What the numeric lines mean is not established: lines 6 and 7 (1250 and 1500 in track 2, stored +0x0400), the 8 coordinate pairs (stored +0x03e0; the wiki calls only the first pair the start position; they land in the word tables obj2+0x1d7cc / +0x1d7e0, from which racer.init sets the racers\' start positions, and racer.start-grid (observed) rebuilds seven of the eight from pair 0 in the demo race, so the file\'s other seven pairs are overwritten there; what the other branch (obj2+0x1ec74 not 0) does with them is racer.init, not observed), the flag on line 25 (the wiki says palette cycling) and lines 26 to 28 (the wiki says delays; they are read into three words).',
     evidence: {},
     leads: ['docs/gam.md'],
     todo: 'Find the readers of obj2+0x28b0a/+0x28b0e, the word tables obj2+0x1d7cc/+0x1d7e0, obj2+0x28b60 and obj2+0x28b5a/+0x28b4e/+0x28b4c.',

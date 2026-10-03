@@ -5,13 +5,13 @@ import { crc, assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 function values() {
-  return { bank: expected('audio.bank-layout'), load: expected('audio.load'), alias: expected('audio.alias'), mode: expected('audio.mode-select') };
+  return { bank: expected('audio.bank-layout'), load: expected('audio.load'), alias: expected('audio.alias'), mode: expected('audio.mode-select'), play: expected('audio.record-play') };
 }
 
 // Cross-validate an `audio` record against the archive: the buffer is AUDIOT.FX, and every record follows from the bank layout.
 function validate(dat, record, V) {
   assertArchive(record, dat);
-  const { bank: B, load: LD, alias: A, mode: M } = V, members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data]));
+  const { bank: B, load: LD, alias: A, mode: M, play: P } = V, members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data]));
   assert.equal(record.names.head, 'AUDIOHED.FX', 'the game names the header file');
   assert.equal(record.names.body, 'AUDIOT.FX', 'the game names the bank file');
   assert.equal(record.names.headOffset, LD.headName);
@@ -40,6 +40,16 @@ function validate(dat, record, V) {
     assert.equal(rec[at(LD.zeroAt)], 0, `record ${k}: the dword at +${LD.zeroAt} is 0`);
     assert.equal(rec[at(LD.priorityAt)], LD.priorityFirst - k, `record ${k}: counts down from ${LD.priorityFirst}`);
   });
+  // The play routine's trail (audio.record-play): a handle is stored only with a counted play, and a record never played has none.
+  const handles = record.records.filter(rec => rec[at(P.handleAt)] !== P.none);
+  assert.ok(handles.length > 0 && handles.length < record.records.length, 'some records hold a handle and some do not');
+  record.records.forEach((rec, k) => {
+    const count = rec[at(P.countAt)], handle = rec[at(P.handleAt)];
+    assert.ok(Number.isInteger(count) && count >= 0, `record ${k}: the play counter`);
+    if (count === 0) assert.equal(handle, P.none, `record ${k}: never played, so no handle`);
+    if (handle !== P.none) { assert.ok(handle >= 0, `record ${k}: a handle is non-negative`); assert.ok(count >= 1, `record ${k}: a handle comes with a counted play`); }
+  });
+  assert.ok(new Set(record.records.map(rec => rec[at(P.countAt)])).size > 1, 'the counts differ between records');
   // The aliased slots are the empty sounds, and the source is not: otherwise the alias could not be told apart from the layout.
   for (let k = A.firstTarget; k < A.firstTarget + A.count; k++) assert.equal(bank.slots[k].length, 0, `slot ${k} is empty`);
   assert.ok(bank.slots[A.source].length > 0);
@@ -47,7 +57,7 @@ function validate(dat, record, V) {
 
 export default {
   id: 'obs-audio',
-  claims: ['audio.load', 'audio.alias'],
+  claims: ['audio.load', 'audio.alias', 'audio.record-play'],
   obs: ['audio-1'],
   reviewed: { by: 'main-session', date: '2026-10-03' },
   async run(ctx) { validate(await ctx.open('WACKY.DAT'), ctx.obs('audio-1'), values()); },
@@ -66,6 +76,9 @@ export default {
       tweak('priority at +0x10', 'load', { priorityAt: V.load.priorityAt + V.load.recordBytes / 6 }), // @math one dword on from +0x0c is not guaranteed; any move must fail
       tweak('zero word at +0x0c', 'load', { zeroAt: V.load.priorityAt }),
       tweak('25 records', 'load', { records: V.load.records - 1 }),
+      tweak('handle in the play-counter dword', 'play', { handleAt: V.play.countAt }),
+      tweak('counter in the handle dword', 'play', { countAt: V.play.handleAt }),
+      tweak('no-handle value 0', 'play', { none: 0 }),
       tweak('mode 2 recorded as the mode', 'mode', { otherMode: V.mode.secondBankMode }),
       { label: 'one archive byte changed', fn: () => validate(Uint8Array.from(dat, (b, i) => (i === dat.length - 1 ? b ^ 1 : b)), record, V) }, // @math flip the lowest bit of the last byte
     ];

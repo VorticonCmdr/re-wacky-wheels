@@ -13,6 +13,9 @@
 //   gamtext  (--edit N=text ... --member NAME) the words the game stored from a .GAM whose lines were edited in the run copy's archive
 //   ctype  the character-class table as [character, class] pairs (any moment after start-up)
 //   cmdline  (--args "words") the values left by the start-up code after the game was started as `WW words`
+//   start  (as soon as a race has loaded) the start tables, every racer's first position, heading and route index, and the branch words of racer.init
+//   aistate  (game paused in a race) 30 pauses of every racer's AI words (state, counters, speeds, route index)
+//   gamslot  (--edit 4="back2.pcx ") the stored sky-name line and the sky picture the game loaded for it
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -150,6 +153,95 @@ const scenarios = {
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), args: values.args.split(' ').filter(Boolean),
       maskAt: 0x84f0, mask: await u32(b2 + 0x84f0), maskCopies: [await u32(b2 + 0x85f4), await u32(b2 + 0x1ed64), await u32(b2 + 0x1ed68)], maskCopyAt: [0x85f4, 0x1ed64, 0x1ed68],
       nowAt: 0x1ecbc, now: await u32(b2 + 0x1ecbc), classAt: 0x1ed08, class: await u32(b2 + 0x1ed08), debugAt: 0x28bea, debug: await u16(b2 + 0x28bea) };
+  },
+  async start() {
+    // Taken as soon as possible after a race has loaded: the start tables, the first positions of all racers and the words that pick the branch of racer.init.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const count = (await u16(b2 + 0x28c40)) + 1, tables = { x: [], y: [] }, racers = [];
+    for (let i = 0; i < 8; i++) { tables.x.push(await u16(b2 + 0x1d7cc + 2 * i)); tables.y.push(await u16(b2 + 0x1d7e0 + 2 * i)); }
+    // Per racer, raw: x, y, heading (+0x1a), route index (+0x1c), then the AI words +0, +2, +4 (state), +6, +8, +0xa, +0xc, +0xe.
+    for (let i = 0; i < count; i++) racers.push([await u16(b2 + 0xaaa6 + 0x68 * i), await u16(b2 + 0xaaa8 + 0x68 * i), await u16(b2 + 0xaaaa + 0x68 * i), await u16(b2 + 0xaaac + 0x68 * i), ...await Promise.all([0x00, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e].map(o => u16(b2 + 0xaa90 + 0x68 * i + o)))]);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, branchAt: 0x1ec74, branch: await u32(b2 + 0x1ec74), gridFlagAt: 0x28be2, gridFlag: await u16(b2 + 0x28be2), twoPlayerAt: 0x28bdc, twoPlayer: await u16(b2 + 0x28bdc), countWord: count - 1, levelAt: 0x28b84, level: await u16(b2 + 0x28b84), tables, racers, routeCompass0: await u16(b2 + 0x12356) };
+  },
+  async aistate() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    // Per pause, per racer, the AI words +0, +2, +4 (state), +6, +8, +0xa, +0xc, +0xe, +0x10, +0x14 and the route index +0x1c, as raw words; plus the level word.
+    const count = (await u16(b2 + 0x28c40)) + 1, words = [0x00, 0x02, 0x04, 0x06, 0x08, 0x0a, 0x0c, 0x0e, 0x10, 0x14, 0x1c], samples = [];
+    await post('/debug/pause');
+    for (let k = 0; k < 30; k++) {
+      await post('/debug/continue'); await sleep(150 + Math.random() * 1500); await post('/debug/pause'); await sleep(50);
+      const racers = [];
+      for (let i = 0; i < count; i++) racers.push(await Promise.all(words.map(w => u16(b2 + 0xaa90 + 0x68 * i + w))));
+      samples.push({ level: await u16(b2 + 0x28b84), steps: await u16(b2 + 0x28c24), racers });
+    }
+    const velBytes = parseDatDirectory(datBytes).find(e => e.name === 'VEL.TAB').size, velTable = { offset: 0x1e730, bytes: velBytes, crc: hex8(crc32(await readMemory(b2 + 0x1e730, velBytes))) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, columns: words, countWord: count - 1, levelAt: 0x28b84, stepsAt: 0x28c24, velTable, samples };
+  },
+  async gamslot() {
+    // An experiment with an edited sky-name line (make-test-archive with the same --edit arguments): what the game kept of the line, and what it loaded as the sky picture.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const runDat = await readFile(resolve(values.run)), edits = values.edit.map(e => { const i = e.indexOf('='); return [Number(e.slice(0, i)), e.slice(i + 1)]; });
+    const slot = Buffer.from(await readMemory(b2 + 0xa4e0, 16)), members = new Map(parseDatDirectory(datBytes).map(e => [e.name, e]));
+    const sky = members.get('BACK2.PCX'), skyPtr = await u32(b2 + 0xa978 + 4), bytes = sky.size - 0x380, live = Buffer.from(await readMemory(skyPtr, bytes)), foundAt = [];
+    for (let at = -1; foundAt.length < 4 && (at = runDat.indexOf(live.subarray(0, 64), at + 1)) >= 0;) if (runDat.subarray(at, at + bytes).equals(live)) foundAt.push(at);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, member: values.member, edits, modified: { size: runDat.length, sha1: sha1(runDat) },
+      slotOffset: 0xa4e0, slotBytes: [...slot], skyMember: 'BACK2.PCX', skyBytes: bytes, skyBufferCrc: hex8(crc32(live)), matchedOffsets: foundAt };
+  },
+  async speaker() {
+    // The sound library's device word and the PC-speaker player's state, read at the title screen with sound mode 7 (the CFG dword at 0x786 set to 7 in the run copy).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], at = off => b2 + off;
+    const i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), table = Buffer.from(await readMemory(at(0x28ec4), 0x200));
+    const words = {};
+    for (const [name, off] of Object.entries({ device: 0x3fe8, error: 0x3fec, volume: 0x4330, handle: 0x4338, callback: 0x432c, byteMode: 0x290d0, priority: 0x290cc, remaining: 0x290c8, pointer: 0x4328, mode: 0x17404 })) words[name] = [off, await i32(at(off))];
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), cfg: { offset: 0x786, sha1: sha1(await readFile(resolve(values.cfg))) }, words, tableOffset: 0x28ec4, tableBytes: table.length, tableCrc: hex8(crc32(table)) };
+  },
+  async gate() {
+    // Execute breakpoints at the sound-library check, its error stub, the init, its error stub, the bank-load routine and the bank loader, armed in protected mode (tools/dosbox/gate-run.mjs); read at the final stop.
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const list = await (await fetch(`${API}/api/v1/debug/breakpoints`)).json(), stop = (await (await fetch(`${API}/api/v1/debug/status`)).json()).stop;
+    const words = {};
+    for (const [name, off] of Object.entries({ mode: 0x17404, device: 0x3fe8, error: 0x3fec })) words[name] = [off, await i32(b2 + off)];
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), selector: stop.registers.cs, stoppedAt: stop.linear_eip - b1, words,
+      breakpoints: list.breakpoints.filter(b => b.type === 'execute').map(b => [b.offset - b1, b.hit_count]).sort((a, b) => a[0] - b[0]) };
+  },
+  async tick() {
+    // Samples of the PC-speaker tick handler (tools/dosbox/tick-run.mjs arms an execute breakpoint at obj1+0x371f8, the first instruction of the tone path, and waits for the first stop).
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), samples = [], bufferPointer = await i32(b2 + 0x1eb14);
+    let last = 0; // @math no stop seen yet
+    const waitStop = async since => { for (let i = 0; i < 1200; i++) { const d = await (await fetch(`${API}/api/v1/debug/status`)).json(); if (d.debugging && d.stop.stop_id > since) return d.stop; await sleep(100); } return null; };
+    const first = await waitStop(0);
+    if (!first) throw new Error('the emulator did not stop at the breakpoint');
+    last = first.stop_id - 1; // @math the stop being sampled is not yet counted as seen
+    for (let k = 0; k < 40; k++) { // @math number of stops sampled
+      const stop = (await (await fetch(`${API}/api/v1/debug/status`)).json()).stop;
+      samples.push([stop.linear_eip - b1, stop.registers.ebx, (await i32(b2 + 0x4328)) - bufferPointer, await i32(b2 + 0x290c8), await i32(b2 + 0x290cc), await i32(b2 + 0x4338)]);
+      await fetch(`${API}/api/v1/debug/continue`, { method: 'POST' });
+      last = stop.stop_id;
+      if (!(await waitStop(last))) break;
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), bufferPointerOffset: 0x1eb14, columns: ['eip', 'ebx', 'pointerFromBuffer', 'remaining', 'priority', 'handle'], samples };
+  },
+  async miss() {
+    // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
+    // The run archive is the one made with the same --edit arguments (make-test-archive).
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], stop = (await (await fetch(`${API}/api/v1/debug/status`)).json()).stop;
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const runDat = await readFile(resolve(values.run)), edits = values.edit.map(e => { const i = e.indexOf('='); return [Number(e.slice(0, i)), e.slice(i + 1)]; });
+    const bp = (await (await fetch(`${API}/api/v1/debug/breakpoints`)).json()).breakpoints.filter(b => b.type === 'execute').map(b => [b.offset - b1, b.hit_count]);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), member: values.member, edits, modified: { size: runDat.length, sha1: sha1(runDat) }, stoppedAt: stop.linear_eip - b1,
+      name: await cstr(stop.registers.ebx), walkIndex: [0x28b00, Buffer.from(await readMemory(b2 + 0x28b00, 2)).readInt16LE(0)], breakpoints: bp,
+      table: await (async () => { const index = Buffer.from(await readMemory(b2 + 0x28b00, 2)).readInt16LE(0), size = 0x16, first = i => readMemory(b2 + 0x5080 + i * size, 4).then(b => [...Buffer.from(b)]); return { offset: 0x5080, entryBytes: size, lastLoaded: await first(index - 1), atIndex: await first(index), afterIndex: await first(index + 1) }; })() };
+  },
+  async clamp() {
+    // Out-of-range inputs forced into the terrain lookup at its entry (tools/dosbox/clamp-run.mjs passes the samples: [row, column, result]).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, inputsObject: 2, rowOffset: 0x1d7a8, columnOffset: 0x1d7a4, resultOffset: 0x1e568, forced: true, samples: JSON.parse(values.args) };
   },
   async race() {
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];

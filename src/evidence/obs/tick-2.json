@@ -1,0 +1,64 @@
+{
+ "id": "tick-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 7 in the run copy; execute breakpoint at the PC-speaker tick handler tone path (obj1+0x371f8); consecutive stops, menu keys pressed",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "bufferPointerOffset": 125716,
+ "columns": [
+  "eip",
+  "ebx",
+  "pointerFromBuffer",
+  "remaining",
+  "priority",
+  "handle"
+ ],
+ "samples": [
+  [
+   225784,
+   6120,
+   167,
+   21,
+   19,
+   729
+  ],
+  [
+   225784,
+   9300,
+   1331,
+   50,
+   3,
+   738
+  ],
+  [
+   225784,
+   7740,
+   111,
+   77,
+   19,
+   751
+  ],
+  [
+   225784,
+   6000,
+   187,
+   1,
+   19,
+   756
+  ]
+ ]
+}

@@ -31,6 +31,20 @@ export default [
     leads: ['docs/atr.md'],
   },
   {
+    id: 'cars.frames', tag: 'PROVEN',
+    statement: 'In the user\'s WACKY.DAT the driver sprites are 38 x 28 frames of 0x428 (1064) bytes: CARS.SP is 102144 bytes = 8 slots of 12 frames (0x31e0 bytes a slot), and each driver\'s own file (AJ.SP, PUF.SP, SHARK.SP, ELE.SP, DIGGER.SP, CAMEL.SP, RINGO.SP, MOOSE.SP, PELICAN.SP, TIGER.SP, PANDA.SP) is a whole number of such frames: 4, 4, 16, 16, 16, 20, 20, 24, 24, 17 and 18. The frame size is the one the viewer assumes for these names; the catalogue SPRITE.ATR has no entry of this size.',
+    value: { width: 0x26, height: 0x1c, slots: 0x08, framesPerSlot: 0x0c, slotBytes: 0x31e0, readFrames: 0x08, readBytes: 0x2140, drivers: ['AJ.SP', 'PUF.SP', 'SHARK.SP', 'ELE.SP', 'DIGGER.SP', 'CAMEL.SP', 'RINGO.SP', 'MOOSE.SP', 'PELICAN.SP', 'TIGER.SP', 'PANDA.SP'], driverFrames: { 'AJ.SP': 4, 'PUF.SP': 4, 'SHARK.SP': 16, 'ELE.SP': 16, 'DIGGER.SP': 16, 'CAMEL.SP': 20, 'RINGO.SP': 20, 'MOOSE.SP': 24, 'PELICAN.SP': 24, 'TIGER.SP': 17, 'PANDA.SP': 18 } },
+    evidence: { checks: ['cars-frames'] },
+    leads: ['docs/sp.md'],
+  },
+  {
+    id: 'cars.slots', tag: 'STATIC',
+    statement: 'The CARS.SP buffer at obj2+0x1d708 (0x18f00 bytes, read whole by the start-up loader after a lookup of the name at obj2+0x11c0, obj1+0x1053d to +0x10557) is used as eight driver slots of 0x31e0 bytes. The routine around obj1+0x22800 takes a slot index, looks up a per-driver file by the name at obj2+0x1acc, reads 0x2140 bytes (8 frames of cars.frames) of it to the start of that slot, and stores eight frame pointers, 0x428 bytes apart starting at the slot base, in the 0x98-byte record for that slot at obj2+0x13c08 (obj1+0x22822 to +0x22868); a second routine at obj1+0x2287b does the same for the slot kept at obj2+0x1ec6c. The last four frames of every slot are not filled by these reads, and the driver files are not all long enough to fill the eight frames (AJ.SP and PUF.SP have 4). What the slots are used for in play, and the choice of file, are not traced. Not observed at run time.',
+    value: { bufferPointerAt: 0x1d708, bufferBytes: 0x18f00, slotBytes: 0x31e0, readBytes: 0x2140, pointers: 0x08, frameBytes: 0x428, recordBytes: 0x98, recordTableAt: 0x13c08, nameAt: 0x1acc },
+    evidence: { at: ['WW.EXE:obj1+0x1053d fp=119a1f88', 'WW.EXE:obj1+0x1054c fp=f5f0cd55', 'WW.EXE:obj1+0x22822 fp=0689d968', 'WW.EXE:obj1+0x2282d fp=3799e656', 'WW.EXE:obj1+0x22852 fp=54709818', 'WW.EXE:obj1+0x22868 fp=239b275d', 'WW.EXE:obj1+0x2287b fp=aa5a2910', 'WW.EXE:obj1+0x228b2 fp=239b275d'] },
+    leads: ['docs/sp.md'],
+  },
+  {
     id: 'UNKNOWN_ATR_FIELDS', tag: 'UNKNOWN',
     statement: 'What the ATR record words other than width, height, frames and name mean is not established: the wiki calls +0 a pickup type (atr.kind-use: a routine at obj1+0x13227 branches on it; the sprite loader compares it with 2), +2 usually 10, +8 and +0x0a duplicate dimensions (equal to +4 and +6 in all 36 records) and +0x0c a size selector; the loader, the frame addressing (spw.frame) and the blitter (sp.draw) read +0, +4, +6, +0x0e, +0x24 and the name.',
     evidence: {},
