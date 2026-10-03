@@ -1,0 +1,60 @@
+{
+ "id": "gamslot-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "first demo race (track 2), paused at the end of racer init, with the sky name line (line 5) of 2.GAM set to the bytes 0x40 0x41 0x5a 0x5b 0x60 0x61 0x7a 0x7b",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "2"
+ },
+ "member": "2.GAM",
+ "edits": [
+  [
+   4,
+   "@AZ[`az{"
+  ]
+ ],
+ "modified": {
+  "size": 7772050,
+  "sha1": "45ac403a5329da2bff5bfc21df920aa9283599e8"
+ },
+ "slotOffset": 42208,
+ "slotBytes": [
+  64,
+  65,
+  90,
+  91,
+  96,
+  65,
+  90,
+  123,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "skyMember": "BACK2.PCX",
+ "skyBytes": 33339,
+ "skyBufferCrc": "22351bf8",
+ "matchedOffsets": [
+  3462824
+ ]
+}

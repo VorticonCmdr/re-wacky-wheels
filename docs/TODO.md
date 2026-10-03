@@ -12,8 +12,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 ### Archive (`WACKY.DAT`)
 
 - [ ] `dat.entry-compare` [STATIC] — the compare function is a NUL-terminated string compare after an in-place upper-case of a-z (obj1+0x32df0, +0x32dd0)
-  - Gap: the tail-insensitivity is observed (`dat.entry-tail`); the function internals and the exact upper-casing range (only a-z) are read, not exercised (every name looked up in the records is already upper or lower ASCII letters).
-  - Next: an experiment with a planted name such as `a_f3.pcx` containing a non-letter byte in the 0x5b to 0x60 range.
+  - Gap: the tail-insensitivity (`dat.entry-tail`) and the upper-casing range (`dat.uppercase-range`) are observed; the word-wise compare function itself (obj1+0x32df0) is read, not exercised beyond that.
 - [ ] `UNKNOWN_DAT_SENTINEL_ENTRY` [UNKNOWN] — whether the packer writes the 22-byte sentinel after the directory on purpose
   - Gap: the game does not load it (the 22 bytes after its table are zero), so it is irrelevant to the game; only archive rewriting cares.
 
@@ -122,6 +121,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `dat.uppercase-range` PROVEN (`gamslot-2`, check `obs-uppercase`): the lookup upper-cases exactly the bytes 0x61 to 0x7a of the requested name in place; the bytes at 0x40, 0x5b, 0x60 and 0x7b stay
 - [x] `terrain.clamp` PROVEN (`terrain-4`, check `obs-terrain`): with row and column forced at the lookup's entry to values on each side of both limits, every result equals the one the position clamped to 0..0xfff predicts
 - [x] `dat.entry-notfound` PROVEN (`miss-1`, check `obs-miss`): an execute breakpoint on the lookup's not-found path stops for the missing name with the walk index equal to the entry count (577) and a zero first byte in the entry there
 - [x] `audio.speaker-tick` PROVEN (`tick-1`, `tick-2`, check `obs-tick`): at execute-breakpoint stops on the tick handler's tone path, the player's pointer, counter, divisor (60 x byte) and priority all follow from chunk + 6, the length dword and the bank

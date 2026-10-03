@@ -52,9 +52,15 @@ export default [
     leads: ['docs/dat.md (wiki: null-padded names; refuted for 496 entries)'],
   },
   {
+    id: 'dat.uppercase-range', tag: 'PROVEN',
+    statement: 'Experiment in the running game (record gamslot-2: a copy of the user\'s archive with line 5 of 2.GAM set to the eight bytes 0x40 0x41 0x5a 0x5b 0x60 0x61 0x7a 0x7b, rebuilt and hash-checked by the check; the first demo race): after the archive lookup the game\'s copy of that line (the slot at obj2+0xa4e0) holds 0x40 0x41 0x5a 0x5b 0x60 0x41 0x5a 0x7b and a 0 byte. So the in-place upper-casing of the requested name changes exactly the bytes 0x61 to 0x7a (by subtracting 0x20), and the bytes next to that range, and the upper-case letters, stay as they are.',
+    value: { lowerFirst: 0x61, lowerLast: 0x7a, caseDelta: 0x20, slotAt: 0xa4e0, planted: [0x40, 0x41, 0x5a, 0x5b, 0x60, 0x61, 0x7a, 0x7b] },
+    evidence: { checks: ['obs-uppercase'], obs: ['gamslot-2'], at: ['WW.EXE:obj1+0x32dd0 fp=8ca3cb2d'] },
+    leads: ['docs/dat.md'],
+  },
+  {
     id: 'dat.entry-compare', tag: 'STATIC',
-    statement: 'The lookup compares the requested name with the entry name using Ghidra FUN_00042df0 (obj1+0x32df0; read in full), a word-wise string compare that decides on the bytes up to the first NUL and returns 0 for equal strings (that the bytes after an entry name\'s first NUL are not decisive is observed: dat.entry-tail). The requested name is first upper-cased in place by Ghidra FUN_00042dd0 (obj1+0x32dd0): a-z become A-Z, nothing else changes (the in-place effect is observed in dat.entry-lookup).',
-    value: { lowerFirst: 0x61, lowerLast: 0x7a, caseDelta: 0x20 },
+    statement: 'The lookup compares the requested name with the entry name using Ghidra FUN_00042df0 (obj1+0x32df0; read in full), a word-wise string compare that decides on the bytes up to the first NUL and returns 0 for equal strings (that the bytes after an entry name\'s first NUL are not decisive is observed: dat.entry-tail). The requested name is first upper-cased in place by Ghidra FUN_00042dd0 (obj1+0x32dd0), whose effect is observed in dat.uppercase-range.',
     evidence: { at: ['WW.EXE:obj1+0x32df0 fp=03a5de48', 'WW.EXE:obj1+0x32dd0 fp=8ca3cb2d'] },
     leads: ['docs/dat.md (wiki: null-padded names; refuted for 496 entries, see Verification notes)'],
   },
