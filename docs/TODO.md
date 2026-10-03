@@ -41,8 +41,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `UNKNOWN_SIN_KEPT_FIELDS` [UNKNOWN] — what the surface values other than 2, 3, 5, 6, 0xf mean (track 2 yields 4, 5 and 7), and what the 4 discarded `.SIN` bytes hold
   - Gap: the kept 8 bytes are two dwords, one per mask value (`terrain.lookup`, proven); 2 is a boost strip, 3 the wall, 6 and 0xf a special state (`car.speed-model`, `car.move-step`), 5 shortens a stopped car's drawing; the lookup never reads the discarded 4.
   - Next: the remaining readers of the car words +0x36, +0x3a, +0x56 for 4, 7 and the rest, and whether anything reads the discarded bytes.
-- [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 0xffff on pickup, `atr.kind-effects`) and what the coordinates are used for beyond drawing and pickups
-  - Next: the other users of the object table (obj1+0x216a0, +0x218a4, +0x25a78, +0x261fc).
+- [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 1 by a collision and 0xffff by a pickup) and what the coordinates are used for beyond drawing, pickups and collisions
+  - Next: the other users of the object table (obj1+0x218a4, +0x25a78, +0x261fc).
 - [ ] `UNKNOWN_PAR_USE` [UNKNOWN] — what draws the uploaded pixels afterwards; lead: the file is a 1280 x 20 panorama shown as a 320-pixel window on screen rows 110 to 129 (seen once by comparing a frame, not wiki's 640 x 40)
   - Next: find the code that addresses video memory at 0xa0000 + 0x7d00 (latch copies like obj1+0x26f14), cite how it picks the window, and add a check that compares a recorded frame with the file; then fix the viewer's 640 x 40.
 
@@ -106,7 +106,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `car.speed-model` [STATIC] — the player's throttle index (+10 accelerating, -4 coasting, -8 braking, boost 160 for 16 frames) and the speed as `VEL.TAB[index]`
   - Gap: read in full, not run; the input words obj2+0x28b40/0x28b44 and where they are set are unread. Next: with DOSBox, hold the accelerate key and sample the car's +0x42 and +0x26 words against `VEL.TAB`.
 - [ ] `car.move-step` [STATIC] — the player's per-frame move: heading index, position by TRIG x speed, collision bounce, wall probes (terrain 3), terrain value stored in the car record, hazard terrains 6 and 0xf
-  - Gap: read in full, not run; `FUN_00021de0` (the collision decision) and `FUN_000283a4` (the probe vectors) are unread. Next: read those two, and sample position, heading and the terrain value over a drive.
+  - Gap: read in full, not run; the walk and probe vectors are `car.collision-test`; what the car state word +0x44 is stays unread. Next: sample position, heading and the terrain value over a drive.
+- [ ] `car.collision-test` [STATIC] — the Bresenham walk and the per-step collision codes (1 wall, 2 object, 3 racer, 4 pit) with touch distance 14
+  - Gap: read in full, not run. Next: with DOSBox, watch the collision word during a bump into a wall or an object.
 - [ ] `view.setup` [STATIC] — the view fan: 320 TRIG entries around the heading, reaching 1122 units (the largest NDIST dword), and a bounding box of the visible points
   - Gap: read, not run; `FUN_00037bb1` is `car.move-step`'s advance helper (offset = (vector x distance + 0x8000) >> 16), the box's use is unread.
 - [ ] `race.frame-calls` [STATIC] — the race frame routine FUN_0002fd8c: its call order (floor, objects, cars, terrain lookup, progress, AI)
