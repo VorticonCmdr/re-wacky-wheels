@@ -162,3 +162,6 @@ Startup/errors: 0x1e9c "WACKY WHEELS VERSION 1.1", 0x1ec8 "SHAREWARE RELEASE.", 
 - Whether `TABLES.DAT` is shown at start-up and what it is.
 - Attract demo selection of the `.BMC` file (1.BMC..5.BMC, 7.BMC; no 6) and `GIG.MOV`.
 - Everything was read statically; none of the transitions were observed in DOSBox in this pass.
+
+
+> **Checked 2026-10-04 against the running game** (`text.menu-observed`, PROVEN, record menu-1): the race's Esc menu text is drawn from `WFONT1.SP` as 42 tiles of 15 x 13 pixels (character plus bar piece), step 11 pixels, items 12 rows apart from (88, 84); letters are the tiles 0 to 25, the space tile 36. The 8 x 8 text routine obj1+0x48f4 draws `OFONT.SP` glyphs elsewhere (`text.glyphs-observed`).
