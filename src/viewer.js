@@ -100,7 +100,7 @@ function previewPcx(entry) {
   detail(`${img.width} × ${img.height} pixels · ${img.bits} bits/plane · ${img.planes} plane(s). Palette indices are preserved.`);
 }
 function previewRaw(entry) {
-  const horizon = extension(entry.name) === 'par', layout = horizon ? { width: 640, height: 40, frames: 1, certainty: 'Documented horizon dimensions' } : spriteLayout(entry.name, entry.data, state.catalog);
+  const horizon = extension(entry.name) === 'par', layout = horizon ? { width: 1280, height: 20, frames: 1, certainty: 'Observed in the running game: a 1280 × 20 panorama of which the game shows a 320-pixel window (horizon.render-observed)' } : spriteLayout(entry.name, entry.data, state.catalog);
   let w = layout.width, h = layout.height, frame = 0, offset = 0, column = !horizon, key = defaultPalette(), transparent = !horizon, animate = false, last = 0;
   const c = canvas(w, h); controls();
   const frameSlider = el('input'); frameSlider.type = 'range'; frameSlider.min = 0; frameSlider.step = 1;

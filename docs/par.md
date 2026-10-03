@@ -1,6 +1,6 @@
 # PAR — horizon images
 
-Headerless 640×40 indexed 8bpp pixels: 25600 bytes. Uses the primary track palette; no rotation or flipping.
+Headerless indexed 8bpp pixels: 25600 bytes. Read as 1280×20 (the game's use, see below; the wiki says 640×40). Uses the primary track palette; no rotation or flipping.
 
 ## Verification notes
 
