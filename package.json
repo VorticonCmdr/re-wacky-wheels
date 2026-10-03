@@ -12,9 +12,21 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --test test/*.test.js",
     "check:assets": "node scripts/check-assets.js",
-    "check:tracks": "node scripts/check-track-editor.js"
+    "check:tracks": "node scripts/check-track-editor.js",
+    "lint": "node tools/lint/constants.mjs",
+    "verify": "node src/verify/run.js --report analysis/verify-report.json",
+    "mutate": "node src/verify/mutate.js",
+    "dump:le": "node tools/dump-le.mjs",
+    "cite": "node tools/cite.mjs",
+    "ghidra:import": "sh tools/ghidra/import.sh",
+    "ghidra:verify": "sh tools/ghidra/verify.sh",
+    "observe": "node tools/dosbox/observe.mjs",
+    "disasm": "node tools/disasm.mjs",
+    "make-test-archive": "node tools/dosbox/make-test-archive.mjs"
   },
   "devDependencies": {
+    "acorn": "^8.18.0",
+    "acorn-walk": "^8.3.5",
     "vite": "^8.0.0"
   }
 }

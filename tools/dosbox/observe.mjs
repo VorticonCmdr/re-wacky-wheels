@@ -1,0 +1,250 @@
+// npm run observe -- <scenario> --id <record-id> --moment "<what the game was doing>" [--game DIR]
+// Reads the running game's memory through the dosbox-automation REST API and writes a numeric-only
+// record to src/evidence/obs/<id>.json. The record is evidence only once a check in
+// src/verify/checks/ cross-validates it; re-run this tool to refresh one.
+//   load   object bases, per-page masked CRC-32s and relocated fixup samples
+//   race   (--cfg PATH names the WACKY.CFG the game was started with) a track loaded: the directory table, tile buffer, per-cell pointer table, POS/SIN/RD data,
+//          GAM words, a PCX stream and the palette buffer (game paused in a race)
+//   audio  (game started with sound mode 2 or 7 in WACKY.CFG offset 0x786) the sound-bank buffer and the 26 sound records
+//   vram   (game paused in a race) the 0x6400 bytes at video offset 0x7d00 read plane by plane
+//   progress  (game paused in a race) 24 samples of every racer's position, lap, grid value and ranking keys, at random pauses
+//   surface  (game paused in a race) 24 samples of the car record fields copied from the SDX record for the terrain value
+//   buffers  (game paused in a race) whole-buffer CRC-32 of the regions the small data loaders fill
+//   gamtext  (--edit N=text ... --member NAME) the words the game stored from a .GAM whose lines were edited in the run copy's archive
+//   ctype  the character-class table as [character, class] pairs (any moment after start-up)
+//   cmdline  (--args "words") the values left by the start-up code after the game was started as `WW words`
+//   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
+//            for a short random time and pausing again (leaves the game paused)
+import { writeFile, mkdir, readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { parseArgs } from 'node:util';
+import { openGameFolder } from '../../src/vfs/node.js';
+import { locateLe } from '../../src/formats/le.js';
+import { parseDatDirectory } from '../../src/formats/dat.js';
+import { crc32, hex8 } from '../../src/evidence/crc32.js';
+import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
+
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const [scenario] = positionals;
+if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
+
+const vfs = await openGameFolder(values.game && resolve(values.game)), exeBytes = await vfs.open('WW.EXE'), { le } = locateLe(exeBytes);
+const st = await status(), [wStart, wLen] = values.window.split(',').map(Number);
+const window = await readMemory(wStart, wLen);
+const datBytes = await vfs.open('WACKY.DAT');
+const header = { id: values.id, tool: `dosbox-automation ${st.version}`, via: 'REST GET /api/v1/memory/{offset}/{len}', date: new Date().toISOString().slice(0, 10), exe: { name: 'WW.EXE', size: exeBytes.length, sha1: sha1(exeBytes) }, archive: { name: 'WACKY.DAT', size: datBytes.length, sha1: sha1(datBytes) }, moment: values.moment };
+
+const scenarios = {
+  async load() {
+    const found = locateObjects(le, exeBytes, window, wStart), pageCrc = {};
+    // The live masked CRC of every stored page: which pages equal the file is decided by the check, not here.
+    le.objects.forEach((obj, oi) => {
+      pageCrc[obj.number] = [];
+      for (let p = 0; p * PAGE < obj.data.length; p++) {
+        const a = p * PAGE, b = Math.min(a + PAGE, obj.data.length), at = found.bases[oi] + a - wStart;
+        pageCrc[obj.number].push(maskedCrc(window.subarray(at, at + (b - a)), found.masks[oi].subarray(a, b)));
+      }
+    });
+    const samples = found.sites.filter(s => s.type === 7 && s.object === 1).filter((_, i) => i % 64 === 0)
+      .map(s => [s.object, s.offset, Buffer.from(window.buffer, window.byteOffset + found.bases[0] + s.offset - wStart, 4).readUInt32LE(0)]); // @math sample every 64th site, read as uint32
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), pageCrc, relocSamples: samples };
+  },
+  async terrain() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const samples = [];
+    await post('/debug/pause');
+    for (let k = 0; k < 60; k++) {
+      await post('/debug/continue'); await sleep(120 + Math.random() * 380); await post('/debug/pause'); await sleep(50);
+      samples.push([await i32(b2 + 0x1d7a8), await i32(b2 + 0x1d7a4), await u32(b2 + 0x1e568)]); // row, column, result
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, inputsObject: 2, rowOffset: 0x1d7a8, columnOffset: 0x1d7a4, resultOffset: 0x1e568, samples };
+  },
+  async audio() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], at = off => b2 + off;
+    const u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const bank = parseDatDirectory(datBytes).find(e => e.name === 'AUDIOT.FX'), bufferPointer = await u32(at(0x1eb14));
+    // The 26 records of 0x18 bytes, raw: the pointer as a signed distance from the bank buffer, then the five other dwords.
+    const records = [];
+    for (let k = 0; k < 26; k++) {
+      const a = at(0x1a9c8) + k * 0x18;
+      records.push([(await i32(a)) - bufferPointer, await i32(a + 4), await i32(a + 8), await i32(a + 12), await i32(a + 16), await i32(a + 20)]);
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { headOffset: 0x224, head: await cstr(at(0x224)), bodyOffset: 0x230, body: await cstr(at(0x230)) }, modeOffset: 0x17404, mode: await i32(at(0x17404)), enableOffset: 0x1ee4e, enableWord: await u16(at(0x1ee4e)), bufferPointerOffset: 0x1eb14, bufferPointer, bankBytes: bank.size, bankCrc: hex8(crc32(await readMemory(bufferPointer, bank.size))), recordTableOffset: 0x1a9c8, recordBytes: 0x18, records };
+  },
+  async vram() {
+    // Video memory is planar here: the read-map register (graphics controller index 4, port 0x3ce) picks which plane a read returns.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], VRAM = 0xa0000, vramOffset = 0x7d00, bytes = 0x6400, planes = 4;
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const setPlane = p => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port: 0x3ce, value: (p << 8) | 4, width: 2 }) }).then(r => { if (!r.ok) throw new Error(`port write failed: ${r.status}`); });
+    const planeCrcs = [];
+    for (let p = 0; p < planes; p++) { await setPlane(p); planeCrcs.push(hex8(crc32(await readMemory(VRAM + vramOffset, bytes / planes)))); }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, pointerOffset: 0x1eb54, bufferPointer: Buffer.from(await readMemory(b2 + 0x1eb54, 4)).readUInt32LE(0), videoBase: VRAM, vramOffset, bytes, planes, planeCrcs };
+  },
+  async progress() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    // Per racer, raw: x, y, lap word, grid-value word, key, second key. Racer 0 keeps its lap and value in other words than the rest.
+    const layout = { xWord: 0xaaa6, yWord: 0xaaa8, racerStride: 0x68, aiLapWord: 0xaab2, aiValueWord: 0xaab4, humanLapWord: 0x84c2, humanValueWord: 0x84be, structStride: 0x104, keyWord: 0x843a, key2Word: 0x843e, flagWord: 0x84c0 };
+    const count = (await i16(b2 + 0x28c40)) + 1, samples = [];
+    await post('/debug/pause');
+    for (let k = 0; k < 24; k++) {
+      await post('/debug/continue'); await sleep(100 + Math.random() * 400); await post('/debug/pause'); await sleep(50);
+      const racers = [];
+      for (let i = 0; i < count; i++) {
+        const lap = i === 0 ? layout.humanLapWord : layout.aiLapWord + layout.racerStride * i, value = i === 0 ? layout.humanValueWord : layout.aiValueWord + layout.racerStride * i;
+        racers.push([await i16(b2 + layout.xWord + layout.racerStride * i), await i16(b2 + layout.yWord + layout.racerStride * i), await i16(b2 + lap), await i16(b2 + value), await i32(b2 + layout.keyWord + layout.structStride * i), await i32(b2 + layout.key2Word + layout.structStride * i)]);
+      }
+      samples.push({ flag: await i16(b2 + layout.flagWord), racers });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, layout, countOffset: 0x28c40, countWord: count - 1, trailerOffset: 0x28ba2, trailerWord: await i16(b2 + 0x28ba2), samples };
+  },
+  async surface() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    // The car record that obj2+0x1d5b0 points to, raw: terrain value (+0x56), dword +0x36, word +0x3a, pointers +0x72 and +0x76, and the live SDX record it names (dword +0x120, word +0x124).
+    const samples = [];
+    await post('/debug/pause');
+    for (let k = 0; k < 24; k++) {
+      await post('/debug/continue'); await sleep(100 + Math.random() * 400); await post('/debug/pause'); await sleep(50);
+      const car = await u32(b2 + 0x1d5b0), c = Buffer.from(await readMemory(car, 0x80)), t = c.readInt32LE(0x56), table = b2 + 0x141f8;
+      const sdx = Buffer.from(await readMemory(table + t * 0x12e, 0x12e));
+      samples.push([await u32(b2 + 0x1e568), t, c.readUInt32LE(0x36), c.readUInt16LE(0x3a), c.readUInt32LE(0x72), c.readUInt32LE(0x76), sdx.readUInt32LE(0x120), sdx.readUInt16LE(0x124)]);
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, resultOffset: 0x1e568, carPointerOffset: 0x1d5b0, tableOffset: 0x141f8, samples };
+  },
+  async buffers() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], members = new Map(parseDatDirectory(datBytes).map(e => [e.name, e]));
+    // The regions the small data loaders fill from an archive member: the label is the member whose size the region has; the check compares the CRC-32 with that member.
+    const regions = [['VEL.TAB', 0x1e8c4, 0x22f8], ['VEL2.TAB', 0x1e584, 0x2308], ['VIEW', 0xb7f8, 0x2314], ['SLP', 0xe858, 0x2324]], out = [];
+    const cstr = async a => { const b = await readMemory(a, 24); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    for (const [member, offset, nameOffset] of regions) { const bytes = members.get(member).size; out.push({ member, object: 2, offset, bytes, crc: hex8(crc32(await readMemory(b2 + offset, bytes))), nameOffset, liveName: await cstr(b2 + nameOffset) }); }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), regions: out };
+  },
+  async gamtext() {
+    // An experiment: the run copy's archive has edited lines in one .GAM (made by make-test-archive with the same --edit arguments);
+    // the record holds the edits, the hash of the archive the game ran from, and the words the game stored.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), u8 = async a => (await readMemory(a, 1))[0];
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const runDat = await readFile(resolve(values.run)), edits = values.edit.map(e => { const i = e.indexOf('='); return [Number(e.slice(0, i)), e.slice(i + 1)]; });
+    const ctype = [];
+    for (const c of [9, 10, 11, 12, 13, 32, 43, 45, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 65, 97, 120]) ctype.push([c, await u8(b2 + 0x3150 + ((c + 1) & 0xff))]);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, member: values.member, edits, modified: { size: runDat.length, sha1: sha1(runDat) },
+      startWords: { xTable: 0x1d7cc, yTable: 0x1d7e0, x: await u16(b2 + 0x1d7cc), y: await u16(b2 + 0x1d7e0) },
+      extraWords: { offsets: [0x28b5a, 0x28b4e, 0x28b4c], values: [await u16(b2 + 0x28b5a), await u16(b2 + 0x28b4e), await u16(b2 + 0x28b4c)] },
+      ctypeTable: 0x3150, ctype };
+  },
+  async ctype() {
+    // The game's character-class table (obj2+0x3150, indexed by the character plus 1 as the integer converter does), as [character, class byte] pairs for all 256 characters.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], table = Buffer.from(await readMemory(b2 + 0x3150, 256 + 1)), pairs = [];
+    for (let c = 0; c < 256; c++) pairs.push([c, table[(c + 1) & 0xff]]);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableOffset: 0x3150, indexBias: 1, pairs };
+  },
+  async cmdline() {
+    // An experiment: the game was started as `WW <args>`; the record holds those words and the values the start-up code left behind.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), args: values.args.split(' ').filter(Boolean),
+      maskAt: 0x84f0, mask: await u32(b2 + 0x84f0), maskCopies: [await u32(b2 + 0x85f4), await u32(b2 + 0x1ed64), await u32(b2 + 0x1ed68)], maskCopyAt: [0x85f4, 0x1ed64, 0x1ed68],
+      nowAt: 0x1ecbc, now: await u32(b2 + 0x1ecbc), classAt: 0x1ed08, class: await u32(b2 + 0x1ed08), debugAt: 0x28bea, debug: await u16(b2 + 0x28bea) };
+  },
+  async race() {
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];
+    const at = off => b2 + off, mem = readMemory;
+    const u32 = async a => Buffer.from(await mem(a, 4)).readUInt32LE(0), i32 = async a => Buffer.from(await mem(a, 4)).readInt32LE(0), u16 = async a => Buffer.from(await mem(a, 2)).readUInt16LE(0), i16 = async a => Buffer.from(await mem(a, 2)).readInt16LE(0);
+    const cstr = async a => { const b = await mem(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const crcOf = async (a, n) => hex8(crc32(await mem(a, n)));
+    const out = { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])) };
+    out.names = { track: await cstr(at(0x1d770)), paletteSource: await cstr(at(0x1d784)), tilesets: [await cstr(at(0x1eabc)), await cstr(at(0x1eaca))], masks: [await cstr(at(0x1eaa0)), await cstr(at(0x1eaae))], sky: await cstr(at(0xa4e0)) };
+    // WACKY.DAT directory table, and what follows it.
+    const dat = await vfs.open('WACKY.DAT'), count = Buffer.from(dat.buffer, dat.byteOffset, 2).readInt16LE(0);
+    out.dat = { tableObject: 2, tableOffset: 0x5080, entries: count, tableCrc: await crcOf(at(0x5080), count * 22), trailingZeroBytes: (await mem(at(0x5080) + count * 22, 22)).every(v => v === 0) ? 22 : 0 };
+    // Tile buffer (tilesets then masks) and the per-cell pointer table.
+    const tilePtr = await u32(at(0x1d75c)), tileBytes = await u32(at(0x1d604));
+    out.tiles = { pointer: tilePtr, bytes: tileBytes, crc: await crcOf(tilePtr, tileBytes) };
+    const cellsPtr = await u32(at(0x1d6a4)), stride = await u32(at(0x1d648));
+    const table = await mem(cellsPtr, 0x80 * 0x80 * 4), cells = [], padding = new Set();
+    for (let r = 0; r < 0x80; r++) for (let c = 0; c < 0x80; c++) {
+      const v = Buffer.from(table.buffer, table.byteOffset + (r * 0x80 + c) * 4, 4).readUInt32LE(0);
+      if (r >= 0x20 && r < 0x60 && c >= 0x20 && c < 0x60) cells.push(v); else padding.add(v);
+    }
+    out.cells = { tablePointer: cellsPtr, rowCells: stride, mapRow: 0x20, mapColumn: 0x20, mapCrc: hex8(crc32(Buffer.from(Uint32Array.from(cells).buffer))), paddingCells: 0x80 * 0x80 - cells.length, paddingValues: [...padding] };
+    // POS grid, trailer and its quarter.
+    const gridPtr = await u32(at(0x1d5fc));
+    out.pos = { gridPointer: gridPtr, gridCrc: await crcOf(gridPtr, 0x2000), trailer: await i16(at(0x28ba2)), quarter: await i16(at(0x28ba0)) };
+    out.sin = { tableObject: 2, tableOffset: 0x1ad88, tableCrc: await crcOf(at(0x1ad88), 0x360) };
+    const rdCount = await i16(at(0x28b7a)), words = [];
+    for (let i = 0; i <= rdCount; i++) words.push(await u16(at(0x12350) + i * 8 + 6));
+    out.rd = { countWord: rdCount, lastRecordCrc: await crcOf(at(0x1ee0c), 14), routeWord6Crc: hex8(crc32(Buffer.from(Uint16Array.from(words).buffer))), firstBiased: [await u16(at(0x28c04)), await u16(at(0x28c06))] };
+    out.gam = { extraWords: [await u16(at(0x28b5a)), await u16(at(0x28b4e)), await u16(at(0x28b4c))], start0: [await u16(at(0x1d7cc)), await u16(at(0x1d7e0))] };
+    const skyPtr = await u32(at(0xa978 + 4)), palPtr = await u32(at(0x1d718));
+    const skyMember = parseDatDirectory(dat).find(e => e.name === out.names.sky.toUpperCase());
+    if (!skyMember) throw new Error(`sky ${out.names.sky} is not in the archive`);
+    const skyBytes = skyMember.size - 0x380; // the member without header and palette
+    out.pcx = { skySlot: 1, skyPointer: skyPtr, skyStreamBytes: skyBytes, skyStreamCrc: await crcOf(skyPtr, skyBytes), afterStream: { bytes: 16, zero: (await mem(skyPtr + skyBytes, 16)).every(v => v === 0) }, paletteBuffer: palPtr, paletteCrc: await crcOf(palPtr, 0x300) };
+    // Route table (stride 8: start pointer, point count, compass) and the point array it indexes.
+    const entries = rdCount + 1, routeBytes = Buffer.from(await mem(at(0x12350), entries * 8)), pointers = [], pointCounts = [];
+    for (let i = 0; i < entries; i++) { pointers.push(routeBytes.readUInt32LE(i * 8)); pointCounts.push(routeBytes.readUInt16LE(i * 8 + 4)); }
+    const cursor = await u32(at(0x1ed10)), contiguous = pointers.every((p, i) => i + 1 === entries ? p + pointCounts[i] * 4 === cursor : p + pointCounts[i] * 4 === pointers[i + 1]);
+    out.route = { tableObject: 2, tableOffset: 0x12350, entryBytes: 8, countOffset: 4, compassOffset: 6, pointBytes: 4, entries, contiguous, firstPointer: pointers[0], cursor, countsCrc: hex8(crc32(Buffer.from(Uint16Array.from(pointCounts).buffer))), pointsCrc: await crcOf(pointers[0], cursor - pointers[0]) };
+    const members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data]));
+    // Startup data tables.
+    const xy = members.get('MAP.XY'), sdxFile = members.get('WACKY.SDX'), movFile = members.get('GIG.MOV');
+    const sdxCount = Buffer.from(sdxFile.buffer, sdxFile.byteOffset, 2).readUInt16LE(0), sdxLive = Buffer.from(await mem(at(0x141f8), sdxCount * 0x12e));
+    const sdxHeads = [], sdxTailCrcs = [];
+    for (let i = 0; i < sdxCount; i++) {
+      sdxHeads.push(sdxLive.subarray(i * 0x12e, i * 0x12e + 0x126));
+      sdxTailCrcs.push(hex8(crc32(sdxLive.subarray(i * 0x12e + 0x126, (i + 1) * 0x12e)))); // the game writes some tails at run time: one CRC per record, no selection
+    }
+    const movCount = Buffer.from(movFile.buffer, movFile.byteOffset, 2).readUInt16LE(0);
+    const viaPointer = async (offset, bytes) => ({ pointerOffset: offset, bytes, crc: await crcOf(await u32(at(offset)), bytes) });
+    out.tables = {
+      mapXy: { firstOffset: 0x202cc, secondOffset: 0x1faca, halfBytes: 0x800, firstCrc: await crcOf(at(0x202cc), 0x800), secondCrc: await crcOf(at(0x1faca), 0x800) },
+      sdx: { countOffset: 0x28b7c, countWord: await i16(at(0x28b7c)), tableOffset: 0x141f8, recordBytes: 0x12e, tailFrom: 0x126, headCrc: hex8(crc32(Buffer.concat(sdxHeads))), tailCrcs: sdxTailCrcs },
+      trig: await viaPointer(0x1d6a0, 0x3c00), ndist: await viaPointer(0x1d660, 0x15e00), cars: await viaPointer(0x1d708, 0x18f00),
+      mov: { countOffset: 0x28b80, countWord: await i16(at(0x28b80)), tableOffset: 0x1b548, entryBytes: 4, extraBytes: 4, crc: await crcOf(at(0x1b548), movCount * 4 + 4) },
+    };
+    // Sprite catalogue and the sprites the loader read for this track.
+    const atrFile = members.get('SPRITE.ATR'), atrCount = Buffer.from(atrFile.buffer, atrFile.byteOffset, 2).readInt16LE(0);
+    const atrLive = Buffer.from(await mem(at(0x12998), atrCount * 40));
+    const atrHeads = [], atrPointers = [];
+    for (let i = 0; i < atrCount; i++) {
+      atrHeads.push(atrLive.subarray(i * 40, i * 40 + 0x24));
+      atrPointers.push(atrLive.readUInt32LE(i * 40 + 0x24)); // the dword the sprite loader writes: raw, for every record
+    }
+    const spStart = await u32(at(0x1eb20)), spCursor = await u32(at(0x1eb4c));
+    out.sprites = {
+      atr: { countOffset: 0x28b82, countWord: await i16(at(0x28b82)), tableOffset: 0x12998, pointerAt: 0x24, headCrc: hex8(crc32(Buffer.concat(atrHeads))), pointers: atrPointers },
+      sp: { startOffset: 0x1eb20, cursorOffset: 0x1eb4c, trackedOffset: 0x1eda4, trackedType: 2, typeAt: 0, start: spStart, cursor: spCursor, tracked: await i32(at(0x1eda4)), pixelsCrc: await crcOf(spStart, spCursor - spStart) },
+    };
+    // SPW object table and the PAR buffer.
+    const spwFile = members.get(`${out.names.track}.SPW`);
+    const spwCount = Buffer.from(spwFile.buffer, spwFile.byteOffset, 2).readUInt16LE(0), live = Buffer.from(await mem(at(0x13938), spwCount * 12)), fileRec = i => Buffer.from(spwFile.buffer, spwFile.byteOffset + 2 + i * 12, 12);
+    const stable = [], word2 = [], word10 = [];
+    for (let i = 0; i < spwCount; i++) {
+      for (const off of [0, 4, 6, 8]) stable.push(live.subarray(i * 12 + off, i * 12 + off + 2)); // the words the loader copies or biases
+      word2.push(live.readUInt16LE(i * 12 + 2)); word10.push(live.readUInt16LE(i * 12 + 10)); // the words the game writes at run time: raw, for every record
+    }
+    out.spw = { countWord: await i16(at(0x28b8e)), tableObject: 2, tableOffset: 0x13938, stableWordsCrc: hex8(crc32(Buffer.concat(stable))), word2, word10 };
+    const parPtr = await u32(at(0xa980));
+    out.par = { slot: 2, bufferPointer: parPtr, bytes: 0x6400, crc: await crcOf(parPtr, 0x6400), pointerObject: 2, pointerOffset: 0x1eb54, pointerValue: await u32(at(0x1eb54)) };
+    // The configuration file is read in three pieces (the reader near obj1+0x25f1b). The record names the file the game was
+    // started with and holds the live CRC-32 of every 16-byte block of the three destinations; the check compares them with the file.
+    const cfgFile = await readFile(resolve(values.cfg)), cfgParts = [[0x1ee1c, 0x492], [0x1b6d8, 0x18], [0x17128, 0x630]], cfgBlock = 16, cfgLive = [];
+    for (const [offset, bytes] of cfgParts) {
+      const live = Buffer.from(await mem(at(offset), bytes)), blockCrcs = [];
+      for (let i = 0; i < bytes; i += cfgBlock) blockCrcs.push(hex8(crc32(live.subarray(i, Math.min(i + cfgBlock, bytes)))));
+      cfgLive.push({ object: 2, offset, bytes, blockCrcs });
+    }
+    out.cfg = { file: { size: cfgFile.length, sha1: sha1(cfgFile) }, block: cfgBlock, parts: cfgLive };
+    return out;
+  },
+};
+if (!scenarios[scenario]) { console.error(`unknown scenario ${scenario}; known: ${Object.keys(scenarios).join(', ')}`); process.exit(1); }
+const record = await scenarios[scenario]();
+await mkdir(resolve('src/evidence/obs'), { recursive: true });
+await writeFile(resolve(`src/evidence/obs/${record.id}.json`), JSON.stringify(record, null, 1) + '\n');
+console.log(`observe: wrote src/evidence/obs/${record.id}.json (${Object.keys(record).join(', ')})`);
