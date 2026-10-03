@@ -46,6 +46,7 @@ Local observations refer to `game/WackyWhe/WACKY/WACKY.DAT` in this installation
 | [xy.md](xy.md) | XY — MAP.XY minimap lookup |
 | [surfaces.md](surfaces.md) | Terrain values and their `WACKY.SDX` slowdown and slide fields, from the archive |
 | [driving-model.md](driving-model.md) | The player's driving model as read from `WW.EXE` (frame order, view, throttle and speed, movement, collisions, object kinds) |
+| [test-play.md](test-play.md) | Test-playing the original through the DOSBox bridge, and the jev model as a judge (needs the user's API key) |
 
 ## Coverage and attribution
 

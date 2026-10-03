@@ -9,7 +9,7 @@ import { expected } from '../expect.js';
 const values = () => ({ boost: expected('car.boost-observed'), model: expected('car.speed-model'), asl: expected('ai.surface-slowdown'), sin: expected('sin.read'), sinLayout: expected('sin.layout'), map: expected('m.read'), sheet: expected('tiles.sheet-split'),
   gate: expected('car.boost-gate') });
 
-const COLUMNS = ['boostActive', 'boostTimer', 'throttle', 'speed', 'terrain', 'row', 'fraction', 'surface', 'tableEntry'], C = Object.fromEntries(COLUMNS.map((n, i) => [n, i]));
+const COLUMNS = ['boostActive', 'boostTimer', 'throttle', 'speed', 'terrain', 'row', 'fraction', 'surface', 'tableEntry', 'carWordA', 'heading'], C = Object.fromEntries(COLUMNS.map((n, i) => [n, i]));
 
 // Rebuild the run copy from the user's archive: the tile's two kept SIN dwords set to the terrain value, the strip's cells set to the tile, and compare it with the record's.
 function rebuild(dat, r, V) {
@@ -47,8 +47,12 @@ function common(dat, r, V) {
 function closed(dat, r, V) {
   const { vel } = common(dat, r, V), B = V.boost;
   assert.deepEqual(r.forced, [], 'nothing was written into the game');
+  assert.deepEqual(r.gateBefore, [0, 0, 0, 0, 0, B.track], 'the gate words as the game set them: the car word and the four range words 0, the track word 1'); // @math the six words read before and after
+  assert.deepEqual(r.gateAfter, r.gateBefore, 'and unchanged');
   let onStrip = 0;
   for (const s of r.samples) {
+    assert.equal(s[C.carWordA], 0, 'the car word +0xa stays 0');
+    assert.notEqual(s[C.heading], 0, 'the heading is not the one heading inside the range 0 to 0');
     assert.equal(s[C.boostActive], 0, 'no boost');
     assert.ok(s[C.throttle] <= B.throttleCap, 'the throttle stays within its cap');
     if (s[C.terrain] === B.terrain) onStrip++;
@@ -61,6 +65,8 @@ function closed(dat, r, V) {
 function opened(dat, r, V) {
   const { vel } = common(dat, r, V), B = V.boost, F = B.forced, G = V.gate;
   assert.deepEqual(r.forced, [['car', F.carWord, 2, F.carValue], ...F.rangeWords.map(w => ['obj2', w, 4, F.rangeValue])], 'the written words'); // @math word and dword sizes
+  assert.deepEqual(r.gateBefore, [0, 0, 0, 0, 0, B.track], 'the gate words as the game set them'); // @math the six words read before and after
+  assert.deepEqual(r.gateAfter, [F.carValue, 0, F.rangeValue, 0, F.rangeValue, B.track], 'and after the writes'); // @math the six words read before and after
   assert.equal(F.carWord, G.carWord, 'the car word of the gate');
   assert.deepEqual(F.rangeWords, [G.startRange[1], G.activeRange[1]], 'the upper range words of the gate');
   assert.equal(B.terrain, V.model.boostTerrain);
@@ -70,7 +76,8 @@ function opened(dat, r, V) {
   assert.ok(first > 0, 'the boost starts after the first sample');
   assert.ok(samples.slice(0, first).every(s => s[C.terrain] !== B.terrain), 'no terrain-2 sample before the boost');
   assert.equal(samples[first][C.terrain], B.terrain, 'the boost starts on terrain 2');
-  assert.equal(samples[first][C.boostTimer], B.boostFrames, 'the timer starts at 16');
+  assert.equal(samples[first][C.boostTimer], B.firstTimer, 'the timer at the first active sample');
+  assert.ok(samples[first][C.boostTimer] <= B.boostFrames, 'at most the 16 calls');
   assert.equal(activeRuns.length, B.activeSamples, 'the samples with the boost word set');
   assert.deepEqual(samples.slice(first, first + activeRuns.length).map(s => s[C.boostActive]), activeRuns.map(() => 1), 'the active samples are consecutive');
   const entry = vel.getInt16(B.boostThrottle * 2, true); // @math 16-bit table entries
@@ -78,6 +85,7 @@ function opened(dat, r, V) {
   let previous = Infinity;
   for (const s of activeRuns) {
     assert.equal(s[C.throttle], B.boostThrottle, 'the boost throttle');
+    assert.equal(s[C.carWordA], 0, 'the car word +0xa is 0 again by the samples');
     assert.equal(s[C.tableEntry], entry);
     assert.equal(s[C.speed], entry - ((entry * s[C.fraction]) >> V.asl.shift), 'the speed is the entry slowed by the surface fraction');
     assert.ok(s[C.boostTimer] >= 1 && s[C.boostTimer] < previous, `the timer only falls (${s[C.boostTimer]})`);
