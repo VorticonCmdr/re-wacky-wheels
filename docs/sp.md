@@ -12,6 +12,8 @@ Tags as in [evidence.md](evidence.md). `CARS.SP` and the per-object sprite files
 
 - [PROVEN] (`atr-sprites`, observed `sp.read`): every catalogue sprite's `.SP` member is exactly width x height x frames bytes, and the game loads those bytes unchanged (see [atr.md](atr.md)).
 - [STATIC] (`sp.draw`): the sprite blitter `FUN_00036fd0` reads a frame column by column (an outer loop of catalogue word +4 columns, an inner loop of word +6 bytes), skips index 0 and writes the rest down the screen, so a frame is column-major with word +4 as the width; this agrees with the viewer's column-major default. No screen pixel was compared with a frame yet. The wiki's "rotate 90 degrees clockwise then flip" is the same thing described differently (a lead). Dimensions the viewer infers for files without catalogue entries (driver sprites, fonts, screens) remain estimates.
+- [PROVEN] (`cars-frames`, `cars.frames`): `CARS.SP` is 102144 bytes = 8 slots of 12 frames of 38 x 28 (0x428 bytes), and each driver's own file (AJ, PUF, SHARK, ELE, DIGGER, CAMEL, RINGO, MOOSE, PELICAN, TIGER, PANDA) is a whole number of such frames (4, 4, 16, 16, 16, 20, 20, 24, 24, 17, 18). SPRITE.ATR has no entry of this size.
+- [STATIC] (`cars.slots`): the game uses the `CARS.SP` buffer as 8 driver slots; a routine reads the first 8 frames (0x2140 bytes) of a driver's file into a slot and keeps eight frame pointers 0x428 apart. The last 4 frames of a slot are not filled by that read. Not observed running.
 
 ## Sources
 

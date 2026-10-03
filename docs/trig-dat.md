@@ -8,6 +8,8 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 
 - [PROVEN] (`static-tables`): `TRIG.DAT` is exactly 0x3c00 = 15360 bytes, which is 1920 x 8 as the wiki says.
 - [PROVEN] (observed, `static.read`): the loader reads the whole member into a buffer (address in the dword at obj2+0x1d6a0), and it equals the file at run time.
+- [PROVEN] (`trig-ndist`, `trig.layout`): the file is 1920 entries of two signed 32-bit values, each a unit vector in 16.16 fixed point (length 65536 within 1.34), turning once around the circle; entries 0, 480, 960 and 1440 are on the four axes (worst miss 152), so a full turn is 1920 entries. Entry 1351 repeats entry 1350 (a quirk of the shipped table); every other step turns on by 0.995 to 1.007 of an entry.
+- [STATIC] (`floor.table-use`): the floor renderer indexes it by a view angle (8 bytes per angle, 0x780 added on one branch to wrap) and multiplies the vector by NDIST factors shifted right by 16; the same table gives the terrain lookup's two inputs (`obj2+0x1d7a4`, `+0x1d7a8`). Not observed running.
 - [UNKNOWN] the pair layout and meaning (the wiki's circular lookup of INT32 x,y pairs): `UNKNOWN_STATIC_TABLE_MEANING`.
 
 ## Sources

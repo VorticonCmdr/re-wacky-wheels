@@ -8,6 +8,8 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 
 - [PROVEN] (`static-tables`): `NDIST` is exactly 0x15e00 = 89600 bytes.
 - [PROVEN] (observed, `static.read`): the loader reads the whole member into a buffer (address in the dword at obj2+0x1d660), and it equals the file at run time.
+- [PROVEN] (`trig-ndist`, `ndist.layout`): the file is 22400 signed 32-bit values in 320 runs of 70: never decreasing inside a run, a drop at every one of the 319 run boundaries, all positive (115 to 1122); the run's first value falls slowly with the run number (133, 133, 132, ...) and its last falls by 2 per run (1122, 1120, ...).
+- [STATIC] (`floor.table-use`): the floor-drawing loops multiply a TRIG vector component by successive NDIST values and shift right by 16 (see `trig-dat.md`); which of rows and columns of the 320 x 70 shape each loop walks is not traced.
 - [UNKNOWN] the schema and meaning (the wiki's INT16 projection table; the first bytes `85 00 00 00 86 00 00 00` also resemble 32-bit values): `UNKNOWN_STATIC_TABLE_MEANING`.
 
 ## Sources
