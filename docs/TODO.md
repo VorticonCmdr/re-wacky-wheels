@@ -111,6 +111,10 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: read, not run; a PROVEN version needs a DOSBox record of the table's high byte while a key is held and released. Player 2's handling of extended (0xe0) codes is not followed.
 - [ ] `input.steer-flags` [STATIC] — key table words 0 and 1 (player 1) become the steering amounts obj2+0x28b92 (left, subtracted) and +0x28b90 (right, added); right wins
   - Gap: read, not run; player 2's steering path and the mode-specific routines that write the same flags are not followed.
+- [ ] `setup.sound-options` [STATIC] — voices (cfg 0x796: 2/4/6/8), mixing bits (0x79a: 8/16), MIDI address (0x7a2) and menu position (0x7a6); the game hands them to the sound library's init
+  - Gap: read, not run; the library routines `obj1+0x31820` and `obj1+0x31fc8` are unread, the word 0x79e and the entry values of the MIDI address list are unknown. Next: read the library init, or run with a changed voice count (DOSBox run copy).
+- [ ] `setup.score-reset` [STATIC] — "Reset score tables" deletes WACKY1.TIM, WACKY2.TIM, WACKY1.HI, WACKY2.HI and WACKY.DTT
+  - Gap: read, not run; that the game recreates them from the default score members is not read.
 - [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
   - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
