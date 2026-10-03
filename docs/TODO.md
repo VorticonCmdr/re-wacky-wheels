@@ -107,10 +107,12 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 - [ ] `input.buttons` [STATIC] — key table words 2 to 5 are buttons 1 to 4 in obj2+0x28b40..46 (accelerate, fire, brake, hand brake turn); the game port 0x201 sets the same words
   - Gap: read, not run. Next: sample the table and the button words while a key is held (DOSBox).
+- [ ] `demo.input-byte` [STATIC] — during a demo the controls come from the byte obj2+0x28cef (bits: left, right, accelerate, fire, brake, hand brake turn, flag), overriding the keyboard
+  - Gap: read, and seen to override the steering bytes in the attract-mode demo; where the byte is loaded from the `.BMC` demo file is unread, so the `.BMC` layout stays the wiki's lead.
 - [ ] `input.joystick` [STATIC] — the stick is read through game port 0x201 into direction bytes using calibrated thresholds (CFG 0x1c..0x26 for player 1, 0x4b2..0x4bc for player 2)
   - Gap: read, not run; SETUP's calibration screens (which fill the thresholds) and the stick test are unread, and no installed file has a calibrated stick.
 - [ ] `input.key-handler` [STATIC] — the keyboard interrupt (vector 9, obj1+0x30907) writes the down flag to the high byte of the key table word whose low byte is the scancode
-  - Gap: read, not run; a PROVEN version needs a DOSBox record of the table's high byte while a key is held and released. Player 2's handling of extended (0xe0) codes is not followed.
+  - Gap: the table, last code and five fixed flag bytes were observed (`input.key-state`, PROVEN); the extended-key (0xe0) prefix handling and the steering flags are read, not run (the demo race overrides the keyboard, `demo.input-byte`).
 - [ ] `input.steer-flags` [STATIC] — key table words 0 and 1 (player 1) become the steering amounts obj2+0x28b92 (left, subtracted) and +0x28b90 (right, added); right wins
   - Gap: read, not run; player 2's steering path and the mode-specific routines that write the same flags are not followed.
 - [ ] `setup.sound-options` [STATIC] — voices (cfg 0x796: 2/4/6/8), mixing bits (0x79a: 8/16), MIDI address (0x7a2) and menu position (0x7a6); the game hands them to the sound library's init
@@ -124,9 +126,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `midi.player` [STATIC] — the library's MIDI sequencer: header and track chunk grammar, delta and running status, one-byte meta lengths (only end of track and tempo acted on), channel event byte counts, tempo formula, loop; `src/formats/midi.js` follows it
   - Gap: read, not run; the music driver's callbacks, the per-channel filters (`obj2+0x43f0`), controller 7's routine (`obj1+0x3ad70`) and the timer service are unread, so what the game does with notes and controllers is not described.
 - [ ] `klm.player` [STATIC] — the AdLib music driver: command grammar, register writes per command, volume formula, instrument loading and initialisation (the faithful KLM decoder `src/formats/klm.js` follows it)
-  - Gap: read, not run; channel 8's four-byte frequency command never occurs in the archive, the timer service that paces the ticks (`obj1+0x30e38`) and the write delays are unread. A DOSBox capture of the OPL register writes of one song would promote it.
+  - Gap: the driver's song position and shadow tables were observed against these rules in five samples of two songs (`klm.driver-state`, PROVEN), but the OPL register writes themselves were not; channel 8's four-byte frequency command never occurs in the archive; the timer service (`obj1+0x30e38`) and the write delays are unread.
 - [ ] `voc.library-player` [STATIC] — the library's VOC block walker: rate 0xf424000 / (0x10000 - (byte << 8)), only codec 0 (and 8-bit mono type 9) blocks play, silence, marker, text and extended blocks are skipped, repeats play count + 1 times
-  - Gap: read, not run; the caller that starts the data pointer (the 26-byte header) and how the rate reaches the DMA or mixer are unread. A DOSBox record of the rate a type-1 block is played at would promote it.
+  - Gap: the type-1 rate rule was observed (`voc.rate-observed`, PROVEN); the other block rules (skipped types, repeats, type 9), the caller that starts the data pointer (the 26-byte header) and how the rate reaches the DMA or mixer are read, not run.
 - [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
   - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
@@ -161,6 +163,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `voc.rate-observed`, `klm.driver-state` and `input.key-state` PROVEN from DOSBox records (`voices-1/2`, `klm-1..5`, `keys-1..7`; checks `obs-voices`, `obs-klm`, `obs-keys`): the library's VOC rate rule (including rounding down: 13157, not 13158, after one byte of a loaded sound was changed), the AdLib driver's shadow tables against the product's KLM decoder, and the keyboard handler's table, last code and flag bytes
 - [x] `sp.loader-sizes` PROVEN (check `sp-loaders`): 14 sprite files are loaded by code that fixes their exact member sizes
 - [x] `dtt.layout` PROVEN (check `score-files`); the time-trial and duck-shoot views of `inspectData` moved under the rule (`src/formats/scores.js`, identical output on the archive defaults and the installed files)
 - [x] `score.references`, `score.defaults` and `tim.layout` PROVEN (check `score-files`): what the program names in its three score tables; the installed score files are exactly the defaults its loaders build (archive `WAC1.OTT`/`WAC1.HTT`, the table built in code for the duck shoot); the 30 x 120-byte time record layout

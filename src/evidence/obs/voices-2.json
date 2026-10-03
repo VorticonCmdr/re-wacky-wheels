@@ -1,0 +1,106 @@
+{
+ "id": "voices-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "as voices-1, after the time constant byte of the loaded PLIP.VOC buffer was changed from 131 to 180 in memory; the game resumed until a voice restarted PLIP at the new rate; game paused",
+ "patched": {
+  "address": 2679354,
+  "from": 131,
+  "to": 180
+ },
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "voicesPointerOffset": 17328,
+ "countOffset": 17300,
+ "recordBytes": 140,
+ "rateOffset": 36,
+ "dataPointerOffset": 28,
+ "count": 8,
+ "voices": [
+  {
+   "index": 0,
+   "rate": 8000,
+   "type": 1,
+   "blockLength": 2693,
+   "timeConstant": 180,
+   "codec": 0,
+   "dataCrc": "42ae56e5"
+  },
+  {
+   "index": 1,
+   "rate": 10989,
+   "type": 1,
+   "blockLength": 2329,
+   "timeConstant": 165,
+   "codec": 0,
+   "dataCrc": "d1054645"
+  },
+  {
+   "index": 2,
+   "rate": 8000,
+   "type": 1,
+   "blockLength": 2693,
+   "timeConstant": 180,
+   "codec": 0,
+   "dataCrc": "42ae56e5"
+  },
+  {
+   "index": 3,
+   "rate": 10000,
+   "type": 1,
+   "blockLength": 7924,
+   "timeConstant": 156,
+   "codec": 0,
+   "dataCrc": "4bc9046c"
+  },
+  {
+   "index": 4,
+   "rate": 10000,
+   "type": 1,
+   "blockLength": 7924,
+   "timeConstant": 156,
+   "codec": 0,
+   "dataCrc": "4bc9046c"
+  },
+  {
+   "index": 5,
+   "rate": 13157,
+   "type": 1,
+   "blockLength": 2693,
+   "timeConstant": 180,
+   "codec": 0,
+   "dataCrc": "42ae56e5"
+  },
+  {
+   "index": 6,
+   "rate": 13157,
+   "type": 1,
+   "blockLength": 2693,
+   "timeConstant": 180,
+   "codec": 0,
+   "dataCrc": "42ae56e5"
+  },
+  {
+   "index": 7,
+   "rate": 10000,
+   "type": 1,
+   "blockLength": 7924,
+   "timeConstant": 156,
+   "codec": 0,
+   "dataCrc": "4bc9046c"
+  }
+ ]
+}

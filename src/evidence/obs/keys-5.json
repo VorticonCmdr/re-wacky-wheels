@@ -1,0 +1,53 @@
+{
+ "id": "keys-5",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 0 in the run copy; demo race running; keys held for 1.5 s then game paused: KBD_up",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "tableOffset": 112344,
+ "lastCodeOffset": 167120,
+ "flagOffsets": {
+  "enterSpace": 167118,
+  "f10": 167117,
+  "up": 167131,
+  "down": 167122
+ },
+ "held": [
+  72
+ ],
+ "words": [
+  75,
+  77,
+  56,
+  29,
+  80,
+  57,
+  32,
+  33,
+  30,
+  31,
+  34,
+  35
+ ],
+ "lastCode": 72,
+ "flags": {
+  "enterSpace": 0,
+  "f10": 0,
+  "up": 1,
+  "down": 0
+ }
+}

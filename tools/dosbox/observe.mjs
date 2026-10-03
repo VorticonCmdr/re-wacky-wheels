@@ -16,6 +16,9 @@
 //   start  (as soon as a race has loaded) the start tables, every racer's first position, heading and route index, and the branch words of racer.init
 //   aistate  (game paused in a race) 30 pauses of every racer's AI words (state, counters, speeds, route index)
 //   gamslot  (--edit 4="back2.pcx ") the stored sky-name line and the sky picture the game loaded for it
+//   voices  (game paused, sound mode 0 with a Sound Blaster, sounds playing) the rates, time constants and data CRCs of the library's voices
+//   klm  (game paused, a KLM song playing through the AdLib driver) the driver's position in the song and its shadow tables
+//   keys  (--held 75,56) (game paused after those scancodes were held) the keyboard handler's key table words, last code and fixed flag bytes
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -27,7 +30,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -225,6 +228,42 @@ const scenarios = {
       if (!(await waitStop(last))) break;
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), bufferPointerOffset: 0x1eb14, columns: ['eip', 'ebx', 'pointerFromBuffer', 'remaining', 'priority', 'handle'], samples };
+  },
+  async voices() {
+    // (game paused with sound mode 0 and a Sound Blaster, while sounds play) the sound library's voice records at obj2+0x43b0 (0x8c bytes each, count at obj2+0x4394):
+    // for every voice holding a rate, the rate (+0x24), the data pointer (+0x1c) and the VOC block header and CRC-32 of the data that the pointer points into.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0), mem = (a, n) => readMemory(a, n);
+    const voicesAt = await u32(b2 + 0x43b0), count = await u32(b2 + 0x4394), voices = [];
+    for (let i = 0; i < count; i++) {
+      const rec = Buffer.from(await mem(voicesAt + i * 0x8c, 0x8c)), rate = rec.readUInt32LE(0x24), pointer = rec.readUInt32LE(0x1c);
+      if (!rate) continue;
+      const head = Buffer.from(await mem(pointer - 6, 6)), length = head[1] | head[2] << 8 | head[3] << 16, data = Buffer.from(await mem(pointer, length - 2));
+      voices.push({ index: i, rate, type: head[0], blockLength: length, timeConstant: head[4], codec: head[5], dataCrc: hex8(crc32(data)) });
+    }
+    const patched = values.patch ? (([address, from, to]) => ({ address, from, to }))(values.patch.split(',').map(Number)) : null; // the one byte the observer wrote to a loaded sound before it was played again (address, old value, new value)
+    return { ...header, patched, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), voicesPointerOffset: 0x43b0, countOffset: 0x4394, recordBytes: 0x8c, rateOffset: 0x24, dataPointerOffset: 0x1c, count, voices };
+  },
+  async klm() {
+    // (game paused while the AdLib music driver plays a KLM song) the driver's song state and shadow tables at obj2+0x2b904.. and +0x3150c..: the song's start
+    // offset, its position and pending delay, and the per-channel and per-operator values the driver keeps; the song itself is identified by CRC-32s of its header and the part consumed.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const word = async off => u32(b2 + off), list = async (off, n) => { const out = []; for (let i = 0; i < n; i++) out.push(await word(off + i * 4)); return out; };
+    const tempo = await word(0x2b904), start = await word(0x2b908), instruments = await word(0x2b90c), position = await word(0x2b910), delay = await word(0x2b914);
+    const base = instruments - 5, head = Buffer.from(await readMemory(base, start - base)), consumed = Buffer.from(await readMemory(start, position - start));
+    const cache = (await list(0x31624, 11)).map(p => (p ? p - base : 0));
+    const stateWords = { tempo: 0x2b904, start: 0x2b908, instruments: 0x2b90c, position: 0x2b910, delay: 0x2b914, playing: 0x43e4, loop: 0x43ec }, arrays = { low: 0x3150c, high: 0x314cc, cache: 0x31624, channelVolume: 0x31650, rhythm: 0x3167c, slotVolume: 0x3154c, level: 0x31594, ksl: 0x315dc }; // object 2 offsets the reads below use
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), stateWords, arrays, tempo, playing: await word(0x43e4), loop: await word(0x43ec), songAt: start - base, position: position - base, delay,
+      headBytes: head.length, headCrc: hex8(crc32(head)), consumedBytes: consumed.length, consumedCrc: hex8(crc32(consumed)),
+      low: await list(0x3150c, 11), high: await list(0x314cc, 11), cache, channelVolume: await list(0x31650, 11), rhythm: await word(0x3167c), slotVolume: await list(0x3154c, 18), level: await list(0x31594, 18), ksl: await list(0x315dc, 18) };
+  },
+  async keys() {
+    // (game paused after the keys named by --held, a comma list of scancodes, had been held for a while; none = all released) the keyboard handler's state: the twelve
+    // key table words at obj2+0x1b6d8 (the high byte of a word is the handler's down flag), the last scancode at +0x28cd0 and the fixed flag bytes it sets.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], byteAt = async off => Buffer.from(await readMemory(b2 + off, 1))[0];
+    const table = Buffer.from(await readMemory(b2 + 0x1b6d8, 24)), words = []; for (let i = 0; i < 12; i++) words.push(table.readUInt16LE(i * 2)); // @math twelve little-endian words
+    const flagOffsets = { enterSpace: 0x28cce, f10: 0x28ccd, up: 0x28cdb, down: 0x28cd2 }, flags = {};
+    for (const [name, off] of Object.entries(flagOffsets)) flags[name] = await byteAt(off);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableOffset: 0x1b6d8, lastCodeOffset: 0x28cd0, flagOffsets, held: values.held ? values.held.split(',').map(Number) : [], words, lastCode: await byteAt(0x28cd0), flags };
   },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.

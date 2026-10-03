@@ -11,7 +11,8 @@ const TABLES = () => K({ slotMapAt: 0x4588, slotMapStride: 8, slots: [[0, 3], [1
 const MAX_EVENTS = 1e6; // @math size guard of the viewer, not a game value
 const MAX_SECONDS = 600; // @math length guard of the viewer, not a game value
 
-export function parseKlmSong(data) {
+// `stopAt` ends the walk before the command at that file offset; the state the driver keeps (its shadow tables) is returned for comparison with a run of the game.
+export function parseKlmSong(data, stopAt = Infinity) {
   const P = PLAYER(), T = TABLES(), H = P.header, R = P.regs, b = bytes(data), dv = view(b);
   need(b, 0, H.instrumentsAt, 'KLM header');
   const tempo = dv.getUint16(H.tempoAt, true), start = dv.getUint16(H.songAt, true);
@@ -20,10 +21,10 @@ export function parseKlmSong(data) {
   need(b, H.instrumentsAt, start - H.instrumentsAt, 'KLM instruments');
   const instruments = (start - H.instrumentsAt) / H.instrumentBytes, slots = T.opOffsets.length;
   const events = [];
-  let ticks = 0, rhythm = 0;
+  let ticks = 0, rhythm = 0, lastDelay = 0;
   const write = (reg, value) => events.push({ time: ticks / tempo, reg, value });
   const low = new Array(P.channels).fill(0), high = new Array(P.channels).fill(0), loaded = new Array(P.channels).fill(-1);
-  const level = new Array(slots).fill(0), ksl = new Array(slots).fill(0), volume = new Array(slots).fill(P.init.volume);
+  const level = new Array(slots).fill(0), ksl = new Array(slots).fill(0), volume = new Array(slots).fill(P.init.volume), channelVolume = new Array(P.channels).fill(P.init.volume);
   const bit = channel => T.rhythmBits[channel - T.rhythmFirstChannel], percussion = channel => channel >= T.rhythmFirstChannel;
   const setRhythm = value => { rhythm = value; write(R.rhythm, rhythm); };
   // obj1+0x40280: the operator's output level from its level, its volume and its key scaling bits.
@@ -53,6 +54,7 @@ export function parseKlmSong(data) {
     fields.forEach((reg, i) => write(reg + T.opOffsets[c], ins[P.carrierFields[i + 1]]));
   };
   const setVolume = (channel, value) => {
+    channelVolume[channel] = value;
     const scaled = Math.floor(value * T.masterVolume / P.volumeScale), [m, c] = T.slots[channel];
     if (channel >= P.twoOperatorChannels) { volume[m] = scaled; apply(m); return; }
     volume[c] = scaled; apply(c);
@@ -60,11 +62,12 @@ export function parseKlmSong(data) {
   };
   let p = start;
   for (;;) {
+    if (p >= stopAt) break;
     need(b, p, 1, 'KLM command');
     const cmd = b[p++];
     if (cmd === P.end) break;
-    if (cmd === P.delay8) { need(b, p, 1, 'KLM delay'); ticks += b[p]; p += 1; continue; }
-    if (cmd === P.delay16) { need(b, p, 2, 'KLM delay'); ticks += dv.getUint16(p, true); p += 2; continue; } // @math a 16-bit delay
+    if (cmd === P.delay8) { need(b, p, 1, 'KLM delay'); ticks += lastDelay = b[p]; p += 1; continue; }
+    if (cmd === P.delay16) { need(b, p, 2, 'KLM delay'); ticks += lastDelay = dv.getUint16(p, true); p += 2; continue; } // @math a 16-bit delay
     const kind = cmd >> 4, channel = cmd & 15; // @math the nibbles
     if (kind > P.maxKind) continue;
     if (channel >= P.channels) throw new Error(`Invalid KLM channel ${channel}`);
@@ -84,5 +87,5 @@ export function parseKlmSong(data) {
     if (events.length > MAX_EVENTS) throw new Error('KLM has too many register writes');
     if (ticks / tempo > MAX_SECONDS) throw new Error('KLM exceeds 10-minute limit');
   }
-  return { events, duration: ticks / tempo, tempo, instruments };
+  return { events, duration: ticks / tempo, tempo, instruments, position: p, lastDelay, state: { low, high, loaded, channelVolume, rhythm, slotVolume: volume, level, ksl } };
 }
