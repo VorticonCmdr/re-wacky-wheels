@@ -2,11 +2,11 @@
 
 The terrain value under the car (the `.SIN` dword the terrain lookup returns, `terrain.lookup`) indexes the 30 records of `WACKY.SDX` (`terrain.sdx-index`). Two fields of the record matter for driving: the dword at `+0x120`, a 16.16 slowdown fraction that lowers the car's speed every call (`car.steer-states`, `ai.surface-slowdown`), and the word at `+0x124`, how many calls a steering key must be held at full throttle before the car slides, 0 meaning it hops at once (`car.steer-states`). The dwords at `+0x126` and `+0x12a`, which the special-state surfaces copy into the car record, are 0 in every record of the user's archive.
 
-[PROVEN] values (re-derived by `track-ranges` and the SDX parser from the user's `WACKY.DAT`; the column of tracks counts the `.SIN` files whose terrain values include that surface; the meanings are [STATIC] readings of the code, not observations, and the SDX fields' use is [STATIC] too):
+Values computed from the user's `WACKY.DAT` with the SDX and `.SIN` parsers (a script run, not pinned by a check; `track-ranges` proves only that every terrain value is in 0 to 27). The column of tracks counts the `.SIN` files whose terrain values include that surface. The meanings are [STATIC] readings of the code, not observations, and so is the use of the SDX fields:
 
 | Value | Slowdown dword (`+0x120`) | As a fraction | Slide count (`+0x124`) | Tracks using it | Known meaning |
 | --- | --- | --- | --- | --- | --- |
-| 0 (0x0) | 0 | 0.000 | 18 | 42 | road-like: no slowdown (the surface most cars start on); used in every track |
+| 0 (0x0) | 0 | 0.000 | 18 | 42 | no slowdown; present in every track (the name of the surface is not read) |
 | 1 (0x1) | 30146 | 0.460 | 18 | 9 | not read |
 | 2 (0x2) | 0 | 0.000 | 20 | 19 | boost strip: sets the throttle to 160 for 16 calls (`car.speed-model`) |
 | 3 (0x3) | 0 | 0.000 | 0 | 42 | wall: the collision probes look for it (`car.collision-test`, `car.move-step`); used in every track |
