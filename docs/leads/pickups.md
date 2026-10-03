@@ -1,4 +1,7 @@
 <!-- WF: output of a subagent's read of the disassembly on 2026-10-03; a lead, not evidence. The maintainer has not re-read it. Citations inside were produced by the subagent and are re-hashed by nothing until a claim cites them. -->
+
+> **Checked 2026-10-03 against the running game** (`pickup.kinds-observed`, PROVEN, records pickup-1, pickup-2, hudicon-1): a kind-2 pickup (hedgehog, sprite 1) sets the object's consumed marker 0xffff and raises the car's counter word +0x6a from 0 to 4; a kind-3 pickup (sprite 0, H1) sets the held word +0x16 to 3 and leaves the counter at 0; neither slows or turns the car; with the item 3 held the icon is ICONS.SP frame 0 at (293, 178). Not yet checked: the fire routine, the projectiles and the hit effects, the kinds 1 and 4 to 7.
+
 # Pickups and held items (WF lead, 2026-10-03)
 
 Everything here is WF: read from the disassembly (`npm run -s disasm`, plus a grep over /private/tmp/obj1.dis = `ndisasm -b 32 analysis/ww/obj1.bin`), nothing was run. Offsets `obj1+0x...` are code offsets, bare `0x28b42`-style operands are obj2 offsets. "Inferred" marks anything not read directly. Sprite names come from SPRITE.ATR + a contact sheet rendered from the SP frames (palette from SHRINK1.PCX, only for looking; colours not authoritative).
