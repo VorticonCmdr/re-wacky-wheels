@@ -26,6 +26,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [PROVEN] `item.mine-hit-observed`: an AI racer that reaches a dropped bomb stops on it for 33 ticks (its word `+0x58` is 1, `+0x4c` the start tick) and the record is gone 3 ticks later; the racers do not otherwise change.
 - [PROVEN] `input.steer-observed`: left alone sets the left byte, word and amount (20 or 40) and lowers the heading, right alone the right ones and raises it (a quarter turn is 480 of 1920); after a hand brake turn the amount was 120.
 
+- [PROVEN] `car.step-observed`: on the road, one tick at a time: the throttle rises by 10 to the cap 100 with the accelerate key, falls by 4 with no key and by 12 with the brake key (the brake's 8 and the coasting 4), the speed is the VEL.TAB entry of the new throttle and the car moves by `(TRIG vector x speed + 0x8000) >> 16` per axis along the heading, in that order inside a call (records steps-1 and steps-2, 51 one-tick pairs).
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.
