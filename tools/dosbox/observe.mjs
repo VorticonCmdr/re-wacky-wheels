@@ -337,6 +337,16 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async boost() {
+    // The boost of the player's car (tools/dosbox/boost-run.mjs passes --args {build, forced, samples}): the run archive is the user's with one tile of track 1 given the terrain value in
+    // `build` (tools/dosbox/make-test-sin.mjs) and laid over a strip of the map, and the boost's gate inputs (the car word +0xa and the heading range words) were written before the car
+    // drove over the strip; the samples were taken between short runs.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], runDat = await readFile(resolve(values.run));
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const A = JSON.parse(values.args);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build, forced: A.forced,
+      columns: ['boostActive', 'boostTimer', 'throttle', 'speed', 'terrain', 'row', 'fraction', 'surface', 'tableEntry'], samples: A.samples };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).

@@ -13,6 +13,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [STATIC] `input.joystick`: with a stick selected the routine at `obj1+0x2784b` times the game port 0x201 and sets the same left, right, up and down bytes from calibrated thresholds, so the stick steers like the first two keys; up and down can also act as hand brake turn and brake.
 
 - [PROVEN] `car.speed-observed`: in a played race the loaded speed table holds `VEL.TAB`'s entry for the throttle (0 to the cap 100), the car record holds the surface's SDX fraction, and the speed is the entry minus `(entry x fraction) >> 16` (54 of 58 samples; the other 4 have a throttle already cleared).
+- [PROVEN] `car.boost-observed`: on a terrain-2 strip a boost needs its gate open (the car word `+0xa` non-zero and the heading in the track's range); with it open the boost word `+0xb4` is 1, the throttle 160 (the `VEL.TAB` entry 64), the timer `+0xb6` counts down from 16 and the boost carries on past the strip for about 1000 world units; with the gate as track 1 sets it a terrain-2 strip does nothing.
+- [STATIC] `car.boost-gate`: the gate routine `obj1+0x25bc` and the per-track heading ranges that `obj1+0x24e8` sets from the track number (west 840 to 1080 for tracks 6, 10, 13, 15, 25; north 1320 to 1560 for 24, 29, 35; 3, 4 and 9 both start and active range north), 0 for the other tracks; what sets the car word `+0xa` is unread.
 - [PROVEN] `input.steer-observed`: left alone sets the left byte, word and amount (20 or 40) and lowers the heading, right alone the right ones and raises it (a quarter turn is 480 of 1920); after a hand brake turn the amount was 120.
 
 ## One frame
@@ -29,7 +31,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 ## Speed and throttle
 
-- [STATIC] `car.speed-model`: the car's throttle word `+0x42` rises by 10 a call while the accelerate flag (`obj2+0x28b40`) is set (6 in some modes), falls by 4 otherwise and by 8 while the brake flag (`obj2+0x28b44`) is set, capped at 100; the speed word `+0x26` is `VEL.TAB[throttle]` (read from the copy at `obj2+0x1e730`). A terrain-2 strip sets the throttle to 160 for 16 calls.
+- [STATIC] `car.speed-model`: the car's throttle word `+0x42` rises by 10 a call while the accelerate flag (`obj2+0x28b40`) is set (6 in some modes), falls by 4 otherwise and by 8 while the brake flag (`obj2+0x28b44`) is set, capped at 100; the speed word `+0x26` is `VEL.TAB[throttle]` (read from the copy at `obj2+0x1e730`). A terrain-2 strip sets the throttle to 160 for 16 calls when its gate is open (`car.boost-gate`, `car.boost-observed`).
 - [STATIC] `race.class-setup`: at the race start the active speed table is filled from the `VEL2.TAB` buffer when the engine choice (`obj2+0x1ea58`) is 2, the 6 horsepower engines, and from `VEL.TAB` otherwise (12 horsepower); `SETUP.EXE` writes the choice (`setup.race-options`).
 - [PROVEN] `ai.race-speeds`: the computer racers' speed words are the same `VEL.TAB` entries.
 
