@@ -14,60 +14,7 @@ export function decodePcSpeaker(data, sampleRate = 22050) {
   return { samples, sampleRate, channels: 1, loop: false, description: 'PC speaker · square-wave synthesis at 140 ticks/s' };
 }
 
-const modOffsets = [0, 1, 2, 8, 9, 10, 16, 17, 18];
-const percOffsets = [19, 20, 18, 21, 17];
-export function parseKlm(data) {
-  const b = bytes(data), v = view(b); need(b, 0, 5, 'KLM');
-  const tempo = v.getUint16(0, true), start = v.getUint16(3, true);
-  if (!tempo || start < 5 || (start - 5) % 11) throw new Error('Invalid KLM instrument block');
-  need(b, 5, start - 5, 'KLM instruments');
-  const instruments = Array.from({ length: (start - 5) / 11 }, (_, i) => b.subarray(5 + i * 11, 16 + i * 11));
-  const events = [], registers = new Uint8Array(256); let ticks = 0, p = start, rhythm = 32, ended = false;
-  const write = (reg, value) => { registers[reg] = value; events.push({ time: ticks / tempo, reg, value }); };
-  write(1, 32); write(0xBD, rhythm);
-  function next(n) { need(b, p, n, 'KLM command'); const at = p; p += n; return at; }
-  while (p < b.length && events.length < 1e6) {
-    const cmd = b[p++], channel = cmd & 15, kind = cmd & 240;
-    if (cmd === 255) { ended = true; break; }
-    if (cmd === 253) { ticks += b[next(1)]; continue; }
-    if (cmd === 254) { ticks += v.getUint16(next(2), true); continue; }
-    if (channel > 10) throw new Error(`Invalid KLM channel ${channel}`);
-    if (kind === 0 || kind === 64) {
-      if (channel <= 6) {
-        // Preserve the most recent block/frequency bits in B0.
-        const reg = 0xB0 + channel, prev = registers[reg];
-        write(reg, kind === 64 ? prev | 32 : prev & ~32);
-        if (channel === 6) { rhythm = kind === 64 ? rhythm | 16 : rhythm & ~16; write(0xBD, rhythm); }
-      } else { const bit = 1 << (10 - channel); rhythm = kind === 64 ? rhythm | bit : rhythm & ~bit; write(0xBD, rhythm); }
-    } else if (kind === 16) {
-      if (channel <= 6) {
-        // The supplied songs use two frequency bytes for channel 6 as well.
-        // The wiki's 0..5 boundary would desynchronize every song in this archive.
-        const at = next(2); write(0xA0 + channel, b[at]); write(0xB0 + channel, b[at + 1]);
-        if (channel === 6) { rhythm = b[at + 1] & 32 ? rhythm | 16 : rhythm & ~16; write(0xBD, rhythm); }
-      }
-      else { rhythm |= 1 << (10 - channel); write(0xBD, rhythm); }
-    } else if (kind === 32) {
-      const value = b[next(1)], offset = channel < 6 ? modOffsets[channel] + 3 : percOffsets[channel - 6];
-      write(0x40 + offset, Math.floor((127 - Math.min(value, 127)) / 2));
-    } else if (kind === 48) {
-      const index = b[next(1)], inst = instruments[index];
-      if (!inst) throw new Error('KLM references a missing instrument');
-      if (channel <= 6) {
-        const mod = modOffsets[channel], car = mod + 3;
-        const regs = [0x40 + mod, 0x40 + car, 0x60 + mod, 0x60 + car, 0x80 + mod, 0x80 + car, 0x20 + mod, 0x20 + car, 0xE0 + mod, 0xE0 + car, 0xC0 + channel];
-        for (let i = 0; i < 11; i++) write(regs[i], inst[i]);
-      } else {
-        const offset = percOffsets[channel - 6], carrier = channel === 7 || channel === 9, base = carrier ? 1 : 0;
-        [0x40, 0x60, 0x80, 0x20, 0xE0].forEach((reg, i) => write(reg + offset, inst[i * 2 + base]));
-        write(0xC0 + (channel === 7 || channel === 10 ? 7 : 8), inst[10]);
-      }
-    } else throw new Error(`Unknown KLM command 0x${cmd.toString(16)}`);
-    if (ticks / tempo > 600) throw new Error('KLM exceeds 10-minute limit');
-  }
-  if (!ended) throw new Error('KLM has no end command');
-  return { events, duration: ticks / tempo, tempo, instruments: instruments.length };
-}
+export { parseKlmSong as parseKlm } from './formats/klm.js';
 
 export function parseAdlib(data) {
   const b = bytes(data), v = view(b); need(b, 0, 23, 'AdLib sound');

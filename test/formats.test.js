@@ -87,7 +87,7 @@ function klm() {
 test('KLM channel 6 consumes two frequency bytes and renders a tone', () => {
   const song = parseKlm(klm()); assert.equal(song.duration, .2); assert.ok(song.events.some(e => e.reg === 0xA6 && e.value === 0x57));
   const audio = renderOpl(klm(), 'klm', 1); assert.ok(audio.samples.some(v => Math.abs(v) > 0.001)); assert.ok(audio.samples.every(Number.isFinite));
-  assert.throws(() => parseKlm(klm().slice(0, -1)), /end/);
+  assert.throws(() => parseKlm(klm().slice(0, -1)), /truncated/); // a song without its end byte runs off the data
 });
 function midi(track) { return new Uint8Array([...ascii('MThd'), ...be32(6), ...be16(0), ...be16(1), ...be16(96), ...ascii('MTrk'), ...be32(track.length), ...track]); }
 test('MIDI running status, tempo changes and duration are respected', () => {
