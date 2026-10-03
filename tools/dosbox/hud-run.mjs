@@ -3,8 +3,11 @@
 // and, at each pause, records the `screen` scenario of observe.mjs (ids hud-1 ...): the displayed page's pixels under the HUD elements of the report in docs/leads/hud.md and the HUD words.
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-const { values } = parseArgs({ options: { count: { type: 'string', default: '6' }, prefix: { type: 'string', default: 'hud' }, seconds: { type: 'string', default: '4' } } });
-const spec = {
+const { values } = parseArgs({ strict: false, options: { count: { type: 'string', default: '6' }, prefix: { type: 'string', default: 'hud' }, seconds: { type: 'string', default: '4' } } });
+// The timer: each of the 11 glyphs of GENEF.SP (7 x 9, the digits and ':' from 13733, 63 bytes each) at each of the 7 places of "MM:SS:T" from (264, 112).
+const timerSprites = []; for (let place = 0; place < 7; place++) for (let g = 0; g < 11; g++) timerSprites.push({ member: 'GENEF.SP', at: 13733 + 63 * g, w: 7, h: 9, x: 264 + 7 * place, y: 112, tag: `${place}:${g}` });
+const timer = process.argv.includes('--timer');
+const spec = timer ? { rects: [], sprites: timerSprites } : {
   rects: [[25, 12, 22, 29], [0, 181, 42, 19]],
   sprites: [
     { member: 'LAP.SP', at: 0x378c, w: 38, h: 41, x: 17, y: 6, exclude: [[25, 12, 22, 29]] },
