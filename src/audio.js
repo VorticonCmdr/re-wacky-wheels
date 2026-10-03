@@ -1,4 +1,5 @@
 import { bytes, view, need, ascii } from './binary.js';
+import { parseMidiEvents } from './formats/midi.js';
 
 export { decodeVocAudio as decodeVoc } from './formats/voc-audio.js';
 
@@ -34,37 +35,11 @@ export function parseAdlib(data) {
 }
 
 export function parseMidi(data) {
-  const b = bytes(data), v = view(b); need(b, 0, 14, 'MIDI header');
-  if (ascii(b.subarray(0, 4)) !== 'MThd') throw new Error('Not a MIDI file');
-  const headerSize = v.getUint32(4), type = v.getUint16(8), tracks = v.getUint16(10), division = v.getUint16(12);
-  if (headerSize < 6 || type > 1 || !tracks || !division || division & 0x8000) throw new Error('Only format 0/1 MIDI with quarter-note timing is supported');
-  let p = 8 + headerSize, serial = 0, lastTick = 0; need(b, 0, p, 'MIDI header');
-  const events = [];
-  for (let track = 0; track < tracks; track++) {
-    need(b, p, 8, 'MIDI track'); if (ascii(b.subarray(p, p + 4)) !== 'MTrk') throw new Error('Missing MTrk');
-    const length = v.getUint32(p + 4); p += 8; const end = p + length; need(b, p, length, 'MIDI track');
-    let tick = 0, running = 0;
-    function vlq() { let value = 0; for (let i = 0; i < 4; i++) { if (p >= end) throw new Error('Truncated MIDI variable integer'); const byte = b[p++]; value = value * 128 + (byte & 127); if (!(byte & 128)) return value; } throw new Error('MIDI variable integer exceeds four bytes'); }
-    function take(n) { if (p + n > end) throw new Error('Truncated MIDI event'); const at = p; p += n; return at; }
-    while (p < end) {
-      tick += vlq(); lastTick = Math.max(lastTick, tick);
-      let status = b[take(1)];
-      if (status < 128) { if (!running) throw new Error('Invalid MIDI running status'); p--; status = running; }
-      if (status < 240) running = status;
-      else if (status !== 255) running = 0;
-      if (status === 255) {
-        const meta = b[take(1)], n = vlq(), at = take(n);
-        if (meta === 81 && n === 3) events.push({ tick, serial: serial++, kind: 'tempo', tempo: b[at] << 16 | b[at + 1] << 8 | b[at + 2] });
-        if (meta === 47) { p = end; break; }
-      } else if (status === 240 || status === 247) take(vlq());
-      else if (status < 240) {
-        const kind = status >> 4, n = kind === 12 || kind === 13 ? 1 : 2, at = take(n);
-        if (b[at] >= 128 || (n === 2 && b[at + 1] >= 128)) throw new Error('Invalid MIDI data byte');
-        events.push({ tick, serial: serial++, kind, channel: status & 15, a: b[at], b: n === 2 ? b[at + 1] : 0 });
-      } else throw new Error(`Unsupported MIDI status ${status}`);
-      if (events.length > 1e6) throw new Error('Too many MIDI events');
-    }
-  }
+  // The file is read by the traced sequencer grammar (src/formats/midi.js, claims midi.player and midi.songs). Pairing notes below
+  // is the viewer's own: the game hands note, controller and program events to its sound card driver. The controller numbers 64
+  // (sustain), 120 and 123 (all notes off) are the MIDI specification's, not read from the game.
+  const { events, tracks, division, lastTick } = parseMidiEvents(data);
+  if (!division || division & 0x8000) throw new Error('Only quarter-note timing is supported');
   events.sort((a, b) => a.tick - b.tick || a.serial - b.serial);
   const active = Array.from({ length: 16 }, () => new Map()), programs = new Uint8Array(16), sustain = new Uint8Array(16), notes = [];
   let tempo = 500000, time = 0, tick = 0;
