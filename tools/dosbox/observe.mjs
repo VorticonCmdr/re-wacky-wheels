@@ -243,6 +243,28 @@ const scenarios = {
     const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, inputsObject: 2, rowOffset: 0x1d7a8, columnOffset: 0x1d7a4, resultOffset: 0x1e568, forced: true, samples: JSON.parse(values.args) };
   },
+  async placement() {
+    // The racer records after the first branch of racer.init ran with its gate (obj2+0x1ec74) forced to 1 (tools/dosbox/placement-run.mjs), read at that branch's ret.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const racers = [];
+    for (let i = 0; i < 24; i++) { // @math the 24 racer records
+      const raw = Buffer.from(await readMemory(b2 + 0xaa90 + i * 0x68, 0x68)), words = [];
+      for (let k = 0; k < raw.length; k += 2) words.push(raw.readUInt16LE(k)); // @math little-endian words
+      racers.push(words);
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, gate: [0x1ec74, await u32(b2 + 0x1ec74)], countWord: [0x28c40, await u16(b2 + 0x28c40)], sourceWord: [0x1ecb0, await u16(b2 + 0x1ecb0)],
+      routeLast: [0x28b7a, await u16(b2 + 0x28b7a)], tableBase: [0x12350, await u32(b2 + 0x12350)], recordBase: 0xaa90, recordBytes: 0x68, racers };
+  },
+  async gamload() {
+    // The words the .GAM parser (obj1+0x1717c) has stored at its exit (tools/dosbox/stop-run.mjs, breakpoint at obj1+0x17499): the two value words, the two start tables, the flag and the three extra words.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0);
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    const table = async off => { const out = []; for (let k = 0; k < 8; k++) out.push(await i16(b2 + off + k * 2)); return out; }; // @math eight entries of two bytes
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) },
+      values: [[0x28b0a, await i16(b2 + 0x28b0a)], [0x28b0e, await i16(b2 + 0x28b0e)]], xTable: [0x1d7cc, await table(0x1d7cc)], yTable: [0x1d7e0, await table(0x1d7e0)], flag: [0x28b60, await i16(b2 + 0x28b60)],
+      extra: [[0x28b5a, await i16(b2 + 0x28b5a)], [0x28b4e, await i16(b2 + 0x28b4e)], [0x28b4c, await i16(b2 + 0x28b4c)]] };
+  },
   async race() {
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];
     const at = off => b2 + off, mem = readMemory;

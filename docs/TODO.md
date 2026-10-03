@@ -76,8 +76,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 ### `.GAM` track configuration
 
 - [ ] `gam.read-rest` [STATIC] — lines 6–7 (+0x0400), line 8 dropped, pairs 2–8 (+0x03e0) into the tables, line 25 stored and set to 1 when non-zero
-  - Gap: the game rewrites these after loading (value words differ from file + 0x400, the table holds a derived start grid, the flag word reads 2), so their load-time contents were not seen.
-  - Next: a breakpoint-free way to catch load time, e.g. record memory during the load (video capture start/stop around the menu choice) or read the file-read interrupts.
+  - Gap: the stores are observed (`gam.load-words`); that line 8 is read and dropped, and that the flag word is set only for a non-zero line 25, are read, not seen (the recorded track has flag 1).
+  - Next: record a track whose flag line is 0, if any exists in the archive (`gam.layout` allows both).
 - [ ] `gam.line-reader-tail` [STATIC] — the line reader has no end-of-file test (a file without a final CR is read past its end) and writes its NUL over the CR
   - Gap: read in full; nothing was run that reads past the end of a file. Next: an experiment with a `.GAM` whose last line has no CRLF.
 - [ ] `UNKNOWN_GAM_NUMBERS` [UNKNOWN] — meaning of lines 6–7, the eight coordinate pairs (only the first survives as a start position; the rest of the live table is a derived grid), the flag on line 25 and lines 26–28
@@ -121,6 +121,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `gam.load-words` PROVEN (`gamload-1`, check `obs-gamload`): at the .GAM parser's exit the value words, both start tables (all eight pairs), the flag word and the three extra words equal the file's lines plus the biases
 - [x] `dat.uppercase-range` PROVEN (`gamslot-2`, check `obs-uppercase`): the lookup upper-cases exactly the bytes 0x61 to 0x7a of the requested name in place; the bytes at 0x40, 0x5b, 0x60 and 0x7b stay
 - [x] `terrain.clamp` PROVEN (`terrain-4`, check `obs-terrain`): with row and column forced at the lookup's entry to values on each side of both limits, every result equals the one the position clamped to 0..0xfff predicts
 - [x] `dat.entry-notfound` PROVEN (`miss-1`, check `obs-miss`): an execute breakpoint on the lookup's not-found path stops for the missing name with the walk index equal to the entry count (577) and a zero first byte in the entry there

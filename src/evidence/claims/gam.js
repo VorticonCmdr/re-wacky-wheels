@@ -11,8 +11,15 @@ export default [
     leads: ['docs/gam.md (ModdingWiki: lines 1-2 tilesets, 3-4 masks, 5 sky, 9-10 start X,Y, 25 cycling flag, 26-28 delays; 25 or 28 lines)'],
   },
   {
+    id: 'gam.load-words', tag: 'PROVEN',
+    statement: 'Observed in the running game (record gamload-1: an execute breakpoint at the exit of the .GAM parser, obj1+0x17499, in the first demo race, track 2): the words the parser has stored equal the track\'s own .GAM read from the archive: the value words at obj2+0x28b0a and +0x28b0e are lines 6 and 7 plus 0x0400; the two start tables at obj2+0x1d7cc (x) and +0x1d7e0 (y) hold all eight coordinate pairs of lines 9 to 24, each plus 0x03e0; the flag word at obj2+0x28b60 is the flag line (1 here); and the words at obj2+0x28b5a, +0x28b4e and +0x28b4c are lines 26, 27 and 28. The grid that later replaces the seven other table entries (racer.start-grid) is therefore written after the load.',
+    value: { valueAt: [0x28b0a, 0x28b0e], valueBias: 0x0400, xTable: 0x1d7cc, yTable: 0x1d7e0, pairBias: 0x03e0, pairs: 0x08, flagAt: 0x28b60, extra: [0x28b5a, 0x28b4e, 0x28b4c] },
+    evidence: { checks: ['obs-gamload'], obs: ['gamload-1'], at: ['WW.EXE:obj1+0x1733d fp=5564c40c', 'WW.EXE:obj1+0x173c9 fp=33a86f73', 'WW.EXE:obj1+0x173e3 fp=afa9fc88', 'WW.EXE:obj1+0x17436 fp=c5eb1d2b'] },
+    leads: ['docs/gam.md'],
+  },
+  {
     id: 'gam.read-rest', tag: 'STATIC',
-    statement: 'The same parser converts lines 6 and 7 to integers stored with 0x0400 added at obj2+0x28b0a and +0x28b0e, reads and drops line 8, converts lines 11 to 24 into the other seven coordinate pairs (each with 0x03e0 added, indexed 1 to 7 in the two tables), and stores line 25 at obj2+0x28b60, setting that word to 1 when it is non-zero. Not observed: in the running game the two value words differ from the file lines plus 0x0400, the seven other table entries hold a derived start grid (x stepping by 20 from the first pair, y equal) and the flag word is 2, so the game rewrites all of these after loading; their load-time contents are not confirmed.',
+    statement: 'The same parser converts lines 6 and 7 to integers stored with 0x0400 added at obj2+0x28b0a and +0x28b0e, reads and drops line 8, converts lines 11 to 24 into the other seven coordinate pairs (each with 0x03e0 added, indexed 1 to 7 in the two tables), and stores line 25 at obj2+0x28b60, setting that word to 1 when it is non-zero. The stores of lines 6, 7, 9 to 24, 25 and 26 to 28 are observed in gam.load-words (the later rewrite is racer.start-grid); that line 8 is read and dropped and that the flag word is set to 1 only for a non-zero line 25 are read, not seen (the one recorded track has flag 1).',
     value: { valueBias: 0x0400, startPairs: 0x08 },
     evidence: { at: ['WW.EXE:obj1+0x1733d fp=5564c40c', 'WW.EXE:obj1+0x173c9 fp=33a86f73', 'WW.EXE:obj1+0x173e3 fp=afa9fc88', 'WW.EXE:obj1+0x17436 fp=c5eb1d2b'] },
   },

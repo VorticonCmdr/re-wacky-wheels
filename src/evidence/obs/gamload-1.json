@@ -1,0 +1,78 @@
+{
+ "id": "gamload-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "first demo race (track 2): execute breakpoint at the exit of the .GAM parser (obj1+0x17499), read at its first stop",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "2"
+ },
+ "values": [
+  [
+   166666,
+   2274
+  ],
+  [
+   166670,
+   2524
+  ]
+ ],
+ "xTable": [
+  120780,
+  [
+   1216,
+   1312,
+   1248,
+   1312,
+   1248,
+   1312,
+   1248,
+   1312
+  ]
+ ],
+ "yTable": [
+  120800,
+  [
+   1600,
+   1696,
+   1792,
+   1888,
+   1984,
+   2080,
+   2176,
+   2272
+  ]
+ ],
+ "flag": [
+  166752,
+  1
+ ],
+ "extra": [
+  [
+   166746,
+   2
+  ],
+  [
+   166734,
+   4
+  ],
+  [
+   166732,
+   3
+  ]
+ ]
+}
