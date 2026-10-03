@@ -23,6 +23,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [PROVEN] `item.shots-observed`: item 4 throws two records sideways (16 columns a call, turning at the road's sides), items 5, 6 and 7 drop one record each 10 rows behind the car that stays where it fell; each press uses the item up.
 - [PROVEN] `car.player-frames-observed`: the player's car (Tigi) is drawn at column 141, top row 164 or 165, with CARS.SP frame 88 going straight, TIGER.SP frames 0 and 1 steering left and 3 and 2 steering right (the car word `+0x1a` runs 0, 1, 2, 3, 4 over TIGER 0, TIGER 1, CARS 88, TIGER 2, TIGER 3), CARS.SP frame 87 in a hand brake turn.
 - [PROVEN] `item.hedgehog-observed`: with the counter above 0 and nothing held a press queues one type-0 record 20 rows ahead and spends one count; a shot stops 13 rows before an object it touches (collision word 2) and otherwise runs to the end of the road.
+- [PROVEN] `item.mine-hit-observed`: an AI racer that reaches a dropped bomb stops on it for 33 ticks (its word `+0x58` is 1, `+0x4c` the start tick) and the record is gone 3 ticks later; the racers do not otherwise change.
 - [PROVEN] `input.steer-observed`: left alone sets the left byte, word and amount (20 or 40) and lowers the heading, right alone the right ones and raises it (a quarter turn is 480 of 1920); after a hand brake turn the amount was 120.
 
 ## One frame
