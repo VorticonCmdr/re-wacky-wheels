@@ -36,9 +36,11 @@ function validate(dat, r, V, { sizeBase = V.proj.sizeBase, sizeStep = V.proj.siz
         player++;
         assert.equal(d, L.playerDistance, 'the player\'s car is at 0x7c');
         assert.equal(L.playerDistance, V.car.distance);
+        assert.equal(rec[F.racer], 0, 'the racer index of the player\'s car is the single player\'s 0'); // @math one player, index 0
         assert.equal(rec[F.left] + (rec[F.width] >> 1), V.car.centre, 'centred on the column 0xa0'); // @math half the width, rounded down
       } else {
         others++;
+        if (rec[F.type] < 0) assert.equal(rec[F.racer], rec[F.type], 'a record of an object (type -1) has -1 in the racer word too'); // @math the objects' marker is -1 in both words
         const size = d < sizeBase ? 0 : Math.min(Math.floor((d - sizeBase) / sizeStep), V.proj.maxSize);
         assert.equal(rec[F.sizeClass], size, `the size class of the distance ${d}`);
         classes[size]++;
@@ -73,6 +75,7 @@ export default {
       { label: 'the size base 0x7b', fn: () => validate(dat, r, V, { sizeBase: V.proj.sizeBase - 1 }) },
       { label: 'the size step 0x45', fn: () => validate(dat, r, V, { sizeStep: V.proj.sizeStep - 1 }) },
       { label: 'a player distance of 0x7d', fn: () => validate(dat, r, { ...V, list: { ...V.list, playerDistance: V.list.playerDistance + 1 } }) },
+      { label: 'a player record of racer 1', fn: () => validate(dat, { ...r, samples: r.samples.map((s, i) => (i === r.samples.findIndex(x => x.records.some(rec => rec[V.list.fieldWords.type] === V.car.type)) ? { ...s, records: s.records.map(rec => (rec[V.list.fieldWords.type] === V.car.type ? rec.map((v, j) => (j === V.list.fieldWords.racer ? 1 : v)) : rec)) } : s)) }, V) }, // @math racer index 1
       { label: 'a centre of 0x9f', fn: () => validate(dat, r, { ...V, car: { ...V.car, centre: V.car.centre - 1 } }) },
       { label: 'a smaller class count', fn: () => validate(dat, r, { ...V, list: { ...V.list, classes: [...V.list.classes.slice(0, -1), V.list.classes.at(-1) - 1] } }) },
       { label: 'one archive byte changed', fn: () => validate(Uint8Array.from(dat, (x, i) => (i === dat.length - 1 ? x ^ 1 : x)), r, V) }, // @math flip the lowest bit of the last byte
