@@ -20,6 +20,7 @@
 //   klm  (game paused, a KLM song playing through the AdLib driver) the driver's position in the song and its shadow tables
 //   keys  (--held 75,56) (game paused after those scancodes were held) the keyboard handler's key table words, last code and fixed flag bytes
 //   midi  (game paused, a MIDI song playing through the General MIDI sequencer) the sequencer's track records
+//   image  (WWHELP.EXE running, --segment N --bytes N) page CRC-32s of the program image in memory
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -31,7 +32,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -279,6 +280,15 @@ const scenarios = {
     const file = Buffer.from(await readMemory(base, size));
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), firstTrackOffset: 0x2b958, divisionOffset: 0x2b964, activeOffset: 0x2b960, playingOffset: 0x4434, loopOffset: 0x443c,
       recordFields: { next: 0, delta: 0x8, active: 0xc, status: 0x10, start: 0x14, current: 0x18 }, recordAddresses: addresses, division, activeTracks, playing, loop, size, crc: hex8(crc32(file)), tracks: records.map(t => ({ start: t.start - base, current: t.current - base, delta: t.delta, active: t.active, status: t.status })) };
+  },
+  async image() {
+    // (WWHELP.EXE running under DOSBox, --segment N the segment of its PSP from the DOS memory map, --bytes N the length of the decoded image) the CRC-32 of every 256-byte page of the
+    // program image that starts 0x100 bytes (the PSP) into the block. This scenario reads real-mode memory by physical address and needs no WW.EXE bases.
+    const pspAt = Number(values.segment) * 16, imageAt = 0x100, length = Number(values.bytes), pageBytes = 256, pageCrcs = [];
+    const live = Buffer.from(await readMemory(pspAt + imageAt, length));
+    for (let at = 0; at < length; at += pageBytes) pageCrcs.push(hex8(crc32(live.subarray(at, Math.min(at + pageBytes, length)))));
+    const file = await readFile(resolve('analysis/dosbox/WACKY/WWHELP.EXE')); // the copy of the installed program that was run
+    return { ...header, program: 'WWHELP.EXE', file: { size: file.length, sha1: sha1(file) }, segment: Number(values.segment), imageAt, pageBytes, bytes: length, pageCrcs };
   },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.

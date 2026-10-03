@@ -63,4 +63,19 @@ export default [
     evidence: { checks: ['wwhelp-packed'] },
     leads: ['docs/binaries.md'],
   },
+  {
+    id: 'lzexe.decode', tag: 'PROVEN',
+    statement: 'The rules by which the packed program image of WWHELP.EXE (wwhelp.packed; wwhelp.image gives the numbers) decompresses, the LZEXE 0.91 decoder\'s: the stream starts at the end of the MZ header (the header size in paragraphs is the word at offset 8, times 16) and is 16-bit words whose bits are taken from the lowest up and whose next word is read as soon as the last bit of one is used; a 1 bit is a literal byte; 0 then 0 is a copy of 2 to 5 bytes (two length bits, then a byte that gives the offset as 0xff00 plus the byte, negative); 0 then 1 is a copy whose offset is a byte and the high bits of a second byte (0xe000 plus those bits shifted by 5 plus the first byte, negative) and whose length is the low three bits of that second byte plus 2, or, when they are 0, a following byte that ends the stream when 0, is a segment-change mark that is skipped when 1 (that branch never occurs in this stream, so it is the packer\'s rule, not shown here) and is otherwise the length plus 1. They are proven by the result: wwhelp.image shows that this decoder reproduces the running program.',
+    value: { headerParasAt: 0x08, paragraph: 0x10, wordBits: 0x10, shortSpanHigh: 0xff00, longSpanHigh: 0xe000, spanHighMask: 0x07, spanHighShift: 0x05, lengthBias: 0x02, extendedBias: 0x01, endMark: 0x00 },
+    evidence: { checks: ['obs-wwhelp'], obs: ['wwhelp-1'] },
+    leads: ['docs/binaries.md'],
+  },
+  {
+    id: 'wwhelp.image', tag: 'PROVEN',
+    statement: 'The packed program image of WWHELP.EXE (wwhelp.packed; MZ header of 2 paragraphs, the packed stream from file offset 0x20 to 0x2e06, the stub with the packer\'s variables from 0x2e10) decompresses with the rules of lzexe.decode to 18538 bytes, the stream ending with its end mark at file offset 0x2e06, and those bytes are the program as it runs: in the DOSBox run of the installed program (record wwhelp-1, taken while it showed its first help page; the record holds the size and SHA-1 of the copy that was run, which is the installed file; the memory block of its PSP read, the image starting 0x100 bytes into it) 62 of the 73 pages of 256 bytes of the decoded image are byte for byte the live image, and the 11 others (offsets 0x2100, 0x2300, 0x2900, 0x3300 and 0x4100 to 0x4800) differ (the check compares pages by CRC-32; a byte comparison made by hand found 526 differing bytes, 15 of them in the first four pages, at the places where the loader applies the program\'s segment relocations, which the packer stores separately, and 511 in the last seven, the program\'s own variables and buffers). The program is SimpleWare\'s document viewer "Simply Docs" modified for Apogee, as its strings show when it runs (seen on its screen and in the memory dump, not part of the check); the text of the help is not in the decoded image (the 24202 appended bytes hold it); only its viewer is.',
+    value: { packedStart: 0x20, packedEnd: 0x2e06, imageBytes: 18538, pageBytes: 256, imageAt: 0x100, pages: 73, equalPages: 62 },
+    evidence: { checks: ['obs-wwhelp'], obs: ['wwhelp-1'] },
+    leads: ['docs/binaries.md'],
+  },
+
 ];
