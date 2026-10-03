@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { parseDatDirectory } from '../formats/dat.js';
 import { view } from '../binary.js';
 import { replaceMember } from './patch.js';
+import { expected } from './expect.js';
 
 // `V` carries sin (sin.read), sinLayout (sin.layout) and map (m.read); `build` is the record's { track, id, rows, cols, value }.
 export function rebuildStrip(dat, record, V) {
@@ -21,3 +22,13 @@ export function rebuildStrip(dat, record, V) {
 
 // The world rows [from, to) the strip covers: the map origin in pixels plus its rows in tiles.
 export const stripRows = (b, V) => [V.map.mapOrigin * V.sheet.size + b.rows[0] * V.sheet.size, V.map.mapOrigin * V.sheet.size + (b.rows[1] + 1) * V.sheet.size];
+
+// An object moved by tools/dosbox/make-test-spw.mjs: the record's x and y words (words 2 and 3 of the 12-byte records after the 2-byte count, spw.layout) replaced. `build` is { track, index, x, y }.
+export function replaceSpwRecord(dat, build) {
+  const L = expected('spw.layout'), members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data])), spw = Uint8Array.from(members.get(`${build.track}.SPW`)), dv = view(spw);
+  const at = L.countBytes + build.index * L.recordBytes;
+  assert.ok(build.index >= 0 && at + L.recordBytes <= spw.length, 'the record exists');
+  dv.setUint16(at + 2 * L.wordBytes, build.x, true); // @math word 2 is x
+  dv.setUint16(at + 3 * L.wordBytes, build.y, true); // @math word 3 is y
+  return replaceMember(dat, `${build.track}.SPW`, spw);
+}
