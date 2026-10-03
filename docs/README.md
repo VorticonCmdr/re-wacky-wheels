@@ -44,6 +44,7 @@ Local observations refer to `game/WackyWhe/WACKY/WACKY.DAT` in this installation
 | [inf.md](inf.md) | INF — unknown sprite metadata |
 | [sdx.md](sdx.md) | SDX — WACKY.SDX particle data |
 | [xy.md](xy.md) | XY — MAP.XY minimap lookup |
+| [driving-model.md](driving-model.md) | The player's driving model as read from `WW.EXE` (frame order, view, throttle and speed, movement, collisions, object kinds) |
 
 ## Coverage and attribution
 
