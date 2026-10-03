@@ -165,3 +165,5 @@ Startup/errors: 0x1e9c "WACKY WHEELS VERSION 1.1", 0x1ec8 "SHAREWARE RELEASE.", 
 
 
 > **Checked 2026-10-04 against the running game** (`text.menu-observed`, PROVEN, record menu-1): the race's Esc menu text is drawn from `WFONT1.SP` as 42 tiles of 15 x 13 pixels (character plus bar piece), step 11 pixels, items 12 rows apart from (88, 84); letters are the tiles 0 to 25, the space tile 36. The 8 x 8 text routine obj1+0x48f4 draws `OFONT.SP` glyphs elsewhere (`text.glyphs-observed`).
+
+> **Checked 2026-10-04** (`menu.main-observed`, PROVEN, record menu-2): the main menu's nine items (SINGLE PLAYER RACING to LEAVE GAME) are drawn with the same WFONT1.SP tiles, left aligned at x = 50, y = 76 + 12 per item; the hyphen is tile 39 and the trade mark sign tile 41.
