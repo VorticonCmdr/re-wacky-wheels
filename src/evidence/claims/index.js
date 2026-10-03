@@ -12,6 +12,7 @@ import statics from './static.js';
 import terrain from './terrain.js';
 import track from './track.js';
 import voc from './voc.js';
+import wf from './wf.js';
 import wwExe from './ww-exe.js';
 
-export default [...le, ...wwExe, ...dat, ...pcx, ...track, ...gam, ...terrain, ...statics, ...sprites, ...exes, ...audio, ...cfg, ...voc];
+export default [...le, ...wwExe, ...dat, ...pcx, ...track, ...gam, ...terrain, ...statics, ...sprites, ...exes, ...audio, ...cfg, ...voc, ...wf];
