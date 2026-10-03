@@ -56,7 +56,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `floor.table-use` [STATIC] — the floor renderer casts from the position along `TRIG` unit vectors scaled by `NDIST` factors; the same pair feeds the terrain lookup's inputs
   - Gap: read in three routines, not observed; the row/column roles of NDIST in the drawing loops are not traced. Next: record the terrain inputs obj2+0x1d7a4/0x1d7a8 with the angle word and compare with TRIG and NDIST entry 0.
 - [ ] `cars.slots` [STATIC] — the `CARS.SP` buffer is 8 driver slots of 12 frames; a routine reads the first 8 frames of a driver's file into a slot and keeps eight frame pointers
-  - Gap: not observed; the slot choice, what fills the last 4 frames and how the frames are used in play are untraced. Next: record the pointer records at obj2+0x13c08 and the slot contents after a race loads.
+  - Gap: the buffer, the slot size and each slot's 12 frame pointers are observed (`cars.slot-records`); the per-driver read did not happen in the attract race (slots still held CARS.SP's own frames), so the slot choice and what fills the last 4 frames are not seen. Next: reach the racer-select menu with a breakpoint at obj1+0x22822.
 - [ ] `UNKNOWN_STATIC_TABLE_MEANING` [UNKNOWN] — what the six tables mean, and what the game rewrites in the last 8 bytes of five `.SDX` records
   - Gap: layout and run-time placement are proven (`static.layout`, `static.read`); no reader of the live buffers has been read.
   - Next: the remaining TRIG sites (38; three routines read in `floor.table-use`); the CARS readers are read (`cars.slots`), MAP.XY (`mapxy.use`), MOV (`mov.use`), TRIG and NDIST layout and use, and the SDX terrain index (`terrain.sdx-index`) are read.
@@ -71,7 +71,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `sp.draw` [STATIC] — the blitter `FUN_00036fd0` consumes a frame column by column (word +4 columns of word +6 bytes), index 0 transparent
   - Gap: no screen pixel was compared with a frame. Next: after a race starts, compare VRAM rows of a visible sprite with the frame (the VRAM read from `par.upload` works) and add a check.
 - [ ] `spw.frame` [STATIC] — frame address = sprite buffer + `.SPW` word +0x0a × (word +4 × word +6); word +8 is the tick counter
-  - Gap: not compared with a running frame. Next: record the dword at obj2+0x1d704 at several pauses and check it equals a catalogue pointer plus k frames.
+  - Gap: not compared with a running frame. The dword obj2+0x1d704 is stored from about 100 code sites; this routine (obj1+0x4398) ran once in a recording, at the title screen, in the branch that takes the pointer from the cars slot records (it gave buffer + 0, as `cars.slot-records` predicts), and never during the attract race. Next: find the routine the race uses for object frames and compare its address with catalogue pointer + frame x width x height.
 
 ### `.GAM` track configuration
 
@@ -121,6 +121,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `cars.slot-records` PROVEN (`cars-1`, check `obs-cars`): the CARS.SP buffer holds the file whole and each slot's pointer record starts with that slot's 12 frame pointers, 0x428 apart
 - [x] `gam.load-words` PROVEN (`gamload-1`, check `obs-gamload`): at the .GAM parser's exit the value words, both start tables (all eight pairs), the flag word and the three extra words equal the file's lines plus the biases
 - [x] `dat.uppercase-range` PROVEN (`gamslot-2`, check `obs-uppercase`): the lookup upper-cases exactly the bytes 0x61 to 0x7a of the requested name in place; the bytes at 0x40, 0x5b, 0x60 and 0x7b stay
 - [x] `terrain.clamp` PROVEN (`terrain-4`, check `obs-terrain`): with row and column forced at the lookup's entry to values on each side of both limits, every result equals the one the position clamped to 0..0xfff predicts

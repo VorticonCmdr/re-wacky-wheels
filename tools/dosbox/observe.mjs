@@ -265,6 +265,40 @@ const scenarios = {
       values: [[0x28b0a, await i16(b2 + 0x28b0a)], [0x28b0e, await i16(b2 + 0x28b0e)]], xTable: [0x1d7cc, await table(0x1d7cc)], yTable: [0x1d7e0, await table(0x1d7e0)], flag: [0x28b60, await i16(b2 + 0x28b60)],
       extra: [[0x28b5a, await i16(b2 + 0x28b5a)], [0x28b4e, await i16(b2 + 0x28b4e)], [0x28b4c, await i16(b2 + 0x28b4c)]] };
   },
+  async cars() {
+    // The CARS.SP buffer and the eight slot pointer records after a race has loaded (paused race, no breakpoint).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const bufferPointer = await u32(b2 + 0x1d708), bufferBytes = 0x18f00; // @math the loader's read size (cars.slots)
+    const live = Buffer.from(await readMemory(bufferPointer, bufferBytes)), records = [];
+    for (let k = 0; k < 8; k++) { // @math eight slots
+      const raw = Buffer.from(await readMemory(b2 + 0x13c08 + k * 0x98, 0x98)), dwords = [];
+      for (let i = 0; i < raw.length; i += 4) dwords.push(raw.readUInt32LE(i)); // @math little-endian dwords
+      records.push(dwords.map(d => (d >= bufferPointer && d < bufferPointer + bufferBytes ? [d - bufferPointer] : d)));
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), bufferPointerOffset: 0x1d708, bufferBytes, bufferCrc: hex8(crc32(live)), recordTableOffset: 0x13c08, recordBytes: 0x98, records };
+  },
+  async spwframe() {
+    // Samples at obj1+0x4414, where the object-preparation routine stores the frame address (stop-run.mjs arms the breakpoint and waits for the first stop):
+    // the address (eax), the branch register (ecx), the object index (dx), the object's 12-byte record and its catalogue entry (0x28 bytes).
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const api = `${API}/api/v1/debug`, status = async () => (await (await fetch(`${api}/status`)).json()), samples = [], bufferPointer = await i32(b2 + 0x1d708);
+    const waitStop = async since => { for (let i = 0; i < 1200; i++) { const d = await status(); if (d.debugging && d.stop.stop_id > since) return d.stop; await sleep(100); } return null; };
+    let stop = await waitStop(0);
+    if (!stop) throw new Error('no stop');
+    for (let k = 0; k < 60; k++) { // @math number of stops sampled
+      const dx = stop.registers.edx & 0xffff, index = (dx << 16) >> 16; // @math the routine uses dx as a signed word
+      const record = Buffer.from(await readMemory(b2 + 0x13938 + index * 12, 12)), words = [];
+      for (let i = 0; i < 12; i += 2) words.push(record.readInt16LE(i)); // @math the record's six words
+      const id = words[0], entry = Buffer.from(await readMemory(b2 + 0x12998 + Math.max(id, 0) * 0x28, 0x28)), catalogue = [];
+      for (let i = 0; i < 0x24; i += 2) catalogue.push(entry.readInt16LE(i)); // @math the catalogue words before the pointer
+      catalogue.push(entry.readUInt32LE(0x24)); // @math the pointer dword
+      samples.push([stop.linear_eip - b1, stop.registers.ecx | 0, stop.registers.eax >>> 0, index, words, catalogue]);
+      await fetch(`${api}/continue`, { method: 'POST' });
+      stop = await waitStop(stop.stop_id);
+      if (!stop) break;
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), recordTableOffset: 0x13938, recordBytes: 12, catalogueOffset: 0x12998, catalogueBytes: 0x28, carsBufferPointer: bufferPointer, carsRecordTable: 0x13c08, columns: ['eip', 'ecx', 'eax', 'index', 'recordWords', 'catalogueWords'], samples };
+  },
   async race() {
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];
     const at = off => b2 + off, mem = readMemory;
