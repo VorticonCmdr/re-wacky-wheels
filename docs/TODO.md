@@ -115,6 +115,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: read, not run; the library routines `obj1+0x31820` and `obj1+0x31fc8` are unread, the word 0x79e and the entry values of the MIDI address list are unknown. Next: read the library init, or run with a changed voice count (DOSBox run copy).
 - [ ] `setup.score-reset` [STATIC] — "Reset score tables" deletes WACKY1.TIM, WACKY2.TIM, WACKY1.HI, WACKY2.HI and WACKY.DTT
   - Gap: read, not run; that the game recreates them from the default score members is not read.
+- [ ] `setup.volume-detail` [STATIC] — volumes at cfg 0x7aa (fx), 0x7ae (music), 0x85c (engine), split-screen detail at 0x860, version stamp 0xfa at 0x7b2
+  - Gap: read, not run; the volume scale (0 to 255?) and the library calls are unread; what obj2+0x28c80 does is unknown; cfg 0x862 and 0x864 (SETUP obj2+0x84b8, +0x84ba) are unread.
 - [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
   - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
