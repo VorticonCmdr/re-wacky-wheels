@@ -124,7 +124,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `score.insert` [STATIC] — how new results enter the duck-shoot and time tables (sorted insertion, shifting, the overall time replacing its record)
   - Gap: read, not run; how the time record index follows the class, cup and track, and where the typed name comes from, are unread. Also: the race high score table (`WACKYn.HI`, 6624 bytes) is loaded and saved by the program but no other code names an address inside it (`score.references`, fixup scan 2026-10-03: a computed address could still reach it), so its 46-byte record layout stays the wiki's lead.
 - [ ] `midi.player` [STATIC] — the library's MIDI sequencer: header and track chunk grammar, delta and running status, one-byte meta lengths (only end of track and tempo acted on), channel event byte counts, tempo formula, loop; `src/formats/midi.js` follows it
-  - Gap: read, not run; the music driver's callbacks, the per-channel filters (`obj2+0x43f0`), controller 7's routine (`obj1+0x3ad70`) and the timer service are unread, so what the game does with notes and controllers is not described.
+  - Gap: the sequencer's track pointers, pending delays, running status and track-end handling were observed (`midi.driver-state`, PROVEN); the music driver's callbacks, the per-channel filters (`obj2+0x43f0`), controller 7's routine (`obj1+0x3ad70`), the tempo formula's effect and the timer service are read or unread, not observed.
 - [ ] `klm.player` [STATIC] — the AdLib music driver: command grammar, register writes per command, volume formula, instrument loading and initialisation (the faithful KLM decoder `src/formats/klm.js` follows it)
   - Gap: the driver's song position and shadow tables were observed against these rules in five samples of two songs (`klm.driver-state`, PROVEN), but the OPL register writes themselves were not; channel 8's four-byte frequency command never occurs in the archive; the timer service (`obj1+0x30e38`) and the write delays are unread.
 - [ ] `voc.library-player` [STATIC] — the library's VOC block walker: rate 0xf424000 / (0x10000 - (byte << 8)), only codec 0 (and 8-bit mono type 9) blocks play, silence, marker, text and extended blocks are skipped, repeats play count + 1 times
@@ -163,6 +163,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `midi.driver-state` PROVEN (check `obs-midi`, records `midi-1` to `midi-5`): the General MIDI sequencer's track records at run time match the walk of the game's grammar for MAINMENU.MID and DANCE.MID
 - [x] `voc.rate-observed`, `klm.driver-state` and `input.key-state` PROVEN from DOSBox records (`voices-1/2`, `klm-1..5`, `keys-1..7`; checks `obs-voices`, `obs-klm`, `obs-keys`): the library's VOC rate rule (including rounding down: 13157, not 13158, after one byte of a loaded sound was changed), the AdLib driver's shadow tables against the product's KLM decoder, and the keyboard handler's table, last code and flag bytes
 - [x] `sp.loader-sizes` PROVEN (check `sp-loaders`): 14 sprite files are loaded by code that fixes their exact member sizes
 - [x] `dtt.layout` PROVEN (check `score-files`); the time-trial and duck-shoot views of `inspectData` moved under the rule (`src/formats/scores.js`, identical output on the archive defaults and the installed files)

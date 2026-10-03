@@ -19,6 +19,7 @@
 //   voices  (game paused, sound mode 0 with a Sound Blaster, sounds playing) the rates, time constants and data CRCs of the library's voices
 //   klm  (game paused, a KLM song playing through the AdLib driver) the driver's position in the song and its shadow tables
 //   keys  (--held 75,56) (game paused after those scancodes were held) the keyboard handler's key table words, last code and fixed flag bytes
+//   midi  (game paused, a MIDI song playing through the General MIDI sequencer) the sequencer's track records
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -264,6 +265,20 @@ const scenarios = {
     const flagOffsets = { enterSpace: 0x28cce, f10: 0x28ccd, up: 0x28cdb, down: 0x28cd2 }, flags = {};
     for (const [name, off] of Object.entries(flagOffsets)) flags[name] = await byteAt(off);
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableOffset: 0x1b6d8, lastCodeOffset: 0x28cd0, flagOffsets, held: values.held ? values.held.split(',').map(Number) : [], words, lastCode: await byteAt(0x28cd0), flags };
+  },
+  async midi() {
+    // (game paused while the General MIDI sequencer plays) the sequencer's track records (0x1c bytes each from the pointer at obj2+0x4430) and state words: for each track
+    // its data start (+0x14), current pointer (+0x18), delta still to count (+0x08), active flag (+0x0c) and running status (+0x10), relative to the start of the file in memory; the file
+    // is identified by its size and CRC-32.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0), word = off => u32(b2 + off);
+    const first = await word(0x2b958), division = await word(0x2b964), activeTracks = await word(0x2b960), playing = await word(0x4434), loop = await word(0x443c);
+    const records = [];
+    const addresses = [];
+    for (let r = first, n = 0; r && n < 64; r = await u32(r), n++) addresses.push(r - first), records.push({ start: await u32(r + 0x14), current: await u32(r + 0x18), delta: await u32(r + 0x8), active: await u32(r + 0xc), status: await u32(r + 0x10) });
+    const base = records[0].start - 8 - 14, head = Buffer.from(await readMemory(base, 14)), last = records.at(-1), lastLength = Buffer.from(await readMemory(last.start - 4, 4)).readUInt32BE(0), size = last.start + lastLength - base;
+    const file = Buffer.from(await readMemory(base, size));
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), firstTrackOffset: 0x2b958, divisionOffset: 0x2b964, activeOffset: 0x2b960, playingOffset: 0x4434, loopOffset: 0x443c,
+      recordFields: { next: 0, delta: 0x8, active: 0xc, status: 0x10, start: 0x14, current: 0x18 }, recordAddresses: addresses, division, activeTracks, playing, loop, size, crc: hex8(crc32(file)), tracks: records.map(t => ({ start: t.start - base, current: t.current - base, delta: t.delta, active: t.active, status: t.status })) };
   },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.

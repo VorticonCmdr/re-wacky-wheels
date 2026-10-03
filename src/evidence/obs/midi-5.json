@@ -1,0 +1,156 @@
+{
+ "id": "midi-5",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 0 and General MIDI music (SC55 config) in the run copy; demo race music playing; game paused at a random moment (sample 5 of 5); sequencer track records read",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "firstTrackOffset": 178520,
+ "divisionOffset": 178532,
+ "activeOffset": 178528,
+ "playingOffset": 17460,
+ "loopOffset": 17468,
+ "recordFields": {
+  "next": 0,
+  "delta": 8,
+  "active": 12,
+  "status": 16,
+  "start": 20,
+  "current": 24
+ },
+ "recordAddresses": [
+  0,
+  28,
+  56,
+  84,
+  112,
+  140,
+  168,
+  196,
+  224,
+  252,
+  280,
+  308,
+  336,
+  364
+ ],
+ "division": 120,
+ "activeTracks": 10,
+ "playing": 1,
+ "loop": 1,
+ "size": 22923,
+ "crc": "5c86572b",
+ "tracks": [
+  {
+   "start": 22,
+   "current": 48,
+   "delta": 4294963704,
+   "active": 0,
+   "status": 0
+  },
+  {
+   "start": 55,
+   "current": 74,
+   "delta": 4294963704,
+   "active": 0,
+   "status": 0
+  },
+  {
+   "start": 81,
+   "current": 112,
+   "delta": 4294963704,
+   "active": 0,
+   "status": 0
+  },
+  {
+   "start": 119,
+   "current": 167,
+   "delta": 4294963704,
+   "active": 0,
+   "status": 0
+  },
+  {
+   "start": 174,
+   "current": 966,
+   "delta": 14,
+   "active": 1,
+   "status": 144
+  },
+  {
+   "start": 4239,
+   "current": 4622,
+   "delta": 14,
+   "active": 1,
+   "status": 145
+  },
+  {
+   "start": 6790,
+   "current": 7587,
+   "delta": 15,
+   "active": 1,
+   "status": 146
+  },
+  {
+   "start": 8940,
+   "current": 9737,
+   "delta": 15,
+   "active": 1,
+   "status": 147
+  },
+  {
+   "start": 12764,
+   "current": 12986,
+   "delta": 14,
+   "active": 1,
+   "status": 148
+  },
+  {
+   "start": 15159,
+   "current": 15655,
+   "delta": 14,
+   "active": 1,
+   "status": 149
+  },
+  {
+   "start": 17618,
+   "current": 17955,
+   "delta": 75,
+   "active": 1,
+   "status": 153
+  },
+  {
+   "start": 19452,
+   "current": 19607,
+   "delta": 15,
+   "active": 1,
+   "status": 153
+  },
+  {
+   "start": 20469,
+   "current": 20529,
+   "delta": 134,
+   "active": 1,
+   "status": 153
+  },
+  {
+   "start": 20688,
+   "current": 21101,
+   "delta": 15,
+   "active": 1,
+   "status": 153
+  }
+ ]
+}

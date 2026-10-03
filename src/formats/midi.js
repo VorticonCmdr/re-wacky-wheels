@@ -19,19 +19,22 @@ export function parseMidiEvents(data) {
   if (!tracks) throw new Error('MIDI has no tracks');
   let p = H.chunkHeader + headerLength, serial = 0, lastTick = 0;
   need(b, 0, p, 'MIDI header');
-  const events = [];
+  const events = [], walks = [];
   for (let track = 0; track < tracks; track++) {
     need(b, p, H.chunkHeader, 'MIDI track');
     if (String.fromCharCode(...b.subarray(p, p + P.trackTag.length)) !== P.trackTag) throw new Error('Missing MTrk');
     const length = be(b, p + P.trackLengthAt, 4); // @math the length dword
     p += H.chunkHeader; need(b, p, length, 'MIDI track');
-    const end = p + length;
+    const end = p + length, steps = [];
     let tick = 0, status = 0, done = false;
+    walks.push({ start: p, end, steps });
     const take = n => { if (p + n > end) throw new Error('Truncated MIDI event'); const at = p; p += n; return at; };
     while (p < end && !done) {
       let delta = 0, byte;
+      const deltaAt = p;
       do { byte = b[take(1)]; delta = delta * 2 ** P.varLengthBits + (byte & ~P.statusBit); } while (byte & P.statusBit); // @math seven bits a byte
       tick += delta; lastTick = Math.max(lastTick, tick);
+      steps.push({ deltaAt, delta, eventAt: p, statusBefore: status }); // where the sequencer\'s pointer rests while this event\'s delta counts down
       const first = b[take(1)];
       if (first === P.meta) {
         const type = b[take(1)], n = b[take(1)];
@@ -51,5 +54,5 @@ export function parseMidiEvents(data) {
     }
     p = end;
   }
-  return { format, tracks, division, events, lastTick };
+  return { format, tracks, division, events, lastTick, walks };
 }
