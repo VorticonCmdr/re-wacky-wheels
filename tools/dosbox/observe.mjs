@@ -374,6 +374,28 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), listAt: 0x19a50, recordBytes: 0x28, samples };
   },
+  async screen() {
+    // The displayed page of a race, read from video memory plane by plane (read-map register of the graphics controller): the CRC-32 of the whole 320x200 picture and of each rectangle of `--rects` ([[x, y, w, h], ...]),
+    // with the HUD words the picture was made from (the racer HUD record at obj2+0x8426: +0 held item, +0x10 and +0x12 the speed words, +0x54, +0x56 counters, +0x96 place), read while the game is paused.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], VRAM = 0xa0000, W = 320, H = 200, LINE = 80, planes = 4; // @math the 320x200 mode-X picture, 80 bytes a line and plane
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    await io(0x3d4, 0x0c, 1); const high = await inPort(0x3d5); await io(0x3d4, 0x0d, 1); const low = await inPort(0x3d5); const start = high * 256 + low; // @math the start address registers 0x0c and 0x0d
+    const plane = [];
+    for (let p = 0; p < planes; p++) { await io(0x3ce, (p << 8) | 4, 2); plane.push(Buffer.from(await readMemory(VRAM + start, LINE * H))); }
+    const image = Buffer.alloc(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) image[y * W + x] = plane[x & 3][y * LINE + (x >> 2)];
+    const spec = JSON.parse(values.args || '{}'), part = (x, y, w, h) => { const out = Buffer.alloc(w * h); for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) out[j * w + i] = image[(y + j) * W + x + i]; return out; };
+    const rects = (spec.rects ?? []).map(([x, y, w, h]) => ({ rect: [x, y, w, h], crc: hex8(crc32(part(x, y, w, h))) }));
+    // Sprites drawn transparently (index 0 skipped): the CRC-32 of the screen pixels under the sprite's non-zero pixels (column-major frame at `at` in the member), in row order, leaving out the `exclude` rectangles.
+    const members = new Map(parseDatDirectory(datBytes).map(e => [e.name, e.data]));
+    const sprites = (spec.sprites ?? []).map(sp => { const data = members.get(sp.member), picked = []; for (let j = 0; j < sp.h; j++) for (let i = 0; i < sp.w; i++) { if (data[sp.at + i * sp.h + j] === 0) continue; const x = sp.x + i, y = sp.y + j; if ((sp.exclude ?? []).some(([ex, ey, ew, eh]) => x >= ex && x < ex + ew && y >= ey && y < ey + eh)) continue; picked.push(image[y * W + x]); } return { ...sp, pixels: picked.length, crc: hex8(crc32(Buffer.from(picked))) }; });
+    const i16 = async a => Buffer.from(await readMemory(b2 + a, 2)).readInt16LE(0), car = Buffer.from(await readMemory(b2 + 0x1d5b0, 4)).readUInt32LE(0), c16 = async off => Buffer.from(await readMemory(car + off, 2)).readInt16LE(0);
+    const hud = {}; for (const [name, off] of Object.entries({ item: 0x8426, speedTarget: 0x8436, speedShown: 0x8438, counterA: 0x847a, counterB: 0x847c, place: 0x84bc })) hud[name] = await i16(off); // @math the racer HUD record words of the report
+    const hudWords = []; for (let k = 0; k < 130; k++) hudWords.push(await i16(0x8426 + 2 * k)); // @math the 0x104-byte record as 130 words
+    const carWords = { speed: await c16(0x26), throttle: await c16(0x42) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).
