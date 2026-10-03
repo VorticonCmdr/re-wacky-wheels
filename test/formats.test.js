@@ -72,7 +72,7 @@ const block = (type, data) => [type, data.length & 255, data.length >> 8 & 255, 
 test('VOC PCM samples and infinite loop markers are decoded', () => {
   const b = voc([...block(6, [255, 255]), ...block(1, [156, 0, 0, 128, 255]), ...block(7, [])]); const result = decodeVoc(b);
   assert.equal(result.loop, true); assert.equal(result.sampleRate, 10000); assert.deepEqual([...result.samples], [-1, 0, 127 / 128]);
-  assert.throws(() => decodeVoc(voc(block(1, [156, 1, 1]))), /codec/);
+  assert.throws(() => decodeVoc(voc(block(1, [156, 1, 1]))), /no audio/); // the game's library skips a block whose codec byte is not 0 (voc.library-player)
   const truncated = b.slice(0, 30); assert.throws(() => decodeVoc(truncated), /truncated/);
 });
 test('PC speaker silence and tones produce bounded sample data', () => {
