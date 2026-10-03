@@ -32,7 +32,7 @@ async function jev(a, s) {
   const res = await fetch('https://api.typesafe.ai/v1/systemone', { method: 'POST', headers: { authorization: `Bearer ${process.env.TYPESAFE_API_KEY}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
   return (await res.json()).answers.steer.choice;
 }
-let held = { KBD_leftalt: true }, steer = 'straight';
+let held = {}, steer = 'straight';
 async function keys(choice) {
   const want = { KBD_leftalt: true, KBD_left: choice === 'left', KBD_right: choice === 'right' }, events = [];
   for (const k of Object.keys(want)) if (!!held[k] !== want[k]) events.push({ type: 'key', key: k, pressed: want[k], frame: 1 });
