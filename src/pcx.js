@@ -1,9 +1,23 @@
+// PCX decoding for the viewer and editor. Pictures in the shape the game reads (a 320x200 8-bit RLE picture with the palette in the last 0x300 bytes) go through
+// the evidence-backed decoder in src/formats/pcx.js (claims pcx.*); any other PCX (loose manual pages, odd bit depths or plane counts) falls back to the lenient
+// general decoder below, whose constants are the ZSoft PCX header fields and are not traced to the game.
 import { bytes, view, need } from './binary.js';
+import { decodePcxMember } from './formats/pcx.js';
 
 export function grayscalePalette() {
   return Uint8Array.from({ length: 768 }, (_, i) => Math.floor(i / 3));
 }
 export function decodePcx(data) {
+  try {
+    const { width, height, indices, palette } = decodePcxMember(data);
+    return { width, height, indices, palette, rgba: null, bits: 8, planes: 1 };
+  } catch {
+    return decodeGeneralPcx(data);
+  }
+}
+
+// The lenient general decoder (untraced header fields; kept for PCX files of shapes the game does not read).
+export function decodeGeneralPcx(data) {
   const b = bytes(data), v = view(b);
   need(b, 0, 128, 'PCX header');
   if (b[0] !== 10) throw new Error('Not a PCX image');

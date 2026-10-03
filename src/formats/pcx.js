@@ -2,7 +2,7 @@
 // other loaders are untraced): header skipped, a fixed-size RLE picture, palette in the last bytes
 // of the member (claims pcx.*). Stricter than the game where the game is silent: a run
 // that overshoots the picture, a zero-count run, or a wrong trailer is an error, not a guess.
-// The legacy decodePcx in src/pcx.js still serves loose PCX files (manual pages) with other sizes.
+// decodePcx in src/pcx.js uses this decoder first and keeps a lenient general decoder for loose PCX files (manual pages) with other sizes.
 import { bytes, need } from '../binary.js';
 import { K } from '../evidence/k.js';
 
