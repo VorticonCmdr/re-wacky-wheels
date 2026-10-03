@@ -355,6 +355,11 @@ const scenarios = {
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build,
       columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain', ...(A.wide ?? []), ...(A.object ?? [])], samples: A.samples, ...(A.stops ? { stopAt: A.stopAt, stops: A.stops } : {}) };
   },
+  async projtable() {
+    // The distance-to-screen-row table the race builds at obj2+0xbd00 (the routine at obj1+0x174a4): its CRC-32 over `--bytes` bytes (default 8194, 4097 words), read in a race.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], n = Number(values.bytes ?? 8194), live = Buffer.from(await readMemory(b2 + 0xbd00, n)); // @math 4097 words of two bytes
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableAt: 0xbd00, bytes: n, crc: hex8(crc32(live)) };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).

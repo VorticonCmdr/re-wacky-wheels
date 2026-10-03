@@ -1,0 +1,24 @@
+{
+ "id": "projtable-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "a played race on track 1 (run copy of the archive with an obstacle moved onto the road); the 4096-word table built at the race start is read",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "tableAt": 48384,
+ "bytes": 8192,
+ "crc": "20b15e11"
+}
