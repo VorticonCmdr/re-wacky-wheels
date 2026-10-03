@@ -411,7 +411,7 @@ const scenarios = {
       const u32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readUInt32LE(0), count2 = await i16(0x28b78), raw2 = Buffer.from(await readMemory(b2 + 0x19a50, 0x28 * Math.min(Math.max(count2, 0), 30))), list2 = []; // @math at most 30 draw-list records
       for (let r = 0; r < raw2.length / 0x28; r++) { const w = []; for (let i = 0; i < 20; i++) w.push(raw2.readInt16LE(r * 0x28 + i * 2)); list2.push(w); } // @math twenty words in a record of 0x28 bytes
       const cstr3 = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
-      horizon = { columns, pointer: await u32(0x1d860), bounds: [await u32(0x1d824), await u32(0x1d828), await u32(0x1d82c), await u32(0x1d830)], heading: await i32(0x1d5d4), drawList: list2, track: await cstr3(b2 + 0x1d770), mode: await u32(0x1d998) };
+      horizon = { columns, pointer: await u32(0x1d860), bounds: [await u32(0x1d824), await u32(0x1d828), await u32(0x1d82c), await u32(0x1d830)], heading: await i32(0x1d5d4), camera: { x: await i16(0x28b0a), y: await i16(0x28b0e), a: await i32(0x1d614), b: await i32(0x1d5e4), box: [await i16(0x28c16), await i16(0x28c2a), await i16(0x28c18), await i16(0x28c2c)] }, drawList: list2, track: await cstr3(b2 + 0x1d770), mode: await u32(0x1d998) };
     }
     // The sky: the CRC-32 of each row of the rectangle spec.sky = [firstRow, lastRow, firstColumn, lastColumn] of the displayed page, with the heading and the sky name of the track.
     let sky;

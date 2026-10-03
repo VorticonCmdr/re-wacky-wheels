@@ -18,3 +18,5 @@ Local observation: 1280 bytes, versus 640 implied by the wiki. Initial values re
 - [Miscellaneous formats](https://moddingwiki.shikadi.net/wiki/Miscellaneous_Wacky_Wheels_File_Formats)
 
 Read on 2026-10-02. [Format index](README.md).
+
+- [PROVEN] (`obs-objproj`, claim `view.object-column-observed`, 8 parked frames of track 1): the draw-list record of a static object is exactly the projection of its `.SPW` position (words 2 and 3 plus 0x400) from the camera words: f and l by the heading vector words (cos and sin in 16.16), column `0xa0 + l * 0xa0 / ((f * 0x93cd) >> 16)`, distance `(isqrt(f*f + l*l) * VIEW[column] + 0x1fa0) >> 14` with the game's isqrt (floor root, plus one when the remainder is at least r - 1), left column = column minus half the width, size class `(distance - 0x7c) / 0x46` at most 9; objects outside the box words get no record. The VIEW member is read as 320 little-endian dwords.
