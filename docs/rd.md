@@ -26,3 +26,5 @@ Tags as in [evidence.md](evidence.md). Parser: `parseRoute` in `src/formats/trac
 - [Track formats](https://moddingwiki.shikadi.net/wiki/Wacky_Wheels_Track_Format)
 
 Read on 2026-10-02. [Format index](README.md).
+
+- [STATIC] `ai.step-helpers`: the catch-up helper (`obj1+0x18b20`) puts racers 4 to 7 into state 3 with an advance of `VEL[level]` plus 0x10, 0x1c, 0x24 or 0x28 while the player's second ranking key leads theirs by more than `7 - index + obj2+0x1ece0` (state 3 ends when it no longer does, or after the counter); racers 5 to 7 get a further 1 to 5 route points depending on the player record word `+0xac`. The hit routine (`obj1+0x189ec`) times a racer's `+0x58` state. Read, not run.
