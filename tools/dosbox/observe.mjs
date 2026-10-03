@@ -374,6 +374,13 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), listAt: 0x19a50, recordBytes: 0x28, samples };
   },
+  async font() {
+    // The glyph pointer table of the text routine obj1+0x48f4 (obj2+0xa778, 61 dwords) and the CRC-32 of the 0x40 bytes each pointer addresses, read from the live game.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], TABLE = 0xa778, ENTRIES = 61, SLOT = 0x40; // @math the table the text routine reads (esi * 4 + 0xa778), 61 glyphs, and the glyph slot of 0x40 bytes
+    const raw = Buffer.from(await readMemory(b2 + TABLE, 4 * ENTRIES)), pointers = [], crcs = [];
+    for (let c = 0; c < ENTRIES; c++) { const p = raw.readUInt32LE(4 * c); pointers.push(p); crcs.push(hex8(crc32(Buffer.from(await readMemory(p, SLOT))))); }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableAt: TABLE, entries: ENTRIES, slotBytes: SLOT, pointers, crcs };
+  },
   async screen() {
     // The displayed page of a race, read from video memory plane by plane (read-map register of the graphics controller): the CRC-32 of the whole 320x200 picture and of each rectangle of `--rects` ([[x, y, w, h], ...]),
     // with the HUD words the picture was made from (the racer HUD record at obj2+0x8426: +0 held item, +0x10 and +0x12 the speed words, +0x54, +0x56 counters, +0x96 place), read while the game is paused.
