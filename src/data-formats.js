@@ -2,6 +2,7 @@ import { bytes, view, need, ascii } from './binary.js';
 import { parseAtr } from './sprites.js';
 import { parseGam, parseRoute, parseSpawns } from './tracks.js';
 import { parseKlm, parseMidi } from './audio.js';
+import { parseTimeTable, parseDuckTable } from './formats/scores.js';
 const racers = ['Uno', 'Sultan', 'Morris', 'Peggles', 'Razer', 'Ringo', 'Blombo', 'Tigi'];
 
 export function numericValues(data, width = 2, signed = true, offset = 0) {
@@ -27,13 +28,11 @@ export function inspectData(name, data) {
     return { columns: ['Index', 'Unknown', 'Racer', 'Score', 'Date', 'Name'], rows: Array.from({ length: b.length / 46 }, (_, i) => { const p = i * 46; return [i, v.getInt16(p, true), racers[v.getInt16(p + 2, true)] ?? '?', v.getInt16(p + 4, true), ascii(b.subarray(p + 6, p + 26)), ascii(b.subarray(p + 26, p + 46))]; }), note: 'Race high scores; alternate four-record groups are unused.' };
   }
   if (['tim', 'ott'].includes(ext)) {
-    if (b.length % 120) throw new Error('Time-trial file has an incomplete record');
-    return { columns: ['Track index', 'Lap 1', 'Time', 'Lap 2', 'Time', 'Lap 3', 'Time', 'Lap 4', 'Time', 'Overall', 'Time'], rows: Array.from({ length: b.length / 120 }, (_, i) => { const p = i * 120, row = [i]; for (let j = 0; j < 4; j++) row.push(ascii(b.subarray(p + j * 20, p + j * 20 + 20)), (v.getUint32(p + 80 + j * 4, true) / 10).toFixed(1) + 's'); row.push(ascii(b.subarray(p + 96, p + 116)), (v.getUint32(p + 116, true) / 10).toFixed(1) + 's'); return row; }), note: 'Time-trial records; stored times are tenths of a second.' };
+    // Layout traced (src/formats/scores.js, claim tim.layout). That the stored times are tenths of a second is the wiki's lead.
+    const seconds = t => (t / 10).toFixed(1) + 's'; // @math tenths of a second (lead, docs/tim.md)
+    return { columns: ['Track index', 'Lap 1', 'Time', 'Lap 2', 'Time', 'Lap 3', 'Time', 'Lap 4', 'Time', 'Overall', 'Time'], rows: parseTimeTable(b).map((r, i) => [i, ...r.laps.flatMap(l => [l.name, seconds(l.time)]), r.overall.name, seconds(r.overall.time)]), note: 'Time-trial records; stored times are tenths of a second.' };
   }
-  if (ext === 'dtt') {
-    if (b.length % 24) throw new Error('Duck-shoot file has an incomplete record');
-    return { columns: ['Name', 'Score'], rows: Array.from({ length: b.length / 24 }, (_, i) => [ascii(b.subarray(i * 24, i * 24 + 20)), v.getInt32(i * 24 + 20, true)]), note: 'Duck-shoot high scores.' };
-  }
+  if (ext === 'dtt') return { columns: ['Name', 'Score'], rows: parseDuckTable(b).map(e => [e.name, e.score]), note: 'Duck-shoot high scores.' };
   if (ext === 'cfg') {
     const fields = [['Single save', 0x866], ['Single laps', 0x872], ['Single class', 0x876], ['Single cup', 0x87a], ['Single track', 0x87e], ['Single points', 0x882], ['Single hedgehogs', 0x8c2], ['Single item', 0x8c6], ['Two-player save', 0x8da], ['Two-player mode', 0x94e]];
     return { columns: ['Field', 'Hex offset', 'INT32LE'], rows: fields.filter(([, p]) => p + 4 <= b.length).map(([n, p]) => [n, '0x' + p.toString(16), v.getInt32(p, true)]), note: 'Known saved-game fields only. Other settings and overlapping wiki field widths remain undocumented; the byte view is complete.' };

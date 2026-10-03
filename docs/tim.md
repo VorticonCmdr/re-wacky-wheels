@@ -13,6 +13,9 @@ Names are null-terminated. Times use tenths/second, maximum 36000. Groups contai
 
 ## Verification notes
 
+- [PROVEN] (`score-files`, `tim.layout`, `score.defaults`, `score.references`): the layout above holds in the installed `WACKY1.TIM` and the archive defaults `WAC1.OTT` and `WAC2.OTT` (30 records of 120 bytes, names of 16 padded characters in 20-byte fields, the four lap times of a record never decrease, laps 148 to 683, overall times 934 to 3254); the installed `WACKY1.TIM` is exactly `WAC1.OTT`, which the loader reads when the file is missing; the program names the table only at record offsets 0x0, 0x50, 0x54 and 0x74.
+- [STATIC] (`score.insert`): a new best lap enters the four sorted times at the first one it is not above and pushes the later laps and names down; a new overall time replaces the one at +0x74 when it is not above it. That the times are tenths of a second remains the wiki's lead.
+
 Source ambiguity: the sixth group repeats “bonus bronze.” It likely means bonus gold, but this has not been verified.
 
 ## Sources

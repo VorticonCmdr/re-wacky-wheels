@@ -12,6 +12,10 @@ wacky1.hi=12HP; wacky2.hi=6HP. 144×46-byte records:
 
 Racers 0–7: Uno,Sultan,Morris,Peggles,Razer,Ringo,Blombo,Tigi. Four scores/group; alternate groups unused. Order: regular then bonus; bronze/silver/gold; amateur/pro/champion. Date/name display limits: 12/14 characters. Missing files restore from [HTT](htt.md).
 
+## Verification notes
+
+- [PROVEN] (`score-files`, `score.defaults`, `score.references`): the installed `WACKY1.HI` (6624 bytes) is exactly the archive default `WAC1.HTT` (which equals `WAC2.HTT`). No code of the game names an address inside the table other than its load and save routines (fixup scan; a computed address could still reach it), so the 46-byte record layout above remains the wiki's lead.
+
 ## Sources
 
 - [High-score formats](https://moddingwiki.shikadi.net/wiki/Wacky_Wheels_High_Score_Files)
