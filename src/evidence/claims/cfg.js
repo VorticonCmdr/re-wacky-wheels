@@ -8,4 +8,11 @@ export default [
     evidence: { checks: ['obs-race'], obs: ['race-3'], at: ['WW.EXE:obj1+0x26020 fp=b46f0921', 'WW.EXE:obj1+0x26030 fp=d6e67835', 'WW.EXE:obj1+0x26046 fp=607f8bff', 'WW.EXE:obj1+0x2605c fp=a0332995', 'WW.EXE:obj1+0x26072 fp=ed99ecc1'] },
     leads: ['docs/cfg.md'],
   },
+  {
+    id: 'cfg.default-keys', tag: 'PROVEN',
+    statement: 'In all three installed WACKY.CFG files (the game folder and its SB16 and SC55 folders) the second of the three pieces the game reads (cfg.read: file offset 0x492, 0x18 bytes, read to obj2+0x1b6d8) holds twelve little-endian 16-bit words: the first six, 0x4b, 0x4d, 0x38, 0x1d, 0x50, 0x39, for player 1 and the next six, 0x20, 0x21, 0x1e, 0x1f, 0x22, 0x23, for player 2. These are IBM PC scancodes: Left arrow, Right arrow, Alt, Ctrl, Down arrow, Space, and D, F, A, S, G, H. The order is the order of SETUP.EXE\'s key menu (steer left, steer right, button 1 accelerate, button 2 fire, button 3 brake, button 4 hand brake turn; setup.race-options, input.buttons).',
+    value: { files: 3, piece: 1, tableAt: 0x1b6d8, players: [[0x4b, 0x4d, 0x38, 0x1d, 0x50, 0x39], [0x20, 0x21, 0x1e, 0x1f, 0x22, 0x23]], words: 6, wordBytes: 2 },
+    evidence: { checks: ['cfg-keys'] },
+    leads: ['docs/cfg.md'],
+  },
 ];

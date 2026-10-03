@@ -4,6 +4,11 @@ What is known about how a frame of the race works, assembled from the claims in 
 
 All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The player car record is the 0x68-byte-like record pointed to by the dword `obj2+0x1d5b0`; its word offsets below are `+0x…`.
 
+## Controls
+
+- [PROVEN] `cfg.default-keys`: the key table in `WACKY.CFG` is six PC scancodes per player in the order steer left, steer right, button 1 to 4. Player 1 defaults: Left, Right, Alt (accelerate), Ctrl (fire), Down (brake), Space (hand brake turn); player 2: D, F, A, S, G, H.
+- [STATIC] `input.buttons`: buttons 1 to 4 are the words `obj2+0x28b40`, `+0x28b42`, `+0x28b44`, `+0x28b46` (accelerate, fire, brake, hand brake turn), set from key table words 2 to 5 or from the joystick port 0x201.
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.

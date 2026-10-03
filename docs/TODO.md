@@ -103,6 +103,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `audio.play-param` [STATIC] — the record dword +0x08 is a pitch parameter (cents) used only by the digital-style players of devices 0, 1 and 6; the PC-speaker player ignores it
   - Gap: read in full, not observed; those players are unreachable with this loader (mode 2 rejected, mode 7 is the PC speaker). Next: nothing reachable; accept as static.
 
+- [ ] `input.buttons` [STATIC] — key table words 2 to 5 are buttons 1 to 4 in obj2+0x28b40..46 (accelerate, fire, brake, hand brake turn); the game port 0x201 sets the same words
+  - Gap: read, not run; the routine that marks keys down and sets the steering flags (obj2+0x28b8c/0x28b98) is unread. Next: read the keyboard handler, or sample the table while a key is held (DOSBox).
 - [ ] `setup.race-options` [STATIC] — SETUP's engine choice (12 or 6 horsepower: VEL.TAB / VEL2.TAB, file offset 0x3e) and full-screen detail level (high/medium/low, offset 0x3c) copied to obj2+0x1ea58 and obj2+0x28c20; the key menu's six controls
   - Gap: read in SETUP.EXE and the game's setup menu, not run; the split-screen detail word and the controls-to-words mapping are unread. Next: with DOSBox, run SETUP on a copy and compare the config bytes, or read the input mapping.
 - [ ] `race.class-setup` [STATIC] — the race start sets the steering rate (40/36/32 by the word obj2+0x28c20, 36 in some modes) and picks the VEL2.TAB or VEL.TAB curve by the word obj2+0x1ea58
@@ -137,6 +139,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `cfg.default-keys` PROVEN (check `cfg-keys`): the config's key table is six PC scancodes per player (player 1 Left, Right, Alt, Ctrl, Down, Space; player 2 D, F, A, S, G, H) in all three installed files
 - [x] `UNKNOWN_AUDIO_MODE_VALUES` resolved into `audio.device-numbers` (STATIC, from SETUP.EXE's card table and config writes): the device values are the card list positions, 7 being the PC speaker
 - [x] `UNKNOWN_ATR_FIELDS` resolved into `atr.derived-words` (PROVEN: +2, +8, +0x0a, +0x0c) and `atr.kind-effects` (STATIC, `FUN_00022bf4`: what each kind does to the player car)
 - [x] `atr.derived-words` PROVEN (check `atr-derived`, archive data only): +2 is the constant 10, +8/+0x0a repeat the dimensions, +0x0c is a shape code, +0 takes 0 to 7; `UNKNOWN_ATR_FIELDS` narrowed to the kind word
