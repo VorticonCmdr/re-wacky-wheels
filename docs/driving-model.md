@@ -28,6 +28,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 - [PROVEN] `car.step-observed`: on the road, one tick at a time: the throttle rises by 10 to the cap 100 with the accelerate key, falls by 4 with no key and by 12 with the brake key (the brake's 8 and the coasting 4), the speed is the VEL.TAB entry of the new throttle and the car moves by `(TRIG vector x speed + 0x8000) >> 16` per axis along the heading, in that order inside a call (records steps-1 and steps-2, 51 one-tick pairs).
 
+- [PROVEN] `car.steer-step-observed`: per tick the heading changes by the steering amount words, 40 left or right (also standing still), 120 in the hand brake turn, 0 without a key, modulo 1920 (record steps-3, 37 one-tick pairs); the movement while turning is not the straight step of `car.step-observed`.
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.
