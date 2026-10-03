@@ -52,8 +52,15 @@ export default [
     leads: ['docs/sp.md'],
   },
   {
+    id: 'atr.derived-words', tag: 'PROVEN',
+    statement: 'In all 36 records of the user\'s SPRITE.ATR: the word at +2 is 10; the words at +8 and +0x0a repeat the words at +4 and +6; the word at +0x0c is a function of those two (28 and 28 give 1, 14 and 28 give 2, 32 and 24 give 3, and no other pair occurs); and the word at +0 takes the values 0 to 7 (all of them occur). So the catalogue holds three sprite shapes, the +0x0c word is a shape code, and the +2 and +8/+0x0a words add no information. What the +0 kind word does is atr.kind-use.',
+    value: { records: 0x24, constantAt: 0x02, constant: 0x0a, widthRepeatAt: 0x08, heightRepeatAt: 0x0a, selectorAt: 0x0c, kindAt: 0x00, shapes: [[0x1c, 0x1c, 1], [0x0e, 0x1c, 2], [0x20, 0x18, 3]], kinds: [0, 1, 2, 3, 4, 5, 6, 7] },
+    evidence: { checks: ['atr-derived'] },
+    leads: ['docs/atr.md'],
+  },
+  {
     id: 'UNKNOWN_ATR_FIELDS', tag: 'UNKNOWN',
-    statement: 'What the ATR record words other than width, height, frames and name mean is not established: the wiki calls +0 a pickup type (atr.kind-use: a routine at obj1+0x13227 branches on it; the sprite loader compares it with 2), +2 usually 10, +8 and +0x0a duplicate dimensions (equal to +4 and +6 in all 36 records) and +0x0c a size selector; the loader, the frame addressing (spw.frame) and the blitter (sp.draw) read +0, +4, +6, +0x0e, +0x24 and the name.',
+    statement: 'What the +0 kind word of the catalogue records means is only partly established: it takes the values 0 to 7 (atr.derived-words), a routine at obj1+0x13227 branches on it (atr.kind-use) and the sprite loader compares it with 2; the wiki\'s pickup names for the values (tires, hedgehogs, fireballs, devils, bomb, oil, inverted hedgehog, ice) are a lead. The other words are accounted for: +2 is the constant 10, +8 and +0x0a repeat the dimensions and +0x0c is a shape code (atr.derived-words); the loader, the frame addressing (spw.frame) and the blitter (sp.draw) read +0, +4, +6, +0x0e, +0x24 and the name.',
     evidence: {},
     leads: ['docs/atr.md'],
     todo: 'Read what the kinds 1, 2 and the others do in the routine of atr.kind-use and the other readers of the table (obj1+0x3ec0, +0x1143a, +0x11455).',

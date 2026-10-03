@@ -67,9 +67,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 - [ ] `atr.kind-use` [STATIC] — the catalogue word +0 is an object kind a routine at obj1+0x13227 branches on (≤ 0, 1, 2, others each go to different code)
   - Gap: read only as branch structure; the routine's purpose (collision with objects?) is not established and nothing was observed.
-- [ ] `UNKNOWN_ATR_FIELDS` [UNKNOWN] — what the catalogue words other than size, frames and name mean (+0 pickup type, +2, +8/+0x0a duplicate dimensions, +0x0c selector)
-  - Gap: the sprite loader reads only +0, +4, +6, +0x0e and the name; +4/+6 are only shown to multiply, not which is width.
-  - Next: what the kinds do (`atr.kind-use`) and the other readers (obj1+0x3ec0, +0x1143a, +0x11455).
+- [ ] `UNKNOWN_ATR_FIELDS` [UNKNOWN] — what the catalogue kind word +0 does (values 0 to 7); every other word is accounted for
+  - Next: read what the kinds 1, 2 and the others do in the routine of atr.kind-use and the other readers of the table (obj1+0x3ec0, +0x1143a, +0x11455).
 - [ ] `sp.draw` [STATIC] — the blitter `FUN_00036fd0` consumes a frame column by column (word +4 columns of word +6 bytes), index 0 transparent
   - Gap: no screen pixel was compared with a frame. Next: after a race starts, compare VRAM rows of a visible sprite with the frame (the VRAM read from `par.upload` works) and add a check.
 - [ ] `spw.frame` [STATIC] — frame address = sprite buffer + `.SPW` word +0x0a × (word +4 × word +6); word +8 is the tick counter
@@ -123,6 +122,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `atr.derived-words` PROVEN (check `atr-derived`, archive data only): +2 is the constant 10, +8/+0x0a repeat the dimensions, +0x0c is a shape code, +0 takes 0 to 7; `UNKNOWN_ATR_FIELDS` narrowed to the kind word
 - [x] `rd.derived-words` PROVEN (check `rd-derived`, archive data only): in every route record the angle word is a TRIG index pointing along the segment, the length word is the segment length (within 1) and the compass word is the angle's octant; so TRIG 480 is the +y direction and the two words the loader ignores are redundant
 - [x] `dat.sentinel-bytes` PROVEN (check `dat-sentinel`): the 22 bytes after the directory are a zero byte, the last entry's name from its second byte (`WREG.BIN`) and zero length and offset fields
 - [x] `UNKNOWN_AUDIO_RECORD_FIELDS` resolved into `audio.play-param` (STATIC, from the play call, the PC-speaker player and the converter at obj1+0x3f140): the record dword +0x08 is a pitch parameter ignored by the player this game can use
