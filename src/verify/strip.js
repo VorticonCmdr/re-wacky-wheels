@@ -33,3 +33,8 @@ export function replaceSpwRecord(dat, build) {
   dv.setUint16(at + 3 * L.wordBytes, build.y, true); // @math word 3 is y
   return replaceMember(dat, `${build.track}.SPW`, spw);
 }
+
+// Several objects moved at once: `build` is { track, records: [{ index, x, y, sprite? }, ...] }.
+export function replaceSpwRecords(dat, build) {
+  return build.records.reduce((out, record) => replaceSpwRecord(out, { track: build.track, ...record }), dat);
+}

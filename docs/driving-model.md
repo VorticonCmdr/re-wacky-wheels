@@ -20,6 +20,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [PROVEN] `car.object-observed`: a full-throttle car reaching a kind-0 obstacle (moved onto the road in a run copy) within 14 units sets the collision word 2, the car word `+0x7c` and the object's `.SPW` word `+2` to 1 for one call; then the throttle is 0, the heading turns by 18, the crash word `+0x7e` is 1 and the car is driven backwards at about 64 a call until it stops.
 - [PROVEN] `pickup.kinds-observed`: a kind-2 pickup sets the object's consumed marker and adds 4 to the car's counter `+0x6a`; a kind-3 pickup sets the held word `+0x16` to 3; neither slows the car; the held item 3 shows as ICONS.SP frame 0 at (293, 178).
 - [PROVEN] `item.fire-observed`: the fire key with the item 3 held uses it up and queues 3 shots in a fan (records in the list at obj2+0x1f2b0, 100 units a step, 10 sideways per 100), the racer word `obj2+0xaaa2` is 3 while they fly; with nothing held and no counter a press spawns nothing.
+- [PROVEN] `item.shots-observed`: item 4 throws two records sideways (16 columns a call, turning at the road's sides), items 5, 6 and 7 drop one record each 10 rows behind the car that stays where it fell; each press uses the item up.
 - [PROVEN] `input.steer-observed`: left alone sets the left byte, word and amount (20 or 40) and lowers the heading, right alone the right ones and raises it (a quarter turn is 480 of 1920); after a hand brake turn the amount was 120.
 
 ## One frame
