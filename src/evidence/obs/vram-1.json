@@ -1,0 +1,36 @@
+{
+ "id": "vram-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "attract-mode demo race, paused; video memory read plane by plane",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "2"
+ },
+ "pointerOffset": 125780,
+ "bufferPointer": 3502116,
+ "videoBase": 655360,
+ "vramOffset": 32000,
+ "bytes": 25600,
+ "planes": 4,
+ "planeCrcs": [
+  "de3abb54",
+  "b71e04c7",
+  "70cfe5db",
+  "3a8b726a"
+ ]
+}

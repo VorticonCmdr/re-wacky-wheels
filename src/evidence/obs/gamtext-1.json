@@ -1,0 +1,156 @@
+{
+ "id": "gamtext-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "demo race on track 2 with edited .GAM lines in the run copy of the archive",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "2"
+ },
+ "member": "2.GAM",
+ "edits": [
+  [
+   8,
+   " 12"
+  ],
+  [
+   9,
+   "+7"
+  ],
+  [
+   25,
+   "-5"
+  ],
+  [
+   26,
+   "9xyz"
+  ],
+  [
+   27,
+   "12 34"
+  ]
+ ],
+ "modified": {
+  "size": 7772058,
+  "sha1": "02d726d4df5652f63fe9b2e772affefb41e81266"
+ },
+ "startWords": {
+  "xTable": 120780,
+  "yTable": 120800,
+  "x": 1004,
+  "y": 999
+ },
+ "extraWords": {
+  "offsets": [
+   166746,
+   166734,
+   166732
+  ],
+  "values": [
+   65531,
+   9,
+   12
+  ]
+ },
+ "ctypeTable": 12624,
+ "ctype": [
+  [
+   9,
+   3
+  ],
+  [
+   10,
+   3
+  ],
+  [
+   11,
+   3
+  ],
+  [
+   12,
+   3
+  ],
+  [
+   13,
+   3
+  ],
+  [
+   32,
+   10
+  ],
+  [
+   43,
+   12
+  ],
+  [
+   45,
+   12
+  ],
+  [
+   48,
+   56
+  ],
+  [
+   49,
+   56
+  ],
+  [
+   50,
+   56
+  ],
+  [
+   51,
+   56
+  ],
+  [
+   52,
+   56
+  ],
+  [
+   53,
+   56
+  ],
+  [
+   54,
+   56
+  ],
+  [
+   55,
+   56
+  ],
+  [
+   56,
+   56
+  ],
+  [
+   57,
+   56
+  ],
+  [
+   65,
+   88
+  ],
+  [
+   97,
+   152
+  ],
+  [
+   120,
+   136
+  ]
+ ]
+}

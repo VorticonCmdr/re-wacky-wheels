@@ -1,0 +1,43 @@
+{
+ "id": "cmdline-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "demo race; the game started as WW turbo jump",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "args": [
+  "turbo",
+  "jump"
+ ],
+ "maskAt": 34032,
+ "mask": 3,
+ "maskCopies": [
+  3,
+  3,
+  3
+ ],
+ "maskCopyAt": [
+  34292,
+  126308,
+  126312
+ ],
+ "nowAt": 126140,
+ "now": 0,
+ "classAt": 126216,
+ "class": 12,
+ "debugAt": 166890,
+ "debug": 0
+}

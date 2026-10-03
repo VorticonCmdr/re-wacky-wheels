@@ -1,0 +1,55 @@
+// The sprite catalogue and sprite pixel files: layout in the archive (PROVEN, atr-sprites check) and
+// how the game loads them (PROVEN, observed in the running game, record race-3). Sites are
+// object-relative and pre-fixup. Pixel order and the meaning of most catalogue fields are unproven.
+export default [
+  {
+    id: 'atr.layout', tag: 'PROVEN',
+    statement: 'In the user\'s WACKY.DAT, SPRITE.ATR is a 2-byte little-endian count (36) followed by exactly count records of 0x28 bytes; in every record the words at +4, +6 and +0x0e multiply to the pixel size (the wiki names them width, height and frames; the product is symmetric in the first two, so which is which is not shown here), the name at +0x10 is a NUL-terminated string in a 0x18-byte field that runs to the end of the record, and the archive member with that name exists and is exactly that many bytes long (36 of 36). Agrees with atr.read and sp.read.',
+    value: { countBytes: 0x02, recordBytes: 0x28, widthAt: 0x04, heightAt: 0x06, framesAt: 0x0e, nameAt: 0x10, nameBytes: 0x18 },
+    evidence: { checks: ['atr-sprites'] },
+    leads: ['docs/atr.md'],
+  },
+  {
+    id: 'atr.read', tag: 'PROVEN',
+    statement: 'Observed in the running game (record race-3): the loader (obj1+0x3e87) reads the SPRITE.ATR count into the word at obj2+0x28b82 and the records, count x 0x28 bytes, into the table at obj2+0x12998. In the table the first 0x24 bytes of every record equal the file\'s (CRC-32 equal); the dword at +0x24 is written by the sprite loader (sp.read) for the sprites it loads, and in the other records it is the file\'s (zero) bytes.',
+    value: { countOffset: 0x28b82, tableOffset: 0x12998, pointerAt: 0x24 },
+    evidence: { checks: ['obs-race'], obs: ['race-3'], at: ['WW.EXE:obj1+0x3e87 fp=06c60c3d', 'WW.EXE:obj1+0x3e96 fp=5dbacc65', 'WW.EXE:obj1+0x3ea6 fp=cd70e851', 'WW.EXE:obj1+0x3ec1 fp=6aae9d07'] },
+    leads: ['docs/atr.md'],
+  },
+  {
+    id: 'sp.read', tag: 'PROVEN',
+    statement: 'Observed in the running game (record race-3, track 2): the per-object sprite loader (Ghidra FUN_00021310, obj1+0x11310) visits the catalogue entries in index order and, for each whose index equals the word at +0 of some .SPW record (spw.read), looks up the .SP member named at +0x10, reads exactly width x height x frames bytes (the entry\'s words at +4, +6, +0x0e) to the running cursor, stores the buffer address in the dword at +0x24 of the entry and advances the cursor by that size. The sprites loaded are exactly those entries; their buffers are contiguous from the dword at obj2+0x1eb20 to the cursor at obj2+0x1eb4c, and equal the .SP files in index order (CRC-32 equal). The first loaded entry whose word at +0 is 2 is remembered in the dword at obj2+0x1eda4. Sites: obj1+0x1134c, +0x1134f, +0x11360, +0x1136f, +0x11375, +0x11395, +0x1139d, +0x113b9.',
+    value: { startOffset: 0x1eb20, cursorOffset: 0x1eb4c, trackedOffset: 0x1eda4, trackedType: 0x02, typeAt: 0x00 },
+    evidence: { checks: ['obs-race'], obs: ['race-3'], at: ['WW.EXE:obj1+0x1134c fp=e482be6d', 'WW.EXE:obj1+0x1134f fp=87eb36fe', 'WW.EXE:obj1+0x11360 fp=984269bc', 'WW.EXE:obj1+0x1136f fp=0a94aaf0', 'WW.EXE:obj1+0x11375 fp=0d225419', 'WW.EXE:obj1+0x11395 fp=6829de9f', 'WW.EXE:obj1+0x1139d fp=cb05a1ca', 'WW.EXE:obj1+0x113b0 fp=1ad7c73c', 'WW.EXE:obj1+0x113b9 fp=e8aa952e'] },
+    leads: ['docs/atr.md', 'docs/sp.md', 'docs/spw.md (object id = sprite-catalogue index)'],
+  },
+  {
+    id: 'atr.kind-use', tag: 'STATIC',
+    statement: 'Besides the sprite loader (sp.read, which compares word +0 with 2), the code at obj1+0x13227 to obj1+0x13261 reads the catalogue word +0 of each object\'s sprite (the table at obj2+0x12998, 0x28 bytes a record, indexed by the object\'s sprite id) and branches on it: a value of 0 or less goes to separate code (obj1+0x1334d) that tests several state words before doing anything, 1 goes to its own code (obj1+0x132d6), 2 sets a flag that makes the general path run (obj1+0x13261) and every other value takes the general path. So word +0 is an object kind that selects different handling in this routine, and the .SPW sprite id selects it. What the routine does and what each kind does is not read. Not observed at run time.',
+    value: { tableOffset: 0x12998, recordBytes: 0x28, kindWord: 0x00, lowBranchAtOrBelow: 0x00, kindOne: 0x01, kindTwo: 0x02 },
+    evidence: { at: ['WW.EXE:obj1+0x13227 fp=c9bff52c', 'WW.EXE:obj1+0x1322d fp=db62448c', 'WW.EXE:obj1+0x13243 fp=90d0b5e9', 'WW.EXE:obj1+0x13261 fp=59cf3270'] },
+    leads: ['docs/atr.md'],
+  },
+  {
+    id: 'UNKNOWN_ATR_FIELDS', tag: 'UNKNOWN',
+    statement: 'What the ATR record words other than width, height, frames and name mean is not established: the wiki calls +0 a pickup type (atr.kind-use: a routine at obj1+0x13227 branches on it; the sprite loader compares it with 2), +2 usually 10, +8 and +0x0a duplicate dimensions (equal to +4 and +6 in all 36 records) and +0x0c a size selector; the loader, the frame addressing (spw.frame) and the blitter (sp.draw) read +0, +4, +6, +0x0e, +0x24 and the name.',
+    evidence: {},
+    leads: ['docs/atr.md'],
+    todo: 'Read what the kinds 1, 2 and the others do in the routine of atr.kind-use and the other readers of the table (obj1+0x3ec0, +0x1143a, +0x11455).',
+  },
+  {
+    id: 'sp.draw', tag: 'STATIC',
+    statement: 'The sprite blitter (Ghidra FUN_00036fd0, obj1+0x26fd0) draws the frame whose address is in the dword at obj2+0x1d704 column by column: an outer loop of [obj2+0x28b36] columns (loop at obj1+0x27075) and an inner loop of [obj2+0x28b26] rows (obj1+0x27048); each step reads one byte (lodsb, obj1+0x2703a), skips it if it is 0 and otherwise stores it to the screen (stosb) and moves 0x50 bytes down to the next scan line; the next column starts after a map-mask change (obj1+0x27032). The catalogue sprite path sets [obj2+0x28b36] to the catalogue word +4 and [obj2+0x28b26] to the word +6 (obj1+0x45e6 and the lines after it), so a frame is stored column-major with word +4 columns of word +6 bytes each, and index 0 is transparent. Not observed: no screen pixel was compared with a frame. The routine also reads the per-frame x and y from obj2+0x28b32 / +0x28b34.',
+    value: { pointerAt: 0x1d704, columnsAt: 0x28b36, rowsAt: 0x28b26, columnsWord: 0x04, rowsWord: 0x06, transparent: 0x00, lineBytes: 0x50 },
+    evidence: { at: ['WW.EXE:obj1+0x26fd0 fp=218f6c6a', 'WW.EXE:obj1+0x27021 fp=c4c29838', 'WW.EXE:obj1+0x27032 fp=322a082f', 'WW.EXE:obj1+0x2703a fp=34464957', 'WW.EXE:obj1+0x45e6 fp=57bd1182'] },
+    leads: ['docs/sp.md', 'docs/atr.md'],
+  },
+  {
+    id: 'spw.frame', tag: 'STATIC',
+    statement: 'The routine that prepares objects for drawing (it loops over the .SPW table at obj2+0x13938, 12 bytes a record, from obj1+0x4398) puts the address of the frame to draw into the dword at obj2+0x1d704 as the sprite buffer pointer (catalogue dword +0x24) plus the record\'s word +0x0a times (catalogue word +4 times word +6) (obj1+0x43e0 to obj1+0x4412). So the .SPW word +0x0a is a frame index and the word +8 is a counter it advances (obj1+0x442a increments word +8; obj1+0x4453 and obj1+0x448e increment word +0x0a, which wraps to 0 at the catalogue frame count in word +0x0e (obj1+0x449c, catalogue +0x0e) or after 7 in the other branch; word +8 is reset to 0 afterwards, obj1+0x44b4). Not observed against a running frame.',
+    value: { tableOffset: 0x13938, recordBytes: 0x0c, counterWord: 0x08, frameWord: 0x0a, pointerWordAt: 0x24, widthWord: 0x04, heightWord: 0x06, framesWord: 0x0e },
+    evidence: { at: ['WW.EXE:obj1+0x43e0 fp=6b1165e5', 'WW.EXE:obj1+0x4402 fp=c6320196', 'WW.EXE:obj1+0x440c fp=f7357418', 'WW.EXE:obj1+0x442a fp=9fee0b5e', 'WW.EXE:obj1+0x4488 fp=79ca7e65'] },
+    leads: ['docs/spw.md', 'docs/atr.md'],
+  },
+
+];

@@ -1,0 +1,59 @@
+{
+ "id": "buffers-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-03",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "attract-mode demo race on track 2; whole-buffer CRCs of the TAB, VIEW and SLP regions",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "regions": [
+  {
+   "member": "VEL.TAB",
+   "object": 2,
+   "offset": 125124,
+   "bytes": 400,
+   "crc": "1a16980f",
+   "nameOffset": 8952,
+   "liveName": "VEL.TAB"
+  },
+  {
+   "member": "VEL2.TAB",
+   "object": 2,
+   "offset": 124292,
+   "bytes": 400,
+   "crc": "575c6031",
+   "nameOffset": 8968,
+   "liveName": "VEL2.TAB"
+  },
+  {
+   "member": "VIEW",
+   "object": 2,
+   "offset": 47096,
+   "bytes": 1280,
+   "crc": "721d77e9",
+   "nameOffset": 8980,
+   "liveName": "VIEW"
+  },
+  {
+   "member": "SLP",
+   "object": 2,
+   "offset": 59480,
+   "bytes": 7680,
+   "crc": "7e61d062",
+   "nameOffset": 8996,
+   "liveName": "SLP"
+  }
+ ]
+}
