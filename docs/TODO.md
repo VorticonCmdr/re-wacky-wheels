@@ -53,8 +53,10 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: not observed. Next: compare a racer marker's drawn position with the table value at its coordinates.
 - [ ] `mov.use` [STATIC] — `GIG.MOV` entries are screen offsets (x, y) for one drawn sprite, read by two drawing routines
   - Gap: not observed; which sprite and what advances the entry index are unread. Next: sample the blitter inputs while the sprite is on screen and compare with the table.
-- [ ] `floor.table-use` [STATIC] — the floor renderer casts from the position along `TRIG` unit vectors scaled by `NDIST` factors; the same pair feeds the terrain lookup's inputs
-  - Gap: read in three routines, not observed; the row/column roles of NDIST in the drawing loops are not traced. Next: record the terrain inputs obj2+0x1d7a4/0x1d7a8 with the angle word and compare with TRIG and NDIST entry 0.
+- [ ] `floor.table-use` [STATIC] — the TRIG and NDIST readers: the lookup-input transform (obj1+0x27a21), the point-ahead routine and the floor loops
+  - Gap: all read; the floor loop is now `floor.render-loop` (STATIC, 320 columns of 70 steps). Next: a paused race with the VRAM frame, the angle dword obj2+0x1d5d4 and the camera words, compared with a render predicted from the archive's tiles (a DOSBox run).
+- [ ] `floor.render-loop` [STATIC] — the floor routine obj1+0x27e94: per column the next TRIG angle, 70 NDIST steps, tile-table lookup, byte copy up the screen
+  - Gap: read in full, never compared with a frame. Next: as above.
 - [ ] `cars.slots` [STATIC] — the `CARS.SP` buffer is 8 driver slots of 12 frames; a routine reads the first 8 frames of a driver's file into a slot and keeps eight frame pointers
   - Gap: the buffer, the slot size and each slot's 12 frame pointers are observed (`cars.slot-records`); the per-driver read did not happen in the attract race (slots still held CARS.SP's own frames), so the slot choice and what fills the last 4 frames are not seen. Next: reach the racer-select menu with a breakpoint at obj1+0x22822.
 - [ ] `UNKNOWN_STATIC_TABLE_MEANING` [UNKNOWN] — what the six tables mean, and what the game rewrites in the last 8 bytes of five `.SDX` records
@@ -121,6 +123,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ## Done
 
+- [x] `rd.derived-words` PROVEN (check `rd-derived`, archive data only): in every route record the angle word is a TRIG index pointing along the segment, the length word is the segment length (within 1) and the compass word is the angle's octant; so TRIG 480 is the +y direction and the two words the loader ignores are redundant
 - [x] `dat.sentinel-bytes` PROVEN (check `dat-sentinel`): the 22 bytes after the directory are a zero byte, the last entry's name from its second byte (`WREG.BIN`) and zero length and offset fields
 - [x] `UNKNOWN_AUDIO_RECORD_FIELDS` resolved into `audio.play-param` (STATIC, from the play call, the PC-speaker player and the converter at obj1+0x3f140): the record dword +0x08 is a pitch parameter ignored by the player this game can use
 - [x] `cars.slot-records` PROVEN (`cars-1`, check `obs-cars`): the CARS.SP buffer holds the file whole and each slot's pointer record starts with that slot's 12 frame pointers, 0x428 apart

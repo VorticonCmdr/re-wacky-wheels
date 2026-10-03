@@ -47,6 +47,13 @@ export default [
     leads: ['docs/rd.md (ModdingWiki: x1,y1,x2,y2,angle,compass,distance; connect consecutive endpoints)'],
   },
   {
+    id: 'rd.derived-words', tag: 'PROVEN',
+    statement: 'In every one of the 2177 route records of the 42 .RD members of the user\'s archive, the words the loader does not read are derived from the coordinates: word +0x08 (index 4) is an index below 1920 into TRIG.DAT whose entry, with dword 0 as the column component and dword 1 as the row component, points along the segment from (x1, y1) to (x2, y2) (the cosine of the angle between them is at least 0.999865 for every segment that is at least 30 long; the three shorter ones are skipped); word +0x0c (index 6) is the segment\'s length, within 1 of the exact value; and word +0x0a (index 5), the compass word the loader stores in the route table, is (floor((angle + 120) / 240) + 6) mod 8 for the angle word, in every record: the eight octants of the turn, each 240 entries wide and centred on a multiple of 240 (angle 0, +x, is compass 6; 480, +y, is compass 0; 960 is 2; 1440 is 4). So TRIG index 480 is the +y (row) direction, the same axes as the terrain lookup\'s column and row, and the compass word is an eight-way direction.',
+    value: { angleWord: 0x04, compassWord: 0x05, lengthWord: 0x06, turn: 0x780, octant: 0xf0, octantBias: 0x78, compassBase: 0x06, compassCount: 0x08, minLength: 0x1e, tracks: 0x2a, records: 2177, short: 3, lengthError: 1, ppm: 1000000, minCosinePpm: 999865 },
+    evidence: { checks: ['rd-derived'] },
+    leads: ['docs/rd.md'],
+  },
+  {
     id: 'rd.unused-words', tag: 'STATIC',
     statement: 'The .RD loader (Ghidra FUN_000279e8, obj1+0x79e8) never reads the record words at +0x08 and +0x0c (the wiki\'s angle and distance): it reads the 14-byte record into a buffer and uses only the words at +0, +2, +4, +6 and +0x0a. The observed route table and point array are independent of them (rd.route reproduces them from the other words). The relocation records name only the words at +0, +2, +4, +6 and +0x0a of the buffer (rd.record-references), all in the loader. A reader of the record buffer through a computed address is not ruled out; the count below 1 case (loop skipped) is not observed.',
     value: { notRead: [0x08, 0x0c] },
