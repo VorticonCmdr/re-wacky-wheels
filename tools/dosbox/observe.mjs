@@ -411,6 +411,11 @@ const scenarios = {
     for (const s of A.samples) { if (!s.own.length) continue; const ptr = ((s.own[6] & 0xffff) | ((s.own[7] & 0xffff) << 16)) >>> 0; if (!(ptr in frameCrcs)) frameCrcs[ptr] = hex8(crc32(Buffer.from(await readMemory(ptr, 38 * 28)))); } // @math the 38 x 28 byte frame the draw-list record points at
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), frameCrcs, schedule: A.schedule.map(s => [s.at, s.key, s.down]), buffer: A.buffer, carWords: ['stateWord', 'frameWord', 'fallWord', 'hopWord', 'turnWord', 'frameCount', 'framePointer', 'basePointer'], keyWords: ['leftByte', 'rightByte', 'accelerate', 'brake', 'handBrake'], samples: A.samples };
   },
+  async boot() {
+    // The start of the program (tools/dosbox/boot-run.mjs passes --args {taps, samples}): [seconds, chain-4, CRTC start, CRC-32 of the 320 x 200 picture, 1].
+    const A = JSON.parse(values.args);
+    return { ...header, columns: ['seconds', 'chain4', 'start', 'frameCrc', 'x'], taps: A.taps, samples: A.samples };
+  },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
     // The run archive is the one made with the same --edit arguments (make-test-archive).

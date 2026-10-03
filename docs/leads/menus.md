@@ -1,4 +1,7 @@
 <!-- WF: output of a subagent's read of the disassembly on 2026-10-03; a lead, not evidence. The maintainer has not re-read it. Citations inside were produced by the subagent and are re-hashed by nothing until a claim cites them. -->
+
+> **Checked 2026-10-03 against the running game** (`boot.pictures-observed`, PROVEN, record boot-1): after the notice screen the screen shows APOG1.PCX, then BEAVIS.PCX, then WINTRO.PCX (the CRC-32 of the 320x200 indexes read from video memory equals that of the picture; WINTRO also reappears later as the menu's background). The rest of this report (the menus' text and flow) is still unchecked.
+
 # WF: menu and screen flow of WW.EXE (lead, not fact)
 
 Everything here is tag WF (subagent output). Method: `ndisasm` listing of `analysis/ww/obj1.bin` via `npm run disasm`, string references taken from `analysis/ww/fixups.json` (object 1 site -> object 2 target), archive member names from `parseDatDirectory`. Nothing was run in DOSBox. Offsets are `obj1+0x...` for code and `obj2+0x...` for data (disasm prints obj2 operands as bare numbers, e.g. `0x28bda` = obj2+0x28bda). Citations are `WW.EXE:obj1+0x... fp=...` (from `npm run cite`; fingerprints below are copied from it). "Inferred" marks claims I did not read straight from instructions. Function boundaries were guessed from `call` targets and prologues (`push ebx..ebp`), so a "function" below can be a larger region than named.
