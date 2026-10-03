@@ -353,7 +353,7 @@ const scenarios = {
     const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
     const A = JSON.parse(values.args);
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, modified: { size: runDat.length, sha1: sha1(runDat) }, build: A.build,
-      columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain', ...(A.wide ?? []), ...(A.object ?? []), ...(A.shots ?? [])], samples: A.samples, ...(A.stops ? { stopAt: A.stopAt, stops: A.stops } : {}), ...(A.lists ? { lists: A.lists, fireAt: A.fireAt } : {}) };
+      columns: ['throttle', 'speed', 'column', 'row', 'heading', 'collision', 'carWordA', 'carWord7c', 'terrain', ...(A.wide ?? []), ...(A.object ?? []), ...(A.shots ?? [])], samples: A.samples, ...(A.stops ? { stopAt: A.stopAt, stops: A.stops } : {}), ...(A.lists ? { lists: A.lists, fireAt: A.fireAt } : {}), ...(A.racers ? { racers: A.racers, racerWords: A.racerWords } : {}) };
   },
   async projtable() {
     // The distance-to-screen-row table the race builds at obj2+0xbd00 (the routine at obj1+0x174a4): its CRC-32 over `--bytes` bytes (default 8194, 4097 words), read in a race.
@@ -395,6 +395,12 @@ const scenarios = {
     const hudWords = []; for (let k = 0; k < 130; k++) hudWords.push(await i16(0x8426 + 2 * k)); // @math the 0x104-byte record as 130 words
     const carWords = { speed: await c16(0x26), throttle: await c16(0x42) };
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites };
+  },
+  async carframes() {
+    // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.
+    const found = locateObjects(le, exeBytes, window, wStart), A = JSON.parse(values.args), frameCrcs = {};
+    for (const s of A.samples) { if (!s.own.length) continue; const ptr = ((s.own[6] & 0xffff) | ((s.own[7] & 0xffff) << 16)) >>> 0; if (!(ptr in frameCrcs)) frameCrcs[ptr] = hex8(crc32(Buffer.from(await readMemory(ptr, 38 * 28)))); } // @math the 38 x 28 byte frame the draw-list record points at
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), frameCrcs, schedule: A.schedule.map(s => [s.at, s.key, s.down]), buffer: A.buffer, carWords: ['stateWord', 'frameWord', 'fallWord', 'hopWord', 'turnWord', 'frameCount', 'framePointer', 'basePointer'], keyWords: ['leftByte', 'rightByte', 'accelerate', 'brake', 'handBrake'], samples: A.samples };
   },
   async miss() {
     // The archive lookup's not-found path (obj1+0x41b2, tools/dosbox/miss-run.mjs): the name asked for and the walk index word, read at the stop.
