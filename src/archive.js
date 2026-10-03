@@ -1,26 +1,39 @@
 import { bytes, view, need, ascii } from './binary.js';
+import { parseDatDirectory, directoryEnd } from './formats/dat.js';
+import { parseAudioBank } from './formats/audio-bank.js';
 
+// The viewer's and editor's archive reader: the directory itself is read by the traced parser
+// (src/formats/dat.js, claims dat.*), then the checks a tool wants on top of it: printable ASCII
+// names, no duplicates, no path separators, and no payload inside the directory. Names are lower-cased.
 export function parseDat(data, source = 'WACKY.DAT') {
-  const b = bytes(data), v = view(b);
-  need(b, 0, 2, 'DAT');
-  const count = v.getUint16(0, true);
-  if (!count) throw new Error('DAT contains no entries');
-  need(b, 2, count * 22, 'DAT directory');
   const entries = [], names = new Set();
-  for (let i = 0; i < count; i++) {
-    const p = 2 + i * 22, nameBytes = b.subarray(p, p + 14);
-    if (nameBytes.some(c => c && (c < 32 || c > 126))) throw new Error('DAT filename is not ASCII');
-    const name = ascii(nameBytes).toLowerCase(), size = v.getUint32(p + 14, true), offset = v.getUint32(p + 18, true) + 2;
-    if (!name || /[\\/]/.test(name) || names.has(name)) throw new Error('Invalid or duplicate DAT filename');
+  for (const [i, e] of parseDatDirectory(data).entries()) {
+    const field = bytes(data).subarray(e.entryAt, e.entryAt + e.name.length);
+    if (field.some(c => c < 32 || c > 126)) throw new Error('DAT filename is not ASCII');
+    const name = e.name.toLowerCase();
+    if (/[\\/]/.test(name) || names.has(name)) throw new Error('Invalid or duplicate DAT filename');
     names.add(name);
-    need(b, offset, size, `DAT entry ${name}`);
-    if (size && offset < 2 + count * 22) throw new Error(`DAT entry ${name} overlaps the directory`);
-    entries.push({ id: `${source}/${i}/${name}`, name, data: b.subarray(offset, offset + size), source, offset, size });
+    if (e.size && e.offset < directoryEnd(data)) throw new Error(`DAT entry ${name} overlaps the directory`);
+    entries.push({ id: `${source}/${i}/${name}`, name, data: e.data, source, offset: e.offset, size: e.size });
   }
+  if (!entries.length) throw new Error('DAT contains no entries');
   return entries;
 }
 
+// The sound bank: the traced strict parser (src/formats/audio-bank.js, claims audio.*) reads the bank the game
+// ships; a bank with another shape (a mod, a test fixture) falls back to the lenient reader below, which keeps
+// whatever its offsets describe. Both give the same entries for the shipped bank.
 export function parseAudioT(header, archive) {
+  let bank;
+  try { bank = parseAudioBank(header, archive); } catch { return parseAudioTLenient(header, archive); }
+  const body = bytes(archive), firstCount = bank.slots.filter(s => s.bank === 'first').length;
+  return bank.slots.map(s => {
+    const kind = s.bank === 'first' ? 'pcs' : 'adl', index = s.bank === 'first' ? s.index : s.index - firstCount;
+    return { id: `audiot.fx/${s.index}`, name: `${kind}-${String(index).padStart(2, '0')}.${kind}`, data: body.subarray(s.start, s.start + s.size), size: s.size, source: 'audiot.fx', offset: s.start, slot: s.index, bankIndex: index };
+  });
+}
+
+function parseAudioTLenient(header, archive) {
   const h = bytes(header), b = bytes(archive), v = view(h);
   if (h.length < 8 || h.length % 4) throw new Error('Invalid AUDIOHED offset table');
   const slots = h.length / 4 - 1;

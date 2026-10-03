@@ -1,5 +1,7 @@
 import { parseDat } from './archive.js';
 import { decodePcx, toRgba } from './pcx.js';
+import { openDevGame } from './vfs/dev.js';
+import { openPicked } from './vfs/picker.js';
 import { parseAtr, rawFrame } from './sprites.js';
 import {
   createTrack,
@@ -1127,24 +1129,15 @@ async function runLoad(action) {
     if (id === state.loadId) $('local').disabled = $('open').disabled = false;
   }
 }
+// A picked or dropped archive is read through the same VFS as the dev-server one.
+const readPicked = async (file) => (await openPicked([file]).openPath(file.name)).slice().buffer;
 async function loadLocal() {
   await runLoad(async () => {
-    const manifest = await fetch('/__game/manifest');
-    if (!manifest.ok)
-      throw new Error(
-        'Local loading needs the Vite development server. Use Open WACKY.DAT instead.'
-      );
-    const files = await manifest.json(),
-      path = files.find((n) => /(^|\/)wacky\.dat$/i.test(n));
-    if (!path)
-      throw new Error(
-        'Put your original WACKY.DAT inside game/, or use Open WACKY.DAT.'
-      );
-    const response = await fetch(
-      `/__game/file?path=${encodeURIComponent(path)}`
-    );
-    if (!response.ok) throw new Error('Could not read the local archive.');
-    return response.arrayBuffer();
+    let vfs;
+    try { vfs = await openDevGame({ base: import.meta.env.BASE_URL }); } catch { throw new Error('Local loading needs the Vite development server. Use Open WACKY.DAT instead.'); }
+    const path = vfs.list().find((n) => /(^|\/)wacky\.dat$/i.test(n));
+    if (!path) throw new Error('Put your original WACKY.DAT inside game/, or use Open WACKY.DAT.');
+    return (await vfs.openPath(path)).slice().buffer;
   });
 }
 function applyDraft(project) {
@@ -1231,7 +1224,7 @@ function navigateMini(e) {
 $('open').onclick = $('welcome-open').onclick = () => $('file').click();
 $('file').onchange = (e) => {
   const file = e.target.files[0];
-  if (file) runLoad(() => file.arrayBuffer());
+  if (file) runLoad(() => readPicked(file));
   e.target.value = '';
 };
 $('local').onclick = loadLocal;
@@ -1502,7 +1495,7 @@ window.addEventListener('drop', (e) => {
   $('drop-hint').hidden = true;
   const files = [...e.dataTransfer.files],
     file = files.find((f) => /\.(dat|lid)$/i.test(f.name));
-  if (file) runLoad(() => file.arrayBuffer());
+  if (file) runLoad(() => readPicked(file));
   else if (files[0]?.name.endsWith('.json'))
     files[0].text().then((text) => {
       try {

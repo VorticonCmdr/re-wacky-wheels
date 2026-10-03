@@ -1,12 +1,9 @@
 import { bytes, view, need, ascii } from './binary.js';
+import { parseAtr as parseAtrStrict } from './formats/atr.js';
+// The catalogue is read by the traced parser (src/formats/atr.js, claims atr.*); this adds the lower-cased
+// name and the type word the viewer shows. The record's other words stay unread (UNKNOWN_ATR_FIELDS).
 export function parseAtr(data) {
-  const b = bytes(data), v = view(b); need(b, 0, 2, 'ATR');
-  const n = v.getInt16(0, true); if (n < 0) throw new Error('Invalid ATR count');
-  need(b, 2, n * 40, 'ATR entries');
-  return Array.from({ length: n }, (_, i) => {
-    const p = 2 + i * 40;
-    return { id: i, type: v.getInt16(p, true), width: v.getInt16(p + 4, true), height: v.getInt16(p + 6, true), frames: v.getInt16(p + 14, true), name: ascii(b.subarray(p + 16, p + 40)).toLowerCase() };
-  });
+  return parseAtrStrict(bytes(data)).map(({ id, name, width, height, frames, raw }) => ({ id, type: view(raw).getInt16(0, true), width, height, frames, name: name.toLowerCase() }));
 }
 export function spriteLayout(name, data, catalog = []) {
   const known = catalog.find(s => s.name === name.toLowerCase());

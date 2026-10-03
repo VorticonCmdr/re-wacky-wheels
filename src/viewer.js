@@ -1,6 +1,9 @@
 import { parseDat, parseAudioT } from './archive.js';
 import { extension, ascii, hexDump, view } from './binary.js';
 import { decodePcx, toRgba, grayscalePalette } from './pcx.js';
+import { openDevGame } from './vfs/dev.js';
+import { openPicked } from './vfs/picker.js';
+import { vgaQuantize } from './formats/pcx.js';
 import { parseAtr, rawFrame, spriteLayout } from './sprites.js';
 import { parseGam, parseRoute, parseSpawns, composeTrack } from './tracks.js';
 import { decodeVoc, decodePcSpeaker, encodeWav } from './audio.js';
@@ -8,7 +11,7 @@ import { numericValues, inspectData, b800Cells } from './data-formats.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
-const state = { entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
+const state = { gamePalette: false, entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function category(e) {
   const ext = extension(e.name);
@@ -65,10 +68,14 @@ function canvas(width, height) {
   const c = el('canvas'); c.width = width; c.height = height; c.setAttribute('aria-label', 'Asset image preview');
   const wrap = el('div', undefined, 'canvas-wrap'); wrap.append(c); $('preview').replaceChildren(wrap); state.canvas = c; $('export-png').hidden = false; return c;
 }
+// The game keeps only the top 6 bits of each palette byte (pcx.palette-scale). Showing them as 8-bit
+// uses the usual VGA expansion (v << 2 | v >> 4), a display convention: what the DAC then shows is not proven.
+function displayPalette(p) { return state.gamePalette ? Uint8Array.from(vgaQuantize(p), v => (v << 2) | (v >> 4)) : p; }
 function paint(c, img, palette, transparent = -1) {
   c.width = img.width; c.height = img.height;
-  c.getContext('2d').putImageData(new ImageData(img.rgba ?? toRgba(img.indices, palette ?? img.palette, transparent), img.width, img.height), 0, 0);
+  c.getContext('2d').putImageData(new ImageData(img.rgba ?? toRgba(img.indices, displayPalette(palette ?? img.palette), transparent), img.width, img.height), 0, 0);
 }
+function gamePaletteControl(redraw) { return checkControl('Game palette (6-bit VGA)', state.gamePalette, v => { state.gamePalette = v; redraw(); }); }
 function zoomControl(c, initial = 'fit') {
   function set(z) { c.style.width = z === 'fit' ? '' : c.width * Number(z) + 'px'; c.style.maxWidth = z === 'fit' ? '100%' : 'none'; c.classList.toggle('fit', z === 'fit'); }
   selectControl('Zoom', [['fit', 'Fit'], [1, '1×'], [2, '2×'], [4, '4×'], [8, '8×']], initial, set); set(initial);
@@ -85,6 +92,7 @@ function previewPcx(entry) {
   const draw = () => paint(c, img, palette(key, img.palette)); draw(); controls(); zoomControl(c);
   if (!img.rgba) {
     selectControl('Palette', paletteChoices(true), key, v => { key = v; draw(); });
+    gamePaletteControl(draw);
     const swatches = el('div', undefined, 'palette-grid');
     for (let i = 0; i < 256; i++) { const s = el('span'); s.style.background = `rgb(${img.palette.slice(i * 3, i * 3 + 3).join(',')})`; s.title = `Index ${i}`; swatches.append(s); }
     $('details').append(swatches);
@@ -110,6 +118,7 @@ function previewRaw(entry) {
   numberControl('Height', h, 1, 2048, n => { h = n; frame = 0; draw(); });
   numberControl('Byte offset', offset, 0, Math.max(0, entry.size - 1), n => { offset = n; frame = 0; draw(); });
   selectControl('Palette', paletteChoices(), key, v => { key = v; draw(); });
+  gamePaletteControl(draw);
   checkControl('Column-major', column, v => { column = v; draw(); }); checkControl('Transparent index 0', transparent, v => { transparent = v; draw(); });
   field('Frame', frameSlider); $('controls').append(frameLabel); frameSlider.oninput = () => { frame = Number(frameSlider.value); draw(); };
   checkControl('Animate · 8 fps', false, v => { animate = v; });
@@ -268,15 +277,15 @@ function renderList() {
     const button = el('button', undefined, 'filter'); button.append(el('span', cat), el('small', count)); button.setAttribute('aria-pressed', String(cat === state.category)); button.onclick = () => { state.category = cat; renderList(); }; $('filters').append(button);
   }
 }
-async function loadFiles(files) {
+// Every way of getting files (picker, drop, dev server) ends here as a VFS plus the paths to show.
+async function loadVfs(vfs, paths = vfs.list()) {
   const token = ++state.loadId; cleanup(); status('Reading your original files…');
-  const entries = [], warnings = []; const limit = 64 * 1024 * 1024;
-  for (const file of files) {
-    const name = file.name.toLowerCase(), ext = extension(name), source = file.path || file.webkitRelativePath || file.name;
+  const entries = [], warnings = [];
+  for (const source of paths) {
+    const name = source.split(/[\\/]/).at(-1).toLowerCase(), ext = extension(name);
     if (name.startsWith('.') || !['dat', 'pcx', 'sp', 'par', 'voc', 'mid', 'klm', 'cfg', 'hi', 'tim', 'dtt', 'gam', 'm', 'rd', 'spw', 'pos', 'tab', 'atr', 'bmc', 'htt', 'ott', 'bin', 'inf', 'ing', 'sdx', 'fx', 'mov', 'xy', ''].includes(ext)) continue;
-    if (file.size > limit) { warnings.push(`${name} exceeds the 64 MB per-file limit`); continue; }
     try {
-      const data = new Uint8Array(await file.arrayBuffer()); if (token !== state.loadId) return;
+      const data = await vfs.openPath(source); if (token !== state.loadId) return;
       const entry = { id: `file/${source}`, name, source: 'Loose file: ' + source, data, size: data.length }; entries.push(entry);
       if (name === 'wacky.dat') entries.push(...parseDat(data, name));
     } catch (e) { warnings.push(`${name}: ${e.message}`); }
@@ -298,20 +307,14 @@ async function loadFiles(files) {
   status(`${state.entries.length} assets loaded. Originals are read only.${warnings.length ? ' Notes: ' + warnings.join('; ') : ''}`, !!warnings.length);
   selectEntry(get('wintro.pcx') ?? get('a_f1.pcx') ?? state.entries[0]);
 }
+const loadFiles = files => loadVfs(openPicked(files));
 async function loadLocal() {
   $('local').disabled = true;
   try {
-    const response = await fetch(`${import.meta.env.BASE_URL}__game/manifest`);
-    if (!response.ok || !response.headers.get('content-type')?.includes('application/json')) throw new Error('Local loading is available with npm run dev. On a hosted build, choose Open files or Open folder.');
-    const paths = await response.json(), archive = paths.find(p => /(^|\/)wacky\.dat$/i.test(p));
+    const vfs = await openDevGame({ base: import.meta.env.BASE_URL }), paths = vfs.list(), archive = paths.find(p => /(^|\/)wacky\.dat$/i.test(p));
     if (!archive) throw new Error('WACKY.DAT was not found under game/. Use Open files or Open folder to select your installation.');
     const dir = archive.slice(0, archive.lastIndexOf('/') + 1);
-    const selected = paths.filter(p => p === archive || (p.startsWith(dir) && !p.slice(dir.length).includes('/') && !/\.dat$/i.test(p)));
-    const files = await Promise.all(selected.map(async path => {
-      const r = await fetch(`${import.meta.env.BASE_URL}__game/file?path=${encodeURIComponent(path)}`); if (!r.ok) throw new Error(`Could not load ${path}`);
-      const buffer = await r.arrayBuffer(); return { name: path.split('/').at(-1), path, size: buffer.byteLength, arrayBuffer: async () => buffer };
-    }));
-    await loadFiles(files);
+    await loadVfs(vfs, paths.filter(p => p === archive || (p.startsWith(dir) && !p.slice(dir.length).includes('/') && !/\.(dat|exe)$/i.test(p))));
   } catch (e) { status(e.message, true); } finally { $('local').disabled = false; }
 }
 $('local').onclick = loadLocal; $('welcome-load').onclick = loadLocal;

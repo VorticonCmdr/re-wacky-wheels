@@ -19,7 +19,7 @@ test('DAT offsets exclude the count; directory and payload bounds are enforced',
   const [e] = parseDat(b); assert.equal(e.offset, 24); assert.deepEqual([...e.data], [1, 2, 3, 4]);
   assert.throws(() => parseDat(b.subarray(0, 27)), /truncated/);
   v.setUint32(20, 0, true); assert.throws(() => parseDat(b), /overlaps/);
-  assert.throws(() => parseDat(new Uint8Array([255, 255])), /directory/);
+  assert.throws(() => parseDat(new Uint8Array([255, 255])), /negative/, 'the game sign-extends the count');
 });
 
 test('AudioT preserves silent PC/AdLib slots and skips empty digital slots', () => {
@@ -31,9 +31,16 @@ test('AudioT preserves silent PC/AdLib slots and skips empty digital slots', () 
 function pcx(pixels, width = 3, stride = 4) {
   const b = new Uint8Array(128 + pixels.length + 769), v = new DataView(b.buffer); b[0] = 10; b[1] = 5; b[2] = 1; b[3] = 8; b[65] = 1; v.setUint16(8, width - 1, true); v.setUint16(66, stride, true); b.set(pixels, 128); b[128 + pixels.length] = 12; b.set([12, 34, 56], b.length - 768 + 3); return b;
 }
+test('PCX RLE runs may cross a scanline, as in the game\'s decoders, but not overshoot the picture', () => {
+  const two = stream => { const b = pcx(stream); new DataView(b.buffer).setUint16(10, 1, true); return b; }; // height 2: 8 stored bytes
+  const img = decodePcx(two([0xc6, 7, 0xc2, 9]));
+  assert.deepEqual([...img.indices], [7, 7, 7, 7, 7, 9], 'a run of 6 crosses the end of the first stored row (3 pixels plus 1 padding byte)');
+  assert.throws(() => decodePcx(two([0xc6, 7, 0xc3, 9])), /overshoots/);
+  assert.throws(() => decodePcx(two([0xc6, 7])), /truncated/);
+});
 test('PCX decodes palette colors, padded rows, RLE and escaped literals', () => {
   const img = decodePcx(pcx([1, 0xc1, 0xc0, 2, 0])); assert.equal(img.width, 3); assert.deepEqual([...img.indices], [1, 192, 2]); assert.deepEqual([...img.palette.slice(3, 6)], [12, 34, 56]);
-  assert.throws(() => decodePcx(pcx([0xc5, 1])), /crosses/);
+  assert.throws(() => decodePcx(pcx([0xc5, 1])), /overshoots/);
   assert.throws(() => decodePcx(pcx([0xc0, 1])), /Invalid/);
   assert.throws(() => decodePcx(new Uint8Array(10)), /header/);
 });
@@ -46,7 +53,7 @@ test('column-major sprite data is transposed without reversing axes', () => {
 test('ATR count and frame dimensions are read from 40-byte records', () => {
   const b = new Uint8Array(42), v = new DataView(b.buffer); v.setUint16(0, 1, true); v.setUint16(6, 32, true); v.setUint16(8, 24, true); v.setUint16(16, 2, true); b.set(ascii('H1.SP'), 18);
   assert.deepEqual(parseAtr(b)[0], { id: 0, type: 0, width: 32, height: 24, frames: 2, name: 'h1.sp' });
-  assert.throws(() => parseAtr(b.subarray(0, 41)), /entries/);
+  assert.throws(() => parseAtr(b.subarray(0, 41)), /expected 42/);
 });
 test('track tiles use ten image-stride columns, not nine; tile 107 is valid', () => {
   function sheet(bias) { const indices = new Uint8Array(320 * 200); for (let y = 0; y < 192; y++) for (let x = 0; x < 320; x++) indices[y * 320 + x] = bias + Math.floor(y / 32) * 10 + Math.floor(x / 32); return { width: 320, height: 200, indices, palette: new Uint8Array(768) }; }

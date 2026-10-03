@@ -12,7 +12,7 @@ function localGameFiles() {
       if (entry.isSymbolicLink() || entry.name.startsWith('.')) continue;
       const path = resolve(dir, entry.name);
       if (entry.isDirectory()) files.push(...await scan(path));
-      else if (/\.(dat|pcx|cfg|dtt|hi|tim)$/i.test(entry.name)) {
+      else if (/\.(dat|exe|pcx|cfg|dtt|hi|tim)$/i.test(entry.name)) {
         files.push(relative(root, path).split(sep).join('/'));
       }
     }

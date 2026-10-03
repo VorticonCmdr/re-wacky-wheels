@@ -18,23 +18,25 @@ export function decodePcx(data) {
     palette = b.slice(-768); end -= 769;
   } else if (bits * planes <= 4) palette.set(b.subarray(16, 64));
   let pos = 128;
-  const rowSize = stride * planes, row = new Uint8Array(rowSize);
+  const rowSize = stride * planes, total = rowSize * height, stream = new Uint8Array(total);
+  // Decode the whole stream first: like the game's decoders (pcx.rle-rule), a run may continue across a
+  // scanline boundary; only a run that overshoots the picture is an error.
+  for (let p = 0; p < total;) {
+    if (pos >= end) throw new Error('PCX pixel data is truncated');
+    const code = b[pos++];
+    let n = 1, value = code;
+    if (b[2] === 1 && code >= 192) {
+      n = code & 63;
+      if (!n || pos >= end) throw new Error('Invalid PCX RLE run');
+      value = b[pos++];
+    }
+    if (p + n > total) throw new Error('PCX RLE run overshoots the picture');
+    stream.fill(value, p, p + n); p += n;
+  }
   const indices = rgb ? null : new Uint8Array(width * height);
   const rgba = rgb ? new Uint8ClampedArray(width * height * 4) : null;
   for (let y = 0; y < height; y++) {
-    let p = 0;
-    while (p < rowSize) {
-      if (pos >= end) throw new Error('PCX pixel data is truncated');
-      const code = b[pos++];
-      let n = 1, value = code;
-      if (b[2] === 1 && code >= 192) {
-        n = code & 63;
-        if (!n || pos >= end) throw new Error('Invalid PCX RLE run');
-        value = b[pos++];
-      }
-      if (p + n > rowSize) throw new Error('PCX RLE run crosses a scanline');
-      row.fill(value, p, p + n); p += n;
-    }
+    const row = stream.subarray(y * rowSize, (y + 1) * rowSize);
     for (let x = 0; x < width; x++) {
       if (rgb) {
         const p = (y * width + x) * 4;
