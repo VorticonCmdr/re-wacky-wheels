@@ -5,7 +5,7 @@ import { view } from '../../binary.js';
 import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
-const values = () => ({ map: expected('hud.minimap-observed') });
+const values = () => ({ map: expected('hud.minimap-observed'), use: expected('mapxy.use') });
 // The constants as the routine carries them: the immediates of the instructions the claim cites.
 const SITES = {
   bias: { at: 0x1a57e, skip: 2, width: 4 }, // @math sub eax,imm32
@@ -32,6 +32,8 @@ function validate(dat, r1, r2, V, { bias = V.map.bias, rowOrigin = V.map.rowOrig
   assert.equal(TOOL.racerBytes, M.racerBytes, 'the racer record size the tool used');
   assert.deepEqual(TOOL.rect, M.rect, 'the rectangle the tool compared');
   assert.equal(M.rect[1], M.rowOrigin, 'the rectangle starts at the row origin');
+  const U = V.use;
+  assert.deepEqual([U.firstOffset, U.secondOffset, U.entries, U.origin, U.yBias, U.countOffset], [M.xTableAt, M.yTableAt, M.limit + 1, M.bias, M.rowOrigin, M.countWord], 'the values of mapxy.use are those observed'); // @math the limit is the last entry
   assert.equal(TOOL.samples, M.samples, 'the two records');
   const clamp = v => { const d = v - bias; return d <= 0 ? 0 : Math.min(d, M.limit); };
   const dotOf = ([x, y]) => (order === 'xy' ? [xy[clamp(x)], rowOrigin + xy[yAt + clamp(y)]] : [xy[clamp(y)], rowOrigin + xy[yAt + clamp(x)]]);
@@ -69,7 +71,7 @@ function validate(dat, r1, r2, V, { bias = V.map.bias, rowOrigin = V.map.rowOrig
 
 export default {
   id: 'obs-minimap',
-  claims: ['hud.minimap-observed'],
+  claims: ['hud.minimap-observed', 'mapxy.use'],
   obs: ['minimap-1', 'minimap-2'],
   reviewed: { by: 'main-session', date: '2026-10-03' },
   async run(ctx) { validate(await ctx.open('WACKY.DAT'), ctx.obs('minimap-1'), ctx.obs('minimap-2'), values(), { exe: await ctx.open('WW.EXE') }); },

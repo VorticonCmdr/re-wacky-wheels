@@ -46,8 +46,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 1 by a collision and 0xffff by a pickup) and what the coordinates are used for beyond drawing, pickups and collisions
   - Next: the other users of the object table (obj1+0x218a4, +0x25a78, +0x261fc).
 - [x] `UNKNOWN_PAR_USE` resolved into `horizon.render-observed` (PROVEN): the floor routine copies 20 rows from the `.PAR` pixels in video memory (video offset 0x7d00 + the pointer obj2+0x1d860) to the screen rows 110 to 129 as a 320-pixel window of the 1280 x 20 panorama; the window start moves with the car's steering amounts (code reading, obj1+0x14832). Still to do: the viewer shows the panorama as 640 x 40 (`docs/par.md`); a check of the pointer's steps while turning.
-- [ ] `mapxy.use` [STATIC] — MAP.XY's two 0x800-byte halves convert each racer's clamped x and y to minimap screen coordinates (y + 0x3c) for a marker draw
-  - Gap: not observed. Next: compare a racer marker's drawn position with the table value at its coordinates.
+- [x] `mapxy.use` PROVEN (`obs-minimap`, `hud.minimap-observed`): MAP.XY's two halves convert each racer's world position into one minimap dot (the loaded tables equal the file's halves, the eight screen dots equal the computed ones, colours 255 for the player and 90 for the others); not observed: the clamp at the map edge and the colour 0x54 of the two-player cases.
 - [ ] `mov.use` [STATIC] — `GIG.MOV` entries are screen offsets (x, y) for one drawn sprite, read by two drawing routines
   - Gap: not observed; which sprite and what advances the entry index are unread. Next: sample the blitter inputs while the sprite is on screen and compare with the table.
 - [ ] `hud.layout` [WF] — HUD routines, sprite sizes and screen positions of the speedometer, place digit, counters, banner, minimap and timer (report in `docs/leads/hud.md`)
