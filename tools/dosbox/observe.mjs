@@ -404,6 +404,15 @@ const scenarios = {
       const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
       floor = { columns, camera: [await i16(0x28b0a), await i16(0x28b0e)], heading: await i32(0x1d5d4), page: await i16(0x28b24), mode: await i16(0x28c20), drawList: list, track: await cstr(b2 + 0x1d770) };
     }
+    // The horizon strip (obj1+0x27e94 copies 20 rows from video memory at the dword obj2+0x1d860): the CRC-32 of each of the 320 columns of the rows 110 to 129 of the displayed page, with that pointer, its bounds and the draw list.
+    let horizon;
+    if (spec.horizon) {
+      const columns = []; for (let c = 0; c < 320; c++) { const col = Buffer.alloc(20); for (let j = 0; j < 20; j++) col[j] = image[(110 + j) * W + c]; columns.push(hex8(crc32(col))); } // @math 320 columns of the 20 rows from row 110
+      const u32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readUInt32LE(0), count2 = await i16(0x28b78), raw2 = Buffer.from(await readMemory(b2 + 0x19a50, 0x28 * Math.min(Math.max(count2, 0), 30))), list2 = []; // @math at most 30 draw-list records
+      for (let r = 0; r < raw2.length / 0x28; r++) { const w = []; for (let i = 0; i < 20; i++) w.push(raw2.readInt16LE(r * 0x28 + i * 2)); list2.push(w); } // @math twenty words in a record of 0x28 bytes
+      const cstr3 = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+      horizon = { columns, pointer: await u32(0x1d860), bounds: [await u32(0x1d824), await u32(0x1d828), await u32(0x1d82c), await u32(0x1d830)], heading: await i32(0x1d5d4), drawList: list2, track: await cstr3(b2 + 0x1d770), mode: await u32(0x1d998) };
+    }
     // The sky: the CRC-32 of each row of the rectangle spec.sky = [firstRow, lastRow, firstColumn, lastColumn] of the displayed page, with the heading and the sky name of the track.
     let sky;
     if (spec.sky) {
@@ -420,7 +429,7 @@ const scenarios = {
       const racers = []; for (let n = 0; n < 8; n++) racers.push([await i16(0xaaa6 + n * 0x68), await i16(0xaaa8 + n * 0x68)]); // @math eight racer records of 0x68 bytes: the x and y words
       minimap = { dots, racers, count: await i16(0x28c40), mode: await i16(0x28c0c), pictureCrc: hex8(crc32(buf)), tables: { x: [0x202cc, hex8(crc32(Buffer.from(await readMemory(b2 + 0x202cc, 2048))))], y: [0x1faca, hex8(crc32(Buffer.from(await readMemory(b2 + 0x1faca, 2048))))] } }; // @math the two 2048-byte tables of the minimap
     }
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}), ...(horizon ? { horizon } : {}) };
   },
   async carframes() {
     // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.

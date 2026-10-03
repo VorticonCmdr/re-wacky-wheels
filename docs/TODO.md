@@ -45,11 +45,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Next: the remaining readers of the car words +0x36, +0x3a, +0x56 for 4, 7 and the rest, and whether anything reads the discarded bytes.
 - [ ] `UNKNOWN_SPW_FIELDS` [UNKNOWN] — what else reads or writes `.SPW` word +2 (set to 1 by a collision and 0xffff by a pickup) and what the coordinates are used for beyond drawing, pickups and collisions
   - Next: the other users of the object table (obj1+0x218a4, +0x25a78, +0x261fc).
-- [ ] `UNKNOWN_PAR_USE` [UNKNOWN] — what draws the uploaded pixels afterwards; lead: the file is a 1280 x 20 panorama shown as a 320-pixel window on screen rows 110 to 129 (seen once by comparing a frame, not wiki's 640 x 40)
-  - Next: find the code that addresses video memory at 0xa0000 + 0x7d00 (latch copies like obj1+0x26f14), cite how it picks the window, and add a check that compares a recorded frame with the file; then fix the viewer's 640 x 40.
-
-### Startup data tables (`MAP.XY`, `WACKY.SDX`, `TRIG.DAT`, `NDIST`, `CARS.SP`, `GIG.MOV`)
-
+- [x] `UNKNOWN_PAR_USE` resolved into `horizon.render-observed` (PROVEN): the floor routine copies 20 rows from the `.PAR` pixels in video memory (video offset 0x7d00 + the pointer obj2+0x1d860) to the screen rows 110 to 129 as a 320-pixel window of the 1280 x 20 panorama; the window start moves with the car's steering amounts (code reading, obj1+0x14832). Still to do: the viewer shows the panorama as 640 x 40 (`docs/par.md`); a check of the pointer's steps while turning.
 - [ ] `mapxy.use` [STATIC] — MAP.XY's two 0x800-byte halves convert each racer's clamped x and y to minimap screen coordinates (y + 0x3c) for a marker draw
   - Gap: not observed. Next: compare a racer marker's drawn position with the table value at its coordinates.
 - [ ] `mov.use` [STATIC] — `GIG.MOV` entries are screen offsets (x, y) for one drawn sprite, read by two drawing routines

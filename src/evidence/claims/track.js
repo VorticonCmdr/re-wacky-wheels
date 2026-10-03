@@ -325,13 +325,6 @@ export default [
     leads: ['docs/par.md'],
   },
   {
-    id: 'UNKNOWN_PAR_USE', tag: 'UNKNOWN',
-    statement: 'What the game does with the .PAR pixels once they are in video memory (par.upload) is not established: which routine reads video memory from offset 0x7d00 and draws them, and how the window start follows the heading. Lead, seen once and not a claim (a raw frame of the paused demo race on track 2, the DAC palette read through ports 0x3c7/0x3c9, 2026-10-03): screen rows 110 to 126 matched file bytes [1280 * (y - 110) + 320, +320) of 2.PAR on 229 to 309 of 320 pixels each (the rest is covered by cars and HUD), and no other alignment matched. That reads as the file being a 1280 x 20 panorama of which the game shows a 320-pixel window starting at column 320 (a start that probably follows the heading) on rows 110 to 129, not the wiki\'s 640 x 40.',
-    evidence: {},
-    leads: ['docs/par.md'],
-    todo: 'Find the code that addresses video memory at 0xa0000 + 0x7d00 (latch copies like the one at obj1+0x26f14 are the likely drawers) and the horizon drawing in the track renderer.',
-  },
-  {
     id: 'UNKNOWN_SPW_FIELDS', tag: 'UNKNOWN',
     statement: 'What the .SPW words mean is established in part: the word at +0 is a sprite-catalogue index (sp.read proves the sprites loaded are the entries named there), +4 and +6 are coordinates with 0x0400 added (the map-to-world origin, terrain.lookup), +8 is a tick counter and +0x0a the frame index of the object\'s sprite, which the game rewrites while running (spw.frame), and +2, cleared by the loader, is set to 1 when the player car\'s move runs into the object (car.collision-test, obj1+0x117e7) and to 0xffff when the car takes it as a pickup (atr.kind-effects, obj1+0x1329c and +0x13309); an entry with +2 equal to -1 is skipped by the collision test. What else reads +2 (other users of the table at obj2+0x13938 are the routines at obj1+0x218a4, +0x25a78 and +0x261fc) and what the coordinates are used for beyond drawing, the pickup test and the collision test is not read.',
     evidence: {},
