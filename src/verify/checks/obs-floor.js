@@ -8,7 +8,7 @@ import { assertArchive, crc, slice } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const values = () => ({ obs: expected('floor.render-observed'), loop: expected('floor.render-loop'), trig: expected('trig.layout'), ndist: expected('ndist.layout'), map: expected('m.read'), sheet: expected('tiles.sheet-split'), buffer: expected('tiles.buffer'), gam: expected('gam.read'), speed: expected('hud.place-speed-observed') });
-const IDS = ['floor-1', 'floor-2'];
+const IDS = ['floor-1', 'floor-2', 'floor-3'];
 const TOOL = { firstRow: 130, rows: 70 }; // @math the rows observe.mjs hashes per column: 70 rows from row 130
 
 // The columns the floor model predicts, as the CRC-32 of the 70 rows 130 to 199 (rows going down the screen, the model's steps going up).
@@ -53,7 +53,7 @@ function validate(dat, records, V, options) {
     const covered = new Set();
     for (const w of F.drawList) if (w[3] + w[1] > O.firstRow) for (let x = w[2]; x < w[2] + w[0]; x++) covered.add(x); // @math top row + height reaches the first floor row; words 0 to 3 are width, height, left, top
     for (let x = O.speedometerColumns[0]; x <= O.speedometerColumns[1]; x++) covered.add(x);
-    assert.ok(bad.every(k => covered.has(k)), 'every differing column is under an overlay');
+    assert.ok(bad.every(k => covered.has(k)), `every differing column is under an overlay (${r.id}: differing ${JSON.stringify(ranges(bad))}, drawn ${JSON.stringify(F.drawList.map(w => [w[2], w[2] + w[0] - 1]))})`); // @math the left column and the last column of a record
   });
   assert.deepEqual(matching, O.matching, 'the columns that equal the prediction');
   assert.deepEqual(mismatching, O.mismatching, 'and the ones that do not');

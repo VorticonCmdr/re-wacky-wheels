@@ -14,7 +14,7 @@ await post('/debug/pause');
 const car = await i32(BASE + 0x1d5b0);
 await key('KBD_leftalt', true); await post('/debug/continue'); await sleep(Number(values.drive));
 await key('KBD_left', true); await sleep(Number(values.steer)); await key('KBD_left', false);
-await key('KBD_leftalt', false); await key('KBD_down', true);
+await post('/input/sequence', { events: [{ type: 'key', key: 'KBD_leftalt', pressed: false, frame: 1 }, { type: 'key', key: 'KBD_left', pressed: false, frame: 1 }, { type: 'key', key: 'KBD_down', pressed: true, frame: 2 }] }); // one sequence: a second call would replace the first
 for (let i = 0; i < 100; i++) { await sleep(100); await post('/debug/pause'); const t = await i16(car + 0x42), s = await i16(car + 0x26); if (t === 0 && s === 0) break; await post('/debug/continue'); } // @math at most ten seconds of braking
 await post('/debug/pause'); await sleep(300); await post('/debug/continue'); await sleep(300); await post('/debug/pause'); // two more calls with nothing moving, so that both video pages hold the same picture
 const out = spawnSync('npm', ['run', '-s', 'observe', '--', 'screen', '--id', values.id, '--moment', 'a played race on track 1 of the plain archive: driven forward, steered left, braked to a stop and paused (the car at rest); the displayed page read from video memory', '--args', values.args], { encoding: 'utf8' });

@@ -5,7 +5,7 @@ import { assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const values = () => ({ obs: expected('view.object-column-observed'), proj: expected('view.object-projection'), list: expected('view.draw-list-observed') });
-const IDS = ['horizon-6', 'horizon-7', 'horizon-8', 'horizon-9', 'horizon-10', 'horizon-11', 'horizon-12', 'horizon-13'];
+const IDS = ['horizon-6', 'horizon-7', 'horizon-8', 'horizon-9', 'horizon-10', 'horizon-11', 'horizon-12', 'horizon-13', 'horizon-14'];
 const FIX = 16; // @math the 16.16 fixed point shift of the vector words and of the tangent factor
 const TOOL = { boxWords: [0x28c16, 0x28c2a, 0x28c18, 0x28c2c], cameraWords: [0x28b0a, 0x28b0e], headingWords: [0x1d614, 0x1d5e4] }; // @math the words observe.mjs read into horizon.camera, in its order
 

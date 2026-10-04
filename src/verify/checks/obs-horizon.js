@@ -4,7 +4,7 @@ import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const values = () => ({ hz: expected('horizon.render-observed'), par: expected('par.upload'), timer: expected('hud.timer-observed') });
-const IDS = ['horizon-1', 'horizon-2'];
+const IDS = ['horizon-1', 'horizon-2', 'horizon-14'];
 const TOOL = { firstRow: 110, rows: 20, pointerAt: 0x1d860, boundWords: [0x1d824, 0x1d828, 0x1d82c, 0x1d830] }; // @math what observe.mjs read: 20 rows from row 110, the pointer word and the four bound words
 
 const ranges = list => { const out = []; for (const c of list) { const last = out.at(-1); if (last && c === last[1] + 1) last[1] = c; else out.push([c, c]); } return out; };
