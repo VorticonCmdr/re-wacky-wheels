@@ -115,3 +115,5 @@ Sound numbers index the 26+ records at obj2+0x1a9c8 (audio.load: slots of AUDIOT
 * Not run: nothing here was observed in DOSBox. Candidates for observation: press fire with kind 3 held (3 entries appear in 0x1f2b0 with types 0 and lanes 0,1,2), hold fire 20 ticks (car+0x16 becomes 8), hit an AI racer (racer+0x58 = 1 for ~33 ticks).
 
 > **Checked 2026-10-04** (`item.racer-hit-observed`, PROVEN, records shot-1 to shot-3): a shot of item 3's fan, of the counter (hedgehog) and of item 8 stops 17 units (Manhattan) from the racer it reaches and sets that racer's hit word +0x58 (1, 1 and 2); 1 lasts 33 ticks, 2 lasts 50 ticks and alternates with 3 (`ai.step-helpers`' limits 0x21 and 0x32); fire is ignored before the green light.
+
+> **Checked 2026-10-04** (`item.mine-types-observed`, PROVEN, records mine-5 to mine-7): the items 5, 6 and 7 each drop one stationary record 10 units behind the car and a racer 10 units from it is stunned (hit word 1, 33 ticks) in the same call, so the three are not distinguished by their effect on a nearby racer.
