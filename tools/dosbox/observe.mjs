@@ -337,6 +337,15 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async exit() {
+    // The text screen the game leaves when it exits (after `LEAVE GAME`): the CRC-32 of the 4000 bytes at B800:0000 (80 x 25 cells of a character and an attribute), of the following 4000 bytes, the CRTC start address and the text mode check.
+    const VRAM = 0xb8000, CELLS = 4000; // @math the colour text segment and 80 x 25 cells of 2 bytes
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    await io(0x3d4, 0x0c, 1); const high = await inPort(0x3d5); await io(0x3d4, 0x0d, 1); const low = await inPort(0x3d5);
+    const mem = Buffer.from(await readMemory(VRAM, 2 * CELLS + 96)); // @math two screens' worth, a little over
+    return { ...header, textAt: VRAM, cells: CELLS, crtcStart: high * 256 + low, textCrc: hex8(crc32(mem.subarray(0, CELLS))), nextCrc: hex8(crc32(mem.subarray(CELLS, 2 * CELLS))) };
+  },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
     // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero

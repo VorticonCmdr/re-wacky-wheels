@@ -52,6 +52,20 @@ export default [
     leads: ['docs/leads/hud.md', 'docs/leads/menus.md'],
   },
   {
+    id: 'exit.screen-observed', tag: 'PROVEN',
+    statement: 'Observed in the running game (record exit-1: WW left through LEAVE GAME in the main menu; the DOS text screen it leaves, read from video memory at B800:0000 with the CRTC start address 0): the 4000 bytes there, 80 x 25 cells of a character byte and an attribute byte, are exactly the member WWREG.BIN of the archive (CRC-32 7e413036), and not the member WWSW.BIN (9b770803); the next 4000 bytes of that segment hold something else. The picture is the Apogee logo and the message asking the player to pay if they enjoy the game (drawn with a redefined character set: the box characters of the cells are pieces of the logo; where the font comes from was not found, WACKY.ING is not a font), shown at the game\'s exit. Not observed: the choice itself (exit.screen-select reads it from the code: WWSW.BIN when the dword obj2+0x1e574 is not 0, WWREG.BIN when it is 0), the dword at that moment (the game\'s memory is gone after the exit), and the other exit paths (a quit from a race, a Save and Quit).',
+    value: { member: 'WWREG.BIN', other: 'WWSW.BIN', cells: 4000, textAt: 0xb8000, crtcStart: 0, crc: '7e413036', otherCrc: '9b770803' },
+    evidence: { checks: ['obs-exit'], obs: ['exit-1'] },
+    leads: ['docs/leads/menus.md'],
+  },
+  {
+    id: 'exit.screen-select', tag: 'STATIC',
+    statement: 'Read in full: the routine around obj1+0x26a06 (the end of the game, before the return to DOS) chooses the exit screen: it calls the member reader obj1+0x25bb0 with the string at obj2+0x2344 (WWSW.BIN) when the dword obj2+0x1e574 is not 0 (obj1+0x26a1a to +0x26a23) and with the string at obj2+0x2350 (WWREG.BIN) when it is 0 (obj1+0x26a2a), and then frees a buffer and returns (obj1+0x26a34 to +0x26a49). The reader puts the 4000 bytes of the member on the screen (the BIN loader of the work items at obj1+0x25c6a; obj2+0x4026 is its buffer). With the dword 0 the member shown is WWREG.BIN (exit.screen-observed). What sets obj2+0x1e574 (a registration or shareware flag, by the names) is not read.',
+    value: { routine: 0x26a06, shareware: 0x2344, registered: 0x2350, flagAt: 0x1e574, reader: 0x25bb0 },
+    evidence: { at: ['WW.EXE:obj1+0x26a1a fp=19afa4e4', 'WW.EXE:obj1+0x26a23 fp=17b8a567', 'WW.EXE:obj1+0x26a2f fp=52678726', 'WW.EXE:obj1+0x25bb0 fp=9cdc21cb'] },
+    leads: ['docs/leads/menus.md'],
+  },
+  {
     id: 'mov.use', tag: 'STATIC',
     statement: 'The GIG.MOV table (obj2+0x1b548, four bytes an entry: two words) is read by two drawing routines, around obj1+0x1a857 and obj1+0x1abfe. Each takes an entry index, sets the sprite blitter\'s screen x (obj2+0x28b32) to a constant (0xfa in the first, 0x8d in the second) plus the entry\'s first word and adds the entry\'s second word to the screen y (obj2+0x28b34), sets the sprite height word (obj2+0x28b26) to 0x2c or 0x1c, and calls the sprite blitter (sp.draw, obj1+0x26fd0) (obj1+0x1a857 to +0x1a87f, +0x1abfe to +0x1ac1e). So the entries are screen offsets, relative to a base position, for one drawn sprite, as the wiki says (devil motion); which sprite it is and what advances the index (the code touching per-racer words at +0x8500 and +0x8508 and a counter at obj2+0x28b80 is not read in full) is not established. Not observed at run time.',
     value: { tableAt: 0x1b548, entryBytes: 0x04, xBases: [0xfa, 0x8d], heights: [0x2c, 0x1c], screenX: 0x28b32, screenY: 0x28b34 },

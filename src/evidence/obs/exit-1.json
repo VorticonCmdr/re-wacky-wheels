@@ -1,0 +1,22 @@
+{
+ "id": "exit-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "WW left by LEAVE GAME from the main menu of the plain archive: the DOS text screen it leaves, B800:0000, 4000 bytes",
+ "textAt": 753664,
+ "cells": 4000,
+ "crtcStart": 0,
+ "textCrc": "7e413036",
+ "nextCrc": "6259ba60"
+}
