@@ -4,12 +4,16 @@
 import { K } from '../evidence/k.js';
 import { menuItems } from '../render/menu.js';
 
-const TREE = () => K({ menus: { options: { items: ['GRAPHIC DETAIL LEVELS', 'VOLUME LEVELS', 'RACE SCREEN OPTIONS', 'LEAVE THIS MENU'] }, comm: { items: ['MODEM', 'SERIAL CABLE', 'LEAVE THIS MENU'] }, detail: { items: ['SINGLE SCREEN DETAIL', 'SPLIT SCREEN DETAIL', 'LEAVE THIS MENU'] }, toggles: { items: ['OVERHEAD MAP', 'CLOCK DISPLAY', 'SPEEDOMETER', 'LEAVE THIS MENU'], width: 17, on: 'ON ', off: 'OFF', words: [0x175d0, 0x175d2, 0x175d4] } }, opens: [['main', 6, 'options'], ['main', 5, 'comm'], ['options', 1, 'detail'], ['options', 3, 'toggles']], leave: 'LEAVE THIS MENU' }, 'menu.tree-observed');
+const TREE = () => K({ menus: { options: { items: ['GRAPHIC DETAIL LEVELS', 'VOLUME LEVELS', 'RACE SCREEN OPTIONS', 'LEAVE THIS MENU'] }, comm: { items: ['MODEM', 'SERIAL CABLE', 'LEAVE THIS MENU'] }, detail: { items: ['SINGLE SCREEN DETAIL', 'SPLIT SCREEN DETAIL', 'LEAVE THIS MENU'] }, toggles: { items: ['OVERHEAD MAP', 'CLOCK DISPLAY', 'SPEEDOMETER', 'LEAVE THIS MENU'], width: 17, on: 'ON ', off: 'OFF', words: [0x175d0, 0x175d2, 0x175d4] }, single: { items: ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL'], word: 0x1ee58 }, split: { items: ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL'], word: 0x174de } }, opens: [['main', 6, 'options'], ['main', 5, 'comm'], ['options', 1, 'detail'], ['options', 3, 'toggles'], ['detail', 1, 'single'], ['detail', 2, 'split']], shifts: { main: 0, options: 0, comm: 0, toggles: 0, detail: -28, single: -52, split: -52 }, leave: 'LEAVE THIS MENU' }, 'menu.tree-observed');
 
 export const menuIds = () => ['main', ...Object.keys(TREE().menus)];
 
-// The settings the menus change: the switches of the race screen (1 on, 0 off), all on in the records.
-export const defaultSettings = () => ({ switches: TREE().menus.toggles.words.map(() => 1) }); // @math one switch for each word
+// Where the state words of a menu lie, in bytes below the block of the main menu (menu.tree-observed): what a recorder has to read.
+export const shiftOf = id => TREE().shifts[id];
+
+// The settings the menus change: the switches of the race screen (1 on, 0 off) and the detail levels of the single and split screen (1 high, 2 medium, 3 low). Where
+// they start is not established (UNKNOWN_MENU_DEFAULT_SETTINGS): every switch on and both levels at the first item until the page says otherwise.
+export const defaultSettings = (detail = 1) => ({ switches: TREE().menus.toggles.words.map(() => 1), detail: { single: detail, split: detail } }); // @math one switch for each word; the first level
 
 // The text of a switch: its name, then ON or OFF at the end of a bar of fixed width.
 const switchText = (T, name, on) => name.padEnd(T.menus.toggles.width - T.menus.toggles.on.length) + (on ? T.menus.toggles.on : T.menus.toggles.off);
@@ -25,6 +29,7 @@ export function menuDef(id, settings = defaultSettings()) {
     if (link) return { open: link[2] }; // @math the target menu is the third word of a link
     if (!main && text === T.leave) return { back: true };
     if (id === 'toggles') return { switch: i };
+    if (def.word !== undefined) return { choose: id }; // the item number is the level
     if (main && i === 0) return { race: 1 }; // @math the first item of the main menu, SINGLE PLAYER RACING
     return { pending: text };
   });

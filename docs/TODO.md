@@ -85,6 +85,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Next: record the first pauses after the title picture ends and after leaving a race, and read the routine that sets the words obj2+0x32f64 to +0x32fac.
 - [x] `UNKNOWN_MENU_KEYS` resolved into `menu.keys-observed` (PROVEN, `obs-menukeys`, records `menukeys-1`, `menukeys-2`): Space and Enter select, Esc goes back or puts the cursor on item 9 in the main menu; a held key and Esc during the icons' animation remain open as `UNKNOWN_MENU_HELD_KEYS`
 - [x] `UNKNOWN_MENU_LEAVE_ITEM` resolved into `menu.tree-observed` (PROVEN, `obs-menutoggle`, record `menutoggle-1`): choosing LEAVE THIS MENU goes back like Esc
+- [ ] `UNKNOWN_MENU_DEFAULT_SETTINGS` [UNKNOWN] — the values of the race screen switches and the single and split detail levels when the game starts (read from WACKY.CFG)
+  - Next: read the words obj2+0x175d0, +0x175d2, +0x175d4, +0x1ee58 and +0x174de in a fresh start before any tap and compare with WACKY.CFG.
 - [ ] `UNKNOWN_MENU_HELD_KEYS` [UNKNOWN] — whether a held cursor key repeats and what Esc does while the icons animate
   - Next: hold Down for a second in the main menu and tap Esc during the animation, recording the cursor word each pause.
 - [ ] `atr.kind-effects` [STATIC] — kind 0 obstacle (wrecks a fast car), 1 one-off pickup, 2 counter pickup (+4, cap 99), 3 to 7 held item; `.SPW` word +2 set to 0xffff on pickup

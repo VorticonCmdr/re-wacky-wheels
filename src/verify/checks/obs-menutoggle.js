@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { archiveMembers } from '../../game/track-data.js';
 import { loadMenuArt, renderMenu, layoutOf } from '../../render/menu.js';
 import { enterMenu, stepFrame } from '../../game/menu.js';
-import { menuDef } from '../../game/menus.js';
+import { menuDef, shiftOf } from '../../game/menus.js';
 import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const IDS = ['menutoggle-1', 'menutoggle-2'];
-const values = () => ({ T: expected('menu.tree-observed') });
+const values = () => ({ T: expected('menu.tree-observed'), C: expected('menu.cursor-observed') });
 const KEY = { KBD_esc: 'escape', KBD_space: 'enter', KBD_enter: 'enter', KBD_up: 'up', KBD_down: 'down' }; // the recorder's key names as the port's step takes them
 const BETWEEN = 8; // @math steps of the menu between two pauses: more than the 5 an icon animation takes
 const LOST_TAPS = 3; // @math taps the game dropped in each record: the first one of a run is often lost
@@ -26,6 +26,7 @@ function blockCrc(art, settings, box) {
 function replay(dat, r, V, { skip = null, wrongStart = null } = {}) {
   assertArchive(r, dat);
   const art = loadMenuArt(archiveMembers(dat)), T = V.T.menus.toggles, keys = new Map(r.keys.map(([i, k]) => [i, KEY[k]])), first = r.samples[0];
+  assert.equal(r.words.cursor, V.C.cursorWord + shiftOf('toggles'), `${r.id}: the tool read the cursor word at the depth of the switches menu`);
   assert.deepEqual(Object.keys(first.extra).map(Number), T.words, 'the words the record read are the switches of the claim');
   const wordsOf = s => T.words.map(w => s.extra[w]);
   const d = menuDef('toggles'), l = layoutOf(d.kind, menuDef('toggles').items), box = [l.x0 + 16, l.y0, l.width - 32, 12 * d.items.length + 1]; // @math 16 columns in from each end; the rows are 12 apart with the last tile 13 high

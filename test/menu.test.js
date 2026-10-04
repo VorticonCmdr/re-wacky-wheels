@@ -119,3 +119,19 @@ test('the switches menu flips a switch at once and its texts follow', () => {
   const back = stepFrame({ ...menu, cursor: 4 }, 'enter').menu;
   assert.deepEqual([back.id, back.cursor, back.settings.switches], ['options', 3, [0, 1, 1]]);
 });
+
+test('a detail list opens on the current level and choosing sets the level and goes back', () => {
+  const settings = { ...defaultSettings(), detail: { single: 2, split: 3 } };
+  const detail = enterMenu('detail', [{ id: 'main', cursor: 6 }, { id: 'options', cursor: 1 }], settings);
+  let menu = stepFrame(detail, 'enter').menu; // item 1: the single screen list
+  assert.deepEqual([menu.id, menu.cursor], ['single', 2]);
+  menu = settle(stepFrame(menu, 'down').menu);
+  assert.equal(menu.cursor, 3);
+  menu = stepFrame(menu, 'enter').menu;
+  assert.deepEqual([menu.id, menu.cursor, menu.settings.detail], ['detail', 1, { single: 3, split: 3 }]);
+  // the split list opens on its own level
+  menu = settle(stepFrame(menu, 'down').menu);
+  menu = stepFrame(menu, 'enter').menu;
+  assert.deepEqual([menu.id, menu.cursor], ['split', 3]);
+  assert.deepEqual(menuDef('single').items, ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL']);
+});

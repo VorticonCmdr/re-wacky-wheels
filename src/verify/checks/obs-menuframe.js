@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { archiveMembers } from '../../game/track-data.js';
 import { loadMenuArt, renderMenu, menuItems, lionTopFor, carCount } from '../../render/menu.js';
 import { advanceAnimation, frameOf, sizeOf } from '../../game/menu.js';
-import { menuDef, menuIds } from '../../game/menus.js';
+import { menuDef, menuIds, shiftOf } from '../../game/menus.js';
 import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3'];
-const values = () => ({ S: expected('menu.screen-model'), main: expected('menu.main-observed'), A: expected('menu.animation-observed'), T: expected('menu.tree-observed') });
+const values = () => ({ C: expected('menu.cursor-observed'), S: expected('menu.screen-model'), main: expected('menu.main-observed'), A: expected('menu.animation-observed'), T: expected('menu.tree-observed') });
 const PAGE = 320 * 200; // @math the 320 x 200 page the CRC covers
 const LAG = 10; // @math the displayed page can be one step behind the words (a few pauses in a record): at most this many
 
@@ -30,7 +30,7 @@ function tree(V) {
   for (const id of menuIds()) {
     const def = menuDef(id);
     assert.equal(def.actions.length, def.items.length, `${id}: an action for every item`);
-    if (id !== 'main') assert.equal(def.items.at(-1), V.T.leave, `${id}: the last item of a submenu is the one that leaves it`);
+    if (id !== 'main' && !def.actions.some(a => a.choose)) assert.equal(def.items.at(-1), V.T.leave, `${id}: the last item of a submenu is the one that leaves it`);
     for (const a of def.actions) if (a.open) assert.ok(menuIds().includes(a.open), `${id}: the menu ${a.open} it opens is in the table`);
   }
 }
@@ -40,6 +40,7 @@ function tree(V) {
 function replay(dat, r, V, { alter = s => s } = {}) {
   assertArchive(r, dat);
   const art = loadMenuArt(archiveMembers(dat)), def = menuDef(r.menu), cars = carCount(def.kind);
+  assert.equal(r.words.cursor, V.C.cursorWord + shiftOf(r.menu), `${r.id}: the tool read the cursor word at the depth of the ${r.menu} menu`);
   let exact = 0, lagged = 0;
   r.samples.map(alter).forEach((s, i) => {
     if (s.busy === V.A.lion.settled) assert.equal(s.lionRow, lionTopFor(def.kind, def.items, s.cursor), `${r.id} pause ${i}: the settled icons are at the row of the cursor`);

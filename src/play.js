@@ -13,7 +13,7 @@ import { viewSetup } from './game/view.js';
 import { objectRecords, objectFrame } from './game/objects.js';
 import { playerRecord } from './game/player-car.js';
 import { renderMenu, loadMenuArt } from './render/menu.js';
-import { menuDef } from './game/menus.js';
+import { menuDef, defaultSettings } from './game/menus.js';
 import { createMenu, stepFrame, viewOf, menuPeriod } from './game/menu.js';
 
 const $ = id => document.getElementById(id);
@@ -59,6 +59,7 @@ function stepMenuClock(now) {
   const ms = frameMs(menuPeriod());
   while (state.menuAccumulator >= ms) {
     const { menu, chosen } = stepFrame(state.menu, state.menuKey); state.menu = menu; state.menuKey = null; state.menuAccumulator -= ms;
+    if (menu.settings.detail.single !== Number($('detail').value)) $('detail').value = String(menu.settings.detail.single); // the detail level chosen in the menus is the page's
     if (chosen) { chooseItem(chosen); if (state.screen !== 'menu') return; }
   }
 }
@@ -104,7 +105,7 @@ async function load(vfs) {
     const names = [...archiveMembers(state.dat).keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => n.replace('.GAM', '')).sort((a, b) => a - b);
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga);
-    state.screen = 'menu'; state.menu = createMenu(); state.menuKey = null; state.menuAccumulator = 0;
+    state.screen = 'menu'; state.menu = createMenu(defaultSettings(Number($('detail').value))); state.menuKey = null; state.menuAccumulator = 0;
     startTrack(); $('stage').hidden = false; setMessage('');
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
   } catch (e) { state.dat = null; setMessage(`${e.message}`, true); }

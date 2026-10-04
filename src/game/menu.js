@@ -15,11 +15,11 @@ export const menuPeriod = () => ANIM().period;
 // The state of a menu just entered: the cursor on its first item, the icons settled there, the cars at the start of their cycle.
 // `stack` holds the menus above it, each with the cursor it was left on; `settings` are what the menus change.
 export function enterMenu(id, stack = [], settings = defaultSettings()) {
-  const def = menuDef(id, settings), cursor = KEYS().openedCursor;
+  const def = menuDef(id, settings), cursor = def.actions[0].choose ? settings.detail[def.actions[0].choose] : KEYS().openedCursor; // a list of levels opens on the current one
   return { id, stack, settings, cursor, lionTop: lionTopFor(def.kind, def.items, cursor), lionFrame: 0, busy: ANIM().lion.settled, phase: 1, count: ANIM().firstCount, pair: carCount(def.kind) - 1 }; // @math the pair starts at the number of cars less one: 1 in the main menu, 3 in a submenu
 }
 
-export const createMenu = () => enterMenu('main');
+export const createMenu = settings => enterMenu('main', [], settings);
 
 // The cursor after a key: it wraps at both ends of the `items` of the menu.
 export function moveCursor(cursor, key, items) {
@@ -84,6 +84,7 @@ export function stepFrame(menu, key) {
   if (key === 'enter' && settled) {
     const action = def.actions[menu.cursor - CURSOR().base];
     if (action.open) return { menu: enterMenu(action.open, [...menu.stack, { id: menu.id, cursor: menu.cursor }], menu.settings), chosen: null };
+    if (action.choose) return { menu: leave({ ...menu, settings: { ...menu.settings, detail: { ...menu.settings.detail, [action.choose]: menu.cursor } } }), chosen: null };
     if ('switch' in action) return { menu: { ...advanceMenu(menu), settings: { ...menu.settings, switches: menu.settings.switches.map((v, i) => (i === action.switch ? 1 - v : v)) } }, chosen: null }; // @math a switch is 1 or 0
     if (action.back) return { menu: leave(menu), chosen: null };
     return { menu: advanceMenu(menu), chosen: action };
