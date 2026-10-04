@@ -9,7 +9,7 @@ import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const IDS = ['fit-1', 'fit-2', 'fit-3', 'fit-4', 'fit-5', 'fit-6', 'fit-7', 'fit-8', 'fit-9'];
-const values = () => ({ s: expected('sprite.model'), floor: expected('floor.model'), hz: expected('horizon.render-observed'), timer: expected('hud.timer-observed'), car: expected('cars.frames') });
+const values = () => ({ s: expected('sprite.model'), floor: expected('floor.model'), hz: expected('horizon.render-observed'), timer: expected('hud.timer-observed'), view: expected('view.model'), car: expected('cars.frames') });
 const DRIVERS = ['AJ', 'PUF', 'SHARK', 'ELE', 'DIGGER', 'CAMEL', 'RINGO', 'MOOSE', 'PELICAN', 'TIGER', 'PANDA']; // the driver files of cars.frames
 
 // The candidate source frames of the game: every frame of every catalogue sprite, and the 38 x 28 frames of CARS.SP and the driver files.
@@ -26,6 +26,11 @@ function frameBank(members, V) {
 const hud = (V, rect) => rect.y < 52 || (rect.x < 78 && rect.y < 112) || rect.x < 42 || (rect.x + rect.w > V.hz.timerColumns[0] && rect.x <= V.hz.timerColumns[1] && rect.y < 122 && rect.y + rect.h > 108); // @math the banner ends at row 52, the minimap is 78 columns by 50 rows at row 60, the timer sits at rows 112 to 120
 
 function validate(dat, records, V, { noBlit = false, skew = 0 } = {}) {
+  const S = V.s;
+  assert.equal(S.maxRow, V.view.maxRow, 'the last drawable row is the one of view.model');
+  assert.equal(S.height, S.maxRow + 1, 'the picture area has one row more than the last drawable row'); // @math rows are counted from 0
+  assert.equal(S.headerBytes, S.headerWords * S.wordBytes, 'the header is its words');
+  assert.deepEqual([S.width, S.height], [V.floor.width, V.floor.height], 'the picture area is the floor\'s screen');
   const members = new Map(parseDatDirectory(dat).map(e => [e.name.toUpperCase(), e.data])), bank = frameBank(members, V), infs = new Map();
   for (const [name, data] of members) if (name.endsWith('.INF')) infs.set(name, parseInf(data));
   let compared = 0, pictures = 0;

@@ -21,14 +21,17 @@ function code(exe, V, { period = V.t.period, rates = V.t.counters.map(c => c.hz)
 }
 
 // The counters against the clock in a running race.
+const MS_PER_SECOND = 1000; // @math milliseconds in a second
+const FRAME_SLACK = 2; // @math the recording's two pauses may each fall between a frame and its counter increment: two frames of slack
+
 function observed(dat, r, V, { tolerance = V.t.tolerance } = {}) {
   const T = V.t;
   assertArchive(r, dat);
   assert.deepEqual([r.words.period, r.words.active], [T.period, T.period], 'the words hold the default period');
-  assert.ok(Math.abs(r.delta.hundred36 - r.delta.frames * T.period) <= T.frameSlack * T.period, `one frame per ${T.period} counts of the fast counter (${JSON.stringify(r.delta)})`); 
-  const hz = r.delta.hundred36 * T.msPerSecond / r.elapsedMs;
+  assert.ok(Math.abs(r.delta.hundred36 - r.delta.frames * T.period) <= FRAME_SLACK * T.period, `one frame per ${T.period} counts of the fast counter (${JSON.stringify(r.delta)})`); 
+  const hz = r.delta.hundred36 * MS_PER_SECOND / r.elapsedMs;
   assert.ok(Math.abs(hz - T.counters[0].hz) <= T.counters[0].hz * tolerance, `the fast counter runs at ${T.counters[0].hz} Hz (measured ${hz.toFixed(1)})`);
-  const frameHz = r.delta.frames * T.msPerSecond / r.elapsedMs;
+  const frameHz = r.delta.frames * MS_PER_SECOND / r.elapsedMs;
   assert.ok(Math.abs(frameHz - T.counters[0].hz / T.period) <= T.counters[0].hz / T.period * tolerance, `and the frames at ${T.counters[0].hz}/${T.period} a second (measured ${frameHz.toFixed(2)})`); // @math two decimals in the message
 }
 

@@ -13,6 +13,7 @@ The first playable slice: drive one car on one track, seen from the driver's sea
 | `src/game/view.js` | the view of a frame (fan, bounding box, SLP cone), the projection of a world point to column, distance, size class and bottom row | `view.model` (each constant equal to its source claim); `port-view` replays the horizon and grid frames' boxes and every static object record of the fit frames (`fit-2` to `fit-9`, `horizon-6` to `-14`) |
 | `src/game/objects.js` | the draw records of the track's .SPW objects and their animation frame | `object.animation` (`port-animation`: 2016 recorded object samples, every frame word = (tick + 20) mod frames, 84 of them one step behind), `port-view` |
 | `src/game/player-car.js`, `src/render/draw-list.js` | the player's car picture and the farthest-first draw list | `car.player-frames-observed`, `car.lean-observed` (`port-lean`: 334 pairs of pauses), `view.player-car-draw` (STATIC), `view.draw-order` |
+| `src/render/menu.js`, `src/game/menu.js` | the main menu screen (WINTRO picture, nine items in the WFONT1.SP tile font) and its cursor | `menu.main-observed`; `port-menu` replays the recorded `menu-2` screen: for each of the 137 positions and each of the 42 tiles, the pixels of the port's frame under the tile equal the game's (5754 comparisons) |
 
 Constants enter these modules only through `K(...)` (THE RULE); `npm run mutate` perturbs them and the replay checks must fail.
 
@@ -23,6 +24,8 @@ Constants enter these modules only through `K(...)` (THE RULE); `npm run mutate`
 - The logic runs one frame per 12 counts of a 136 Hz counter, 88.2 ms (`tick.rate`, `src/game/clock.js`); the HUD race timer is a separate 10 Hz counter. The start heading is 480 and the start camera is the player's position less 0x7c in y (`race.start-heading`).
 
 ## What is not ported or not known (shown on the page)
+
+- The main menu: the port's frame differs from the game's outside the tiles (`UNKNOWN_MENU_SELECTION_LOOK`: lion icons, corner pictures or a highlight), the cursor rule at the ends and Space as fire are not observed (`UNKNOWN_MENU_CURSOR_RULE`), and only SINGLE PLAYER RACING leads anywhere (straight into the race: the class, lap, vehicle and track menus are not ported). The lead's claim that the menu background is CHECK.PCX is refuted by `boot.pictures-observed` (the screen shows WINTRO.PCX).
 
 - The AI cars (their pictures, slots and frames), pickups and consumption of objects, the HUD, sound, laps, the AI, items and menus: not ported yet (see `docs/next-steps.md`).
 - Accelerate and brake together, and the slowdown off the road (observed in `car.speed-observed`, not ported yet).

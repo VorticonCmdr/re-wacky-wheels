@@ -9,6 +9,8 @@ import { parseArgs } from 'node:util';
 import { claims } from '../evidence/registry.js';
 import { leaves } from '../evidence/k.js';
 
+// A mutation can make a check loop forever (a step count of zero or a negative size): a runner that outlives this is killed and counted as having noticed it.
+const TIMEOUT_MS = 5 * 60 * 1000; // @math five minutes, far above the seconds a check takes
 const run = promisify(execFile), runner = fileURLToPath(new URL('./run.js', import.meta.url));
 
 function variants(value) {
@@ -25,10 +27,10 @@ for (const c of targets) {
   const jobs = variants(c.value).map(async v => {
     const args = [runner, '--json', '--only', c.id, '--mutate', JSON.stringify({ id: c.id, ...v }), ...(values.game ? ['--game', values.game] : [])];
     let report;
-    try { report = JSON.parse((await run(process.execPath, args, { maxBuffer: 1 << 26 })).stdout); } // @math stdout buffer size
+    try { report = JSON.parse((await run(process.execPath, args, { maxBuffer: 1 << 26, timeout: TIMEOUT_MS, killSignal: 'SIGKILL' })).stdout); } // @math stdout buffer size
     catch (e) {
       // A runner that dies under the mutation has noticed it; the original value never crashes it.
-      if (!e.stdout) return { ...v, killed: true, crashed: (e.stderr || e.message).trim().split('\n')[0] };
+      if (!e.stdout) return { ...v, killed: true, crashed: e.killed ? 'timed out' : (e.stderr || e.message).trim().split('\n')[0] };
       report = JSON.parse(e.stdout);
     }
     return { ...v, killed: report.checks.some(r => !r.pass) };

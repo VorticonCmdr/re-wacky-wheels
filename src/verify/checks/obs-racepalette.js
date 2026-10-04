@@ -7,8 +7,8 @@ import { expected } from '../expect.js';
 
 const values = () => ({ p: expected('race.palette'), gam: expected('gam.read') });
 
-function validate(dat, r, V, { source = 'tileset' } = {}) {
-  const P = V.p, members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data]));
+function validate(dat, r, V, options = {}) {
+  const P = V.p, source = options.source ?? P.source, members = new Map(parseDatDirectory(dat).map(e => [e.name, e.data]));
   assertArchive(r, dat);
   assert.equal(r.track, P.track, 'the track');
   assert.deepEqual([r.from, r.to, r.samples[0].dac.length], [0, P.entries - 1, P.entries], 'all the entries'); // @math the last entry of 256
@@ -17,9 +17,9 @@ function validate(dat, r, V, { source = 'tileset' } = {}) {
   const vga = decodePcxMember(members.get(pic)).vga, dac = r.samples[0].dac;
   const equal = dac.filter((rgb, e) => rgb.every((v, k) => v === vga[e * 3 + k])).length; // @math three components an entry
   assert.equal(equal, P.entries, `all ${P.entries} entries equal the ${source} picture ${pic}`);
-  if (P.sameAsSecond && source === 'tileset') {
-    const second = decodePcxMember(members.get(V.gam.prefix + gam.tilesets[1].toUpperCase())).vga;
-    assert.deepEqual([...second], [...vga], 'the second tileset has the same palette'); // @math the second of the two tilesets
+  if (source === 'tileset') {
+    const second = decodePcxMember(members.get(V.gam.prefix + gam.tilesets[1].toUpperCase())).vga; // @math the second of the two tilesets
+    assert.equal([...second].every((v, i) => v === vga[i]), P.sameAsSecond, 'the second tileset has the same palette as the first, as the claim says');
   }
 }
 

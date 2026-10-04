@@ -47,7 +47,7 @@ export default [
   {
     id: 'tick.rate', tag: 'PROVEN',
     statement: 'Read from WW.EXE and measured: the game\'s clocks come from the timer library, which programs the PC timer for a base interrupt (the dword obj2+0x3fa4, 4257 in the running game, about 280 interrupts a second) and keeps counters that each advance at a rate given when it is registered by the routine obj1+0x30e38 (rate in edx, counter address in ecx; the library divides 0x12305e by the rate, obj1+0x30e80). At the start (obj1+0x264c2 to +0x26503) three counters are registered: obj2+0x1e720 at 0x88 = 136 times a second, obj2+0x1e71c at 10 a second (the race timer of hud.timer-observed, so its unit is a tenth of a second) and obj2+0x1ea74 at 1 a second. The race frame counter obj2+0x1ec64, which the car step, the countdown and the object animation count in, is not a clock: it is incremented once for every frame of the race routine (obj1+0x2114c), and the frame limiter before it (obj1+0x21108 to +0x21122) waits until the 136 Hz counter has advanced by the period word obj2+0x1ea5c since the last frame (obj2+0x1e724). The period is 12 by default (obj1+0x25cf4 stores 12 in obj2+0x1ed08 at start; obj1+0x6d5b copies it to the active word), so a frame takes 12/136 of a second, 88.2 ms (11.3 a second), when the machine keeps up; the command-line words that set it to 6 or 0 are cmdline.words. Observed in a running race (record rate-1, about 10 s of the host clock): about 112 frames and 1354 counts of the 136 Hz counter (135.2 a second), the period words both 12. Not observed: the 10 Hz counter running (it stays at its start value during the countdown), a machine too slow for the limiter, and the other values of the period.',
-    value: { counters: [{ hz: 136, rateAt: 156871, address: 124704, addressAt: 156881 }, { hz: 10, rateAt: 156891, address: 124700, addressAt: 156901 }, { hz: 1, rateAt: 156921, address: 125556, addressAt: 156926 }], library: { numerator: 1192030, divideAt: 200320 }, period: 12, periodWord: 126216, activeWord: 125532, defaultAt: 154868, copyAt: 27995, limiterAt: 135432, lastWord: 124708, frameWord: 126052, incAt: 135500, tolerance: 0.02, msPerSecond: 1000, frameSlack: 2 },
+    value: { counters: [{ hz: 136, rateAt: 156871, address: 124704, addressAt: 156881 }, { hz: 10, rateAt: 156891, address: 124700, addressAt: 156901 }, { hz: 1, rateAt: 156921, address: 125556, addressAt: 156926 }], library: { numerator: 1192030, divideAt: 200320 }, period: 12, periodWord: 126216, activeWord: 125532, defaultAt: 154868, copyAt: 27995, limiterAt: 135432, lastWord: 124708, frameWord: 126052, incAt: 135500, tolerance: 0.02 },
     evidence: { checks: ['exe-tickrate'], obs: ['rate-1'], at: ['WW.EXE:obj1+0x264c7 fp=bf34e3ee', 'WW.EXE:obj1+0x264d1 fp=975cf997', 'WW.EXE:obj1+0x264db fp=dcea6f5b', 'WW.EXE:obj1+0x264e5 fp=eb6bbe5a', 'WW.EXE:obj1+0x264f9 fp=2c104e8b', 'WW.EXE:obj1+0x264fe fp=e278b6d1', 'WW.EXE:obj1+0x30e80 fp=821cbf42', 'WW.EXE:obj1+0x25cf4 fp=50893b25', 'WW.EXE:obj1+0x6d5b fp=f9e1161a', 'WW.EXE:obj1+0x21108 fp=36e3428f', 'WW.EXE:obj1+0x2114c fp=bb0b4e20'] },
     leads: ['docs/driving-model.md'],
   },
@@ -85,5 +85,19 @@ export default [
     value: { straight: 2, left: 0, right: 4, step: 1, movingState: 5, restState: 0, tickGap: 1 },
     evidence: { checks: ['port-lean'], obs: ['carsteer-1'] },
     leads: ['docs/driving-model.md'],
+  },
+  {
+    id: 'UNKNOWN_MENU_SELECTION_LOOK', tag: 'UNKNOWN',
+    statement: 'How the main menu shows its selected item is not established. The port draws the nine items exactly as the game does under the tile pixels (port-menu: 5754 tile-by-position comparisons equal the recorded screen of menu-2), but the whole recorded frame differs from the port\'s (CRC-32 0da32d97 against 2fb5299c): something outside the tiles is drawn that the port does not draw - the two lion icons beside the selected item, the corner pictures or a highlight of the selected bar. The port marks the selection with a placeholder box in the left margin.',
+    evidence: {},
+    todo: 'Read the whole menu screen (320 x 200) from video memory with the first, a middle and the last item selected, and record the rows and columns where it differs from the picture and the tiles (numeric record), then read the routine obj1+0x55c0 that draws the lions.',
+    leads: ['docs/leads/menus.md'],
+  },
+  {
+    id: 'UNKNOWN_MENU_CURSOR_RULE', tag: 'UNKNOWN',
+    statement: 'What the menu cursor does at the first and the last item (stop or wrap), whether Space acts like Enter in a menu (the lead reads the Enter-or-Space flag obj2+0x28cce as fire), and how a key held down repeats are not established by an observation. The port stops the cursor at the ends and treats Enter and Space as fire.',
+    evidence: {},
+    todo: 'Press Up on the first item and Down on the last in the running game (input interface), and record the selected-item word obj2+0x28bda before and after.',
+    leads: ['docs/leads/menus.md'],
   },
 ];
