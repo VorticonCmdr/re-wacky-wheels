@@ -8,6 +8,10 @@ import { createCar, stepCar } from './game/car.js';
 import { renderFloor } from './render/floor.js';
 import { frameMs } from './game/clock.js';
 import { renderSky, renderHorizon } from './render/sky.js';
+import { drawList } from './render/draw-list.js';
+import { viewSetup } from './game/view.js';
+import { objectRecords, objectFrame } from './game/objects.js';
+import { playerRecord } from './game/player-car.js';
 
 const $ = id => document.getElementById(id);
 const TICK_MS = 100; // UNKNOWN_TICK_RATE: the HUD reads a tick as a tenth of a second; 88.5 ms was measured in DOSBox
@@ -38,6 +42,8 @@ function draw() {
   renderSky(state.world.sky, index);
   renderHorizon(state.world.par, state.car.horizon, index);
   renderFloor(state.world, camera, mode, index);
+  const objects = state.world.objects.map(o => ({ ...o, frame: objectFrame(state.world, o.id, state.tick) })), view = viewSetup(state.world, camera);
+  drawList(index, [...objectRecords(state.world, view, camera, objects), playerRecord(state.world, state.car)]);
   for (let i = 0; i < index.length; i++) { const p = index[i] * 4; image.data[i * 4] = rgba[p]; image.data[i * 4 + 1] = rgba[p + 1]; image.data[i * 4 + 2] = rgba[p + 2]; image.data[i * 4 + 3] = 255; } // @math RGBA
   ctx.putImageData(image, 0, 0);
   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, screen.width, 24);

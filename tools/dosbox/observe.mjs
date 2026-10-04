@@ -393,7 +393,7 @@ const scenarios = {
       if (spec.steer && left-- <= 0) { command = ['left', 'right', 'none'][Math.floor(Math.random() * 3)]; left = 3 + Math.floor(Math.random() * 12); await put(b2 + 0x1b6d8 + 1, command === 'left' ? 1 : 0); await put(b2 + 0x1b6d8 + 3, command === 'right' ? 1 : 0); } // @math runs of 3 to 14 pauses
       await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(70);
       const car = await u32(b2 + 0x1d5b0);
-      samples.push({ tick: await u32(b2 + 0x1ec64), pointer: await u32(b2 + 0x1d860), heading: await u32(b2 + 0x1d5d4), w52: await i16(car + 0x52), w54: await i16(car + 0x54), left: await u8(b2 + 0x28cd5), right: await u8(b2 + 0x28cdd), leftAmount: await i16(b2 + 0x28b92), rightAmount: await i16(b2 + 0x28b90), mode: await i16(b2 + 0x28c42) });
+      samples.push({ tick: await u32(b2 + 0x1ec64), pointer: await u32(b2 + 0x1d860), heading: await u32(b2 + 0x1d5d4), w52: await i16(car + 0x52), w54: await i16(car + 0x54), left: await u8(b2 + 0x28cd5), right: await u8(b2 + 0x28cdd), leftAmount: await i16(b2 + 0x28b92), rightAmount: await i16(b2 + 0x28b90), mode: await i16(b2 + 0x28c42), state: await i16(car + 0x18), frameWord: await i16(car + 0x1a), hop: await i16(car + 0x06), throttle: await i16(car + 0x42), speed: await i16(car + 0x26) });
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), base: 0xa7d00, samples };
   },
@@ -405,6 +405,19 @@ const scenarios = {
     const take = async () => { const at = Date.now(); const s = { frames: await i32(0x1ec64), tenths: await i32(0x1e71c), hundred36: await i32(0x1e720) }; return { ms: at, ...s }; };
     const first = await take(); await sleep((spec.seconds ?? 10) * 1000); const second = await take(); // @math ten seconds by default
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), elapsedMs: second.ms - first.ms, delta: { frames: second.frames - first.frames, tenths: second.tenths - first.tenths, hundred36: second.hundred36 - first.hundred36 }, words: { period: await i32(0x1ed08), active: await i32(0x1ea5c), divisor: await i32(0x3fa4), mode: await i16(0x28c0c), raceMode: await i16(0x28c44) } };
+  },
+  async spwtable() {
+    // The 12-byte object records of the race (obj2+0x13938, the count in the word +0x28b8e) pause by pause: `--args` {count, ms: [lo, hi]}. Per pause: the tick obj2+0x1ec64 and the six words of every record.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms)), post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const rd = async (a, n) => { for (let k = 0; k < 20; k++) { try { return Buffer.from(await readMemory(a, n)); } catch { await sleep(25); } } throw new Error(`read failed at ${a}`); }; // @math retry a read that fails while the pause takes effect
+    const [lo, hi] = spec.ms ?? [40, 90], samples = [];
+    for (let i = 0; i < (spec.count ?? 100); i++) {
+      await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(70);
+      const count = (await rd(b2 + 0x28b8e, 2)).readInt16LE(0), n = Math.min(Math.max(count, 0), 64), raw = await rd(b2 + 0x13938, 12 * n), records = []; // @math at most 64 records of 12 bytes
+      for (let r = 0; r < n; r++) records.push(Array.from({ length: 6 }, (_, k) => raw.readInt16LE(r * 12 + 2 * k))); // @math six words of two bytes
+      samples.push({ tick: (await rd(b2 + 0x1ec64, 4)).readInt32LE(0), count, records });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableAt: 0x13938, samples };
   },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)

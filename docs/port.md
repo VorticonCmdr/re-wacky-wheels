@@ -10,6 +10,9 @@ The first playable slice: drive one car on one track, seen from the driver's sea
 | `src/render/sky.js` | the sky picture (rows 0 to 109) and the horizon strip (the 20 rows from row 110, a window of the track's .PAR file) | `sky.model`; `port-sky` replays the five sky frames and the three horizon frames; the palette is the first tileset's (`race.palette`, `dac-2`: all 256 DAC entries) |
 | `src/game/track-data.js` | the tile sheets, map, palette, TRIG, NDIST, VEL.TAB and the start position of a track | the decoders of `src/formats` and `floor.model`, `car.model` |
 | `src/game/car.js` | the car's throttle, speed from VEL.TAB, the straight move, the heading change, the camera 0x7c behind the car | `car.model`; `port-carmodel` replays every straight-road pair and every steering pair of `steps-1` to `steps-3` through `stepCar`, and checks the camera against the grid frames and one horizon frame |
+| `src/game/view.js` | the view of a frame (fan, bounding box, SLP cone), the projection of a world point to column, distance, size class and bottom row | `view.model` (each constant equal to its source claim); `port-view` replays the horizon and grid frames' boxes and every static object record of the fit frames (`fit-2` to `fit-9`, `horizon-6` to `-14`) |
+| `src/game/objects.js` | the draw records of the track's .SPW objects and their animation frame | `object.animation` (`port-animation`: 2016 recorded object samples, every frame word = (tick + 20) mod frames, 84 of them one step behind), `port-view` |
+| `src/game/player-car.js`, `src/render/draw-list.js` | the player's car picture and the farthest-first draw list | `car.player-frames-observed`, `car.lean-observed` (`port-lean`: 334 pairs of pauses), `view.player-car-draw` (STATIC), `view.draw-order` |
 
 Constants enter these modules only through `K(...)` (THE RULE); `npm run mutate` perturbs them and the replay checks must fail.
 
@@ -21,5 +24,5 @@ Constants enter these modules only through `K(...)` (THE RULE); `npm run mutate`
 
 ## What is not ported or not known (shown on the page)
 
-- Sprites (cars, objects), the HUD, sound, laps, the AI, items and menus: not ported yet (see `docs/next-steps.md`).
+- The AI cars (their pictures, slots and frames), pickups and consumption of objects, the HUD, sound, laps, the AI, items and menus: not ported yet (see `docs/next-steps.md`).
 - Accelerate and brake together, and the slowdown off the road (observed in `car.speed-observed`, not ported yet).

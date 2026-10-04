@@ -7,6 +7,15 @@ import { horizonStart, nextRamp, scrollHorizon } from './horizon.js';
 
 const MODEL = () => K({ accelStep: 10, coastStep: 4, brakeStep: 8, cap: 100, rounding: 32768, fixedBits: 16, steerStep: 40, spinStep: 120, turn: 1920, velEntryBytes: 2, trigEntryBytes: 8, cameraBehind: 124, startBias: 992 }, 'car.model');
 
+// The lean of the car's picture (car.lean-observed): one step a tick toward the side that steers, the state word 5 while it moves and 0 on arrival.
+const LEAN = () => K({ straight: 2, left: 0, right: 4, step: 1, movingState: 5, restState: 0, tickGap: 1 }, 'car.lean-observed');
+const LEAN_STRAIGHT = LEAN().straight;
+
+export function stepLean(lean, input) {
+  const L = LEAN(), target = input.right ? L.right : input.left ? L.left : L.straight, next = lean + Math.sign(target - lean) * L.step;
+  return { lean: next, state: next === target ? L.restState : L.movingState };
+}
+
 const wrap16 = v => ((v % 0x10000) + 0x10000) % 0x10000; // @math 16-bit world words
 
 // The rounded step along a heading: (TRIG vector x distance + 0x8000) >> 16 for each axis (signed).
@@ -31,9 +40,9 @@ export function cameraOf(car, world) {
 }
 
 // A car from its record position and heading (the throttle and the speed start at 0 unless given).
-export function createCar({ x, y, heading, throttle = 0, speed = 0, rampLeft = 0, rampRight = 0, horizon = horizonStart() }, world) {
+export function createCar({ x, y, heading, throttle = 0, speed = 0, rampLeft = 0, rampRight = 0, horizon = horizonStart(), lean = LEAN_STRAIGHT }, world) {
   const camera = cameraOf({ x, y, heading }, world);
-  return { cx: camera.x, cy: camera.y, heading, throttle, speed, rampLeft, rampRight, horizon };
+  return { cx: camera.x, cy: camera.y, heading, throttle, speed, rampLeft, rampRight, horizon, lean };
 }
 
 // The car record's position of a car.
@@ -65,5 +74,6 @@ export function stepCar(car, input, world) {
   // the move along the old heading, then the camera swings about the pivot: it moves by the pivot offset of the old heading less that of the new
   const move = straightMove(world.trig, car.heading, speed), before = pivotOffset(world, car.heading), after = pivotOffset(world, heading);
   const dx = move.dx + (before[0] - after[0]), dy = move.dy + (before[1] - after[1]);
-  return { car: { cx: wrap16(car.cx + dx), cy: wrap16(car.cy + dy), heading, throttle, speed, rampLeft, rampRight, horizon }, unproven };
+  const { lean } = stepLean(car.lean, input);
+  return { car: { cx: wrap16(car.cx + dx), cy: wrap16(car.cy + dy), heading, throttle, speed, rampLeft, rampRight, horizon, lean, spin: Boolean(input.spin) }, unproven };
 }

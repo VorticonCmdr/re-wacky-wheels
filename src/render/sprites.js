@@ -38,3 +38,19 @@ export function blitPicture(fb, picture, frame, left, top) {
   }
   return fb;
 }
+
+// Draw one draw-list record (the clipped blit): the record's picture from its first column on, `width` columns and `height` rows, the source frame
+// column-major; the columns and rows cut by the clip are the record's firstColumn and skipRows.
+export function blitRecord(fb, rec) {
+  const S = MODEL(), { picture } = rec;
+  for (let i = 0; i < rec.width; i++) {
+    const x = rec.left + i;
+    let at = (rec.firstColumn + i) * (picture.h + 1), source = picture.deltas[at++];
+    for (let j = 0; j < rec.height; j++) {
+      const y = rec.top + j, pixel = rec.frame[source];
+      if (pixel !== 0 && x >= 0 && x < S.width && y >= 0 && y <= S.maxRow) fb[y * S.width + x] = pixel;
+      source += picture.deltas[at++];
+    }
+  }
+  return fb;
+}

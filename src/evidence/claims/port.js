@@ -65,4 +65,25 @@ export default [
     evidence: { checks: ['exe-horizon', 'port-horizon'], obs: ['hscroll-1'], at: ['WW.EXE:obj1+0x14834 fp=e304c6e6', 'WW.EXE:obj1+0x14850 fp=befa2751', 'WW.EXE:obj1+0x1487b fp=d9f4cb4f', 'WW.EXE:obj1+0x148a2 fp=f6bd14c7', 'WW.EXE:obj1+0x26789 fp=47ee272c', 'WW.EXE:obj1+0x267b1 fp=587d0662', 'WW.EXE:obj1+0x13d4f fp=acdcc47e', 'WW.EXE:obj1+0x13e6c fp=023ee009'] },
     leads: ['docs/par.md'],
   },
+  {
+    id: 'view.model', tag: 'PROVEN',
+    statement: 'The constants of the view as the port uses them (check port-view derives them from view.object-projection, view.row-table, view.object-column-observed, floor.model, ndist.layout and trig.layout, and replays the recorded frames through the port\'s own code): the fan of the heading less and plus 160 of 1920 reaching 1122, the bounding box of the camera and the two fan end points (each the rounded step of the heading), the cone indices (heading minus and plus 160) into the slope table SLP (4-byte entries), the projection of view.object-projection with tan 0x93cd, the centre column 160, the VIEW scale of 14 bits whose product rounds up from the remainder 0x1fa0 (the routine of obj1+0x15be0: d is the product shifted right and one more when the remainder is at least 0x1fa0), the distances 80 to 1122, the size class (d - 124) / 70 limited to 0 to 9 and the row table.',
+    value: { fixedBits: 16, tan: 37837, center: 160, maxColumn: 319, viewShift: 14, viewRound: 8096, minDistance: 80, maxDistance: 1122, sizeBase: 124, sizeStep: 70, maxSize: 9, maxRow: 199, worldOffset: 1024, fanHalf: 160, fanReach: 1122, rowFirst: 240, rowNumerator: 18000, rowMinimum: 21, rowMaximum: 240, rowBase: 120, rowEntries: 4096, trigEntryBytes: 8, turn: 1920, slopeBytes: 4, viewBytes: 4, rounding: 32768 },
+    evidence: { checks: ['port-view'], obs: ['horizon-6', 'horizon-7', 'horizon-8', 'horizon-9', 'horizon-10', 'horizon-11', 'horizon-12', 'horizon-13', 'horizon-14', 'grid-1', 'grid-7', 'fit-2', 'fit-3', 'fit-4', 'fit-5', 'fit-6', 'fit-7', 'fit-8', 'fit-9'] },
+    leads: ['docs/view.md', 'docs/slp.md'],
+  },
+  {
+    id: 'object.animation', tag: 'PROVEN',
+    statement: 'Observed in a played race on track 5 (records spw-1: 120 pauses of a race after its countdown, the six words of each of the 16 object records at obj2+0x13938, and spwstart-1 and spwstart-2: the same at the first frames of two fresh races): the counter word of every object record (+8) stays 0, and the frame word (+0xa) of every object is (tick + 20) modulo the number of frames of its sprite (catalogue word +0xe), where tick is the race frame counter obj2+0x1ec64, so every object steps one frame every frame of the race, all in the same phase (the objects with 2, 4 and 5 frames, 6 and 7 frames alike), the same in every race. At 4 pauses in 100 the word is one step behind that (a pause between the counter\'s increment and the animation of the frame). The objects with one frame (OB and the like) stay at frame 0. Not observed: the phase 20 on another track (it is the same code, the loader leaves the frame words at 0: obj1+0x1150d to +0x11528 only clear the consumed word and add 0x400 to the coordinates), and what advances the words (the routine is not read).',
+    value: { offset: 20, step: 1, counter: 0, lag: 1 },
+    evidence: { checks: ['port-animation'], obs: ['spw-1', 'spwstart-1', 'spwstart-2'] },
+    leads: ['docs/spw.md'],
+  },
+  {
+    id: 'car.lean-observed', tag: 'PROVEN',
+    statement: 'Observed in a played race on track 5 (record carsteer-1: a race of the plain archive from its countdown, the left and right key state bytes obj2+0x28b92 and +0x28b90 written at random between 500 pauses of 40 to 90 ms, the car\'s state word +0x18 and frame word +0x1a read at each): of the 334 pairs of pauses one race frame apart (from frame 36, both with the state word 0 or 5 - the other values 6 to 9 belong to the hop, slide and wall effects) the frame word of the later pause is the frame word of the earlier one moved one step toward the lean target of the keys read at the later pause (0 with the left key, 4 with the right key, 2 with neither; the two keys were never down together in the record, so what both do is not observed), and its state word is 0 when it has arrived at the target and 5 when it has not: all 334 pairs, no exception (with the keys of the earlier pause 25 of the 334 fail, so the keys are the ones of the frame the lean is computed in). The pictures that the frame words 0 to 4 show are car.player-frames-observed\'s. Not observed: the lean when the state word is 6 to 9, and the amount-dependent speed of steering.',
+    value: { straight: 2, left: 0, right: 4, step: 1, movingState: 5, restState: 0, tickGap: 1 },
+    evidence: { checks: ['port-lean'], obs: ['carsteer-1'] },
+    leads: ['docs/driving-model.md'],
+  },
 ];
