@@ -7,7 +7,7 @@ import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
 const values = () => ({ T: expected('menu.tree-observed') });
-const MENUS = ['main', 'options', 'comm', 'detail', 'toggles']; // the order of the rectangles in a record (the first record took the first four)
+const MENUS = ['main', 'options', 'comm', 'detail', 'toggles', 'info']; // the order of the rectangles in a record (the first record took the first four)
 const KEY = { KBD_esc: 'escape', KBD_space: 'enter', KBD_enter: 'enter', KBD_up: 'up', KBD_down: 'down' }; // the recorder's key names as the port's step takes them
 const BETWEEN = 8; // @math steps of the menu between two pauses: more than the 5 an icon animation takes
 const LOST_TAPS = 2; // @math taps the game dropped in a record
@@ -16,8 +16,9 @@ const PAGE = { width: 320, height: 200 }; // @math the mode 13h page every recor
 const STARTS = {
   'menupath-1': { id: 'comm', stack: [{ id: 'main', cursor: 5 }] }, // @math the Comm-bat menu is opened from item 5 of the main menu
   'menupath-2': { id: 'toggles', stack: [{ id: 'main', cursor: 6 }, { id: 'options', cursor: 3 }] }, // @math item 6 of the main menu, item 3 of the options menu
+  'menupath-3': { id: 'info', stack: [{ id: 'main', cursor: 7 }], from: 8 }, // @math item 7 of the main menu; the first pauses show a slide of ORDERING (not a menu), the info menu is on screen from the pause 8
 };
-const SEEN = { 'menupath-1': ['comm', 'main', 'options', 'detail', 'options', 'main', 'comm', 'main'], 'menupath-2': ['toggles', 'options', 'toggles', 'options', 'main'] };
+const SEEN = { 'menupath-1': ['comm', 'main', 'options', 'detail', 'options', 'main', 'comm', 'main'], 'menupath-2': ['toggles', 'options', 'toggles', 'options', 'main'], 'menupath-3': ['info', 'main', 'info', 'main'] };
 
 // The rectangle the record took for a menu: inside the block of bars, clear of the icons (16 columns in from each end).
 const boxOf = (id, settings) => { const d = menuDef(id, settings), l = layoutOf(d.kind, d.items); return [l.x0 + 16, l.y0, l.width - 32, 12 * d.items.length + 1]; }; // @math 16 columns in from each end; the rows are 12 apart with the last tile 13 high
@@ -40,6 +41,7 @@ function replay(dat, r, V, { start = STARTS[r.id] } = {}) {
   let menu = { ...enterMenu(start.id, start.stack, settings) }, lost = 0;
   const seen = [];
   r.samples.forEach((s, i) => {
+    if (i < (start.from ?? 0)) return; // @math the pauses before a record's menu is on screen
     const before = menu;
     menu = stepFrame(menu, keys.get(i) ?? null).menu;
     const shown = ids.filter((id, k) => crcs.get(id)[k] === s.rects[k]); // each menu's own rectangle: the others may take in the icons of the menu shown
@@ -55,7 +57,7 @@ function replay(dat, r, V, { start = STARTS[r.id] } = {}) {
 export default {
   id: 'obs-menupath',
   claims: ['menu.tree-observed'],
-  obs: ['menupath-1', 'menupath-2'],
+  obs: ['menupath-1', 'menupath-2', 'menupath-3'],
   reviewed: { by: 'main-session', date: '2026-10-04' },
   async run(ctx) {
     const V = values(), dat = await ctx.open('WACKY.DAT');

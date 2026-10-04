@@ -68,6 +68,8 @@ test('menus are laid out centred, with 4 cars in a submenu', () => {
   assert.deepEqual([layoutOf('main', menuDef('main').items).x0, layoutOf('main', menuDef('main').items).y0], [39, 76]);
   const o = menuDef('options'), l = layoutOf('sub', o.items);
   assert.deepEqual([l.x0, l.y0], [33, 88]);
+  const info = menuDef('info'), li = layoutOf('sub', info.items);
+  assert.deepEqual([li.x0, li.y0], [66, 82]);
   assert.equal(carCount('main'), 2);
   assert.equal(carCount('sub'), 4);
 });

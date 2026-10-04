@@ -3,7 +3,7 @@ import { stepFrame, sizeOf, frameOf, enterMenu } from '../../game/menu.js';
 import { assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
-const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3'];
+const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3', 'menusub-4'];
 const values = () => ({ A: expected('menu.animation-observed') });
 const MAX_STEPS = 60; // @math a bit more than a cycle of 51 steps: the most the replay looks ahead between two pauses
 const PICK = 40, PICK_LION = 18, PICK_TIME = 100; // @math pauses to alter in the discriminators: a plain one, one with the icons animating, one later in the run

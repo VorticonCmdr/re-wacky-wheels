@@ -6,7 +6,7 @@ import { menuDef, menuIds, shiftOf } from '../../game/menus.js';
 import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
-const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3'];
+const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3', 'menusub-4'];
 const values = () => ({ C: expected('menu.cursor-observed'), S: expected('menu.screen-model'), main: expected('menu.main-observed'), A: expected('menu.animation-observed'), T: expected('menu.tree-observed') });
 const PAGE = 320 * 200; // @math the 320 x 200 page the CRC covers
 const LAG = 10; // @math the displayed page can be one step behind the words (a few pauses in a record): at most this many
@@ -45,7 +45,10 @@ function replay(dat, r, V, { alter = s => s } = {}) {
   r.samples.map(alter).forEach((s, i) => {
     if (s.busy === V.A.lion.settled) assert.equal(s.lionRow, lionTopFor(def.kind, def.items, s.cursor), `${r.id} pause ${i}: the settled icons are at the row of the cursor`);
     if (frameCrc(art, stateOf(s, def)) === s.frameCrc) { exact++; return; }
-    const hit = olderCars(s, V, cars).some(c => [s.lionFrame, s.lionFrame - 1].some(lf => lf >= 0 && frameCrc(art, { kind: def.kind, items: def.items, lionTop: s.lionRow, lionFrame: lf, pair: c.pair, size: sizeOf(c.phase, c.count), frame: frameOf(c.phase, c.count) }) === s.frameCrc));
+    // the page one step behind the words: the cars one step earlier, the icons one frame earlier - or, when they have just settled, on their last frame at the old row
+    const rows = def.items.map((t, k) => lionTopFor(def.kind, def.items, k + 1)), last = V.A.lion.frames - 1; // @math the cursor counts from 1
+    const icons = s.lionFrame > 0 ? [[s.lionFrame, s.lionRow], [s.lionFrame - 1, s.lionRow]] : [[0, s.lionRow], ...rows.map(row => [last, row])];
+    const hit = olderCars(s, V, cars).some(c => icons.some(([lf, top]) => frameCrc(art, { kind: def.kind, items: def.items, lionTop: top, lionFrame: lf, pair: c.pair, size: sizeOf(c.phase, c.count), frame: frameOf(c.phase, c.count) }) === s.frameCrc));
     assert.ok(hit, `${r.id} pause ${i}: the page equals neither the port's page for the words nor for the step before`);
     lagged++;
   });
@@ -66,7 +69,7 @@ export default {
       assert.equal(got.exact + got.lagged, got.total, `${id}: every pause`);
       assert.ok(got.exact >= 0.95 * got.total, `${id}: almost every page equals the port's (${got.exact} of ${got.total})`); // @math 297 of 300 were exact in the first record
     }
-    assert.deepEqual(IDS.map(id => ctx.obs(id).menu).sort(), ['comm', 'detail', 'main', 'options'].sort(), 'every menu of the table with items of its own has a record'); // @math the four menus of the table
+    assert.deepEqual(IDS.map(id => ctx.obs(id).menu).sort(), ['comm', 'detail', 'info', 'main', 'options'].sort(), 'every menu of the table with items of its own has a record'); // @math the five menus of the table
   },
   async discriminate(ctx) {
     const dat = await ctx.open('WACKY.DAT'), V = values(), r = ctx.obs('menuanim-2'), sub = ctx.obs('menusub-1');
