@@ -71,9 +71,9 @@ function validate(dat, record, V, { tan = V.proj.tan, carWidth = V.car.carWidth 
 export default {
   id: 'obs-carproj',
   claims: ['view.car-column-observed'],
-  obs: ['grid-1'],
+  obs: ['grid-1', 'grid-7'],
   reviewed: { by: 'main-session', date: '2026-10-04' },
-  async run(ctx) { validate(await ctx.open('WACKY.DAT'), ctx.obs('grid-1'), values()); },
+  async run(ctx) { const dat = await ctx.open('WACKY.DAT'), V = values(); validate(dat, ctx.obs('grid-1'), V); validate(dat, ctx.obs('grid-7'), { ...V, car: { ...V.car, ...V.car.second } }); },
   async discriminate(ctx) {
     const dat = await ctx.open('WACKY.DAT'), r = ctx.obs('grid-1'), V = values();
     return [
@@ -81,6 +81,7 @@ export default {
       { label: 'a car width of 40', fn: () => validate(dat, r, V, { carWidth: V.car.carWidth + 2 }) }, // @math two pixels more
       { label: 'a racer moved by 20', fn: () => validate(dat, { ...r, horizon: { ...r.horizon, camera: { ...r.horizon.camera, racers: r.horizon.camera.racers.map((p, i) => (i === 2 ? [p[0] + 20, p[1], p[2]] : p)) } } }, V) }, // @math the third racer
       { label: 'a record altered', fn: () => validate(dat, { ...r, horizon: { ...r.horizon, drawList: r.horizon.drawList.map((w, i) => (i === 1 ? w.map((x, n) => (n === V.list.fieldWords.left ? x + 1 : x)) : w)) } }, V) }, // @math the second record
+      { label: 'the second track\'s cars with a width of 40', fn: () => validate(dat, ctx.obs('grid-7'), { ...V, car: { ...V.car, ...V.car.second } }, { carWidth: V.car.carWidth + 2 }) }, // @math two pixels more
       { label: 'one archive byte changed', fn: () => validate(Uint8Array.from(dat, (x, i) => (i === dat.length - 1 ? x ^ 1 : x)), r, V) }, // @math flip the lowest bit of the last byte
     ];
   },
