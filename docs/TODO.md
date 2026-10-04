@@ -18,9 +18,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ### Images (PCX, tiles, masks)
 
-- [ ] `pcx.rle-rule-vga` [STATIC] — the decoder that writes VGA planes (obj1+0x75cd) uses the same rule; runs continue across rows; a zero count is not special-cased
-  - Gap: this decoder, run continuation and zero counts were not observed (no archive file has such a run). Only the linear-buffer decoder was confirmed (`pcx.rle-rule`).
-  - Next: capture VRAM right after a full-screen PCX is drawn (needs a code breakpoint at a 32-bit offset, which the DOSBox API does not offer) or accept as static.
+- [x] `pcx.rle-rule-vga` PROVEN (`bootpcx-2`, `bootpcx-3`, check `obs-pcxvga`): the video-plane decoder (obj1+0x275cd, 37 call sites; the linear one has 2, in the track loader) lets a run continue across a row boundary (a re-encoded title picture shows the original) and treats a zero count as a 16-bit loop of 65536 copies that fills the rest of the picture (a picture of 0x55 entirely), not as an empty run
 - [ ] `pos.progress` [STATIC] — the progress lookup and lap logic (`FUN_0001260c`, `FUN_00012b44`): grid cell at `((y-0x400)>>5, (x-0x400)>>5)`, 0 off the course, lap counted when the previous value is the trailer and the new one is 1, ranking key `progress + trailer * laps`
   - Gap: the lookup, the ranking keys and the lap counting are observed (`pos.progress-live`; `pos.lap-observed`: 36 crossings by the seven computer racers and the player, a lap counted exactly when the value falls through the trailer 27 to 1); what stays STATIC is the code reading itself (the call sequence) and the flag-word branch. The wiki's wrong-way warning was not located.
   - Next: a recording with the flag word set (obj2+0x84c0), or find the wrong-way code.

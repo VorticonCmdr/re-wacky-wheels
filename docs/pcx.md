@@ -45,3 +45,5 @@ Tags as in [evidence.md](evidence.md); citations are against the user's WW.EXE (
 - [Graphics formats](https://moddingwiki.shikadi.net/wiki/Wacky_Wheels_Graphics_Formats)
 
 Read on 2026-10-02. [Format index](README.md).
+
+- [PROVEN] (`obs-pcxvga`, claim `pcx.rle-rule-vga`): the game's video-plane decoder continues a run across a row boundary and takes a run count of 0 as 65536 copies (it fills the rest of the picture; the in-process decoder here rejects it). Seen with `tools/dosbox/make-test-pcx.mjs`, which re-encodes the title picture APOG1.PCX that way in the run copy.
