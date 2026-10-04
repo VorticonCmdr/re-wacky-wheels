@@ -4,7 +4,7 @@ import { openDevGame } from './vfs/dev.js';
 import { openPicked } from './vfs/picker.js';
 import { withSteps } from './evidence/k.js';
 import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
-import { createCar, stepCar } from './game/car.js';
+import { createCar, stepCar, carPosition } from './game/car.js';
 import { renderFloor } from './render/floor.js';
 import { frameMs } from './game/clock.js';
 import { renderSky, renderHorizon } from './render/sky.js';
@@ -14,12 +14,14 @@ import { objectRecords, objectFrame } from './game/objects.js';
 import { playerRecord } from './game/player-car.js';
 import { renderMenu, loadMenuArt } from './render/menu.js';
 import { renderHud, loadHudArt } from './render/hud.js';
-import { createHud, stepHud, advanceTimer, speedDigits, timerText, hudGates } from './game/hud.js';
+import { createHud, stepHud, advanceTimer, speedDigits, timerText, hudGates, counterDigits, lapText, unseenGlyphs } from './game/hud.js';
+import { createLaps, stepLaps, gridValue, lapsTotal, isFinished, figureDriver } from './game/laps.js';
+import { parseMov, startFigure, stepFigure } from './game/figure.js';
 import { menuDef, defaultSettings } from './game/menus.js';
 import { createMenu, stepFrame, viewOf, menuPeriod } from './game/menu.js';
 
 const $ = id => document.getElementById(id);
-const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuAccumulator: 0, menuArt: null, hudArt: null, hud: createHud(), dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
+const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuAccumulator: 0, menuArt: null, hudArt: null, hud: createHud(), laps: null, total: 0, finished: false, finalTicks: 0, mov: null, figure: null, figureDraw: null, dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 
@@ -29,7 +31,9 @@ function startTrack() {
   const name = $('track').value, engine = Number($('engine').value);
   state.world = loadTrack(state.dat, name, engine);
   state.car = createCar(state.world.start, state.world);
-  state.tick = 0; state.accumulator = 0; state.unproven = new Set(['the place digit (1, as the only car; not observed with one racer)']); state.hud = createHud();
+  state.tick = 0; state.accumulator = 0; state.hud = createHud();
+  state.unproven = new Set(['the place digit (1, as the only car; not observed with one racer)', 'the count label (0) and the single digit (3) of the banner: their start values are read in fresh races, what they count is not known', 'the driver name TIGI (the vehicle screen is not ported)', 'the laps from the menu choice (6, 8 or 10 laps, read from the code)']);
+  state.laps = createLaps(state.world.pos, state.world.start.x, state.world.start.y); state.total = lapsTotal(state.menu.settings.flow.laps); state.finished = false; state.finalTicks = 0; state.figure = null; state.figureDraw = null;
   rgba = rgbaPalette(state.world.palette);
 }
 
@@ -38,7 +42,17 @@ function tickOnce() {
   const { result, steps } = withSteps(() => stepCar(state.car, input, state.world));
   state.car = result.car; state.tick++; state.steps = steps;
   for (const u of result.unproven) state.unproven.add(u);
-  const after = stepHud(state.hud, state.car); state.hud = after.hud; // the HUD routine follows the car step in a frame
+  const at = carPosition(state.car, state.world), lap = stepLaps(state.laps, gridValue(state.world.pos, at.x, at.y), state.world.pos.trailer); // the lookup is at the car record position
+  state.laps = lap.laps; for (const u of lap.unproven) state.unproven.add(u);
+  if (lap.started) state.figure = startFigure(figureDriver());
+  state.figureDraw = null; // the reaction figure: one call a frame while it runs, drawn from the call's picture
+  if (state.figure) {
+    const call = stepFigure(state.figure, state.mov.count); state.figure = call.fig;
+    if (call.draw.picture === null) state.unproven.add('the last three calls of the reaction figure (their pictures are not identified)');
+    else state.figureDraw = { draw: call.draw, entry: state.mov.entries[call.draw.entry] };
+  }
+  if (!state.finished && isFinished(state.laps.lap, state.total)) { state.finished = true; state.finalTicks = state.hud.ticks; state.unproven.add('what the finish does to the car and the screens after it'); }
+  const after = stepHud(state.hud, state.car, true, state.finished ? state.finalTicks : null); state.hud = after.hud; // the HUD routine follows the car step in a frame
   for (const u of after.unproven) state.unproven.add(u);
 }
 
@@ -85,14 +99,15 @@ function draw() {
   renderFloor(state.world, camera, mode, index);
   const objects = state.world.objects.map(o => ({ ...o, frame: objectFrame(state.world, o.id, state.tick) })), view = viewSetup(state.world, camera);
   drawList(index, [...objectRecords(state.world, view, camera, objects), playerRecord(state.world, state.car)]);
-  const gates = hudGates(state.menu.settings);
+  const gates = hudGates(state.menu.settings), text = state.laps.shown && !state.figure ? lapText(state.laps.lap, state.total, state.finished) : null, unseen = text ? unseenGlyphs(text) : [];
+  if (unseen.length) state.unproven.add(`the lap text glyphs ${unseen.join(' ')} (from the character map, not seen on screen)`);
   if (!gates.speedometer || !gates.timer) state.unproven.add('the SPEEDOMETER and CLOCK DISPLAY switches hiding the HUD');
-  renderHud(index, state.hudArt, { place: 1, speed: gates.speedometer ? speedDigits(state.hud.shown) : null, timer: gates.timer ? timerText(state.hud.timerShown) : null }); // place 1: no other car exists here (listed as unproven in startTrack)
+  renderHud(index, state.hudArt, { banner: counterDigits(state.hud.counter), name: true, figure: state.figureDraw, lap: text, place: 1, speed: gates.speedometer ? speedDigits(state.hud.shown) : null, timer: gates.timer ? timerText(state.hud.timerShown) : null }); // place 1: no other car exists here (listed as unproven in startTrack)
   blit(rgba);
   const c = state.car, row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Camera', `${c.cx}, ${c.cy}`) + row('Heading', c.heading);
   $('badge').className = state.unproven.size ? 'badge bad' : 'badge';
-  $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor, the straight road, the objects, the player car, the speedometer and the timer); the top banner, the minimap, laps, the AI cars, pickups and sound are not ported yet.';
+  $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor, the straight road, the objects, the player car, the speedometer, the timer, the top banner, the driver name, the laps, the lap text and the reaction figure); the minimap, the held item, the finish and what follows it, the AI cars, pickups and sound are not ported yet.';
 }
 
 function frame(now) {
@@ -112,7 +127,7 @@ async function load(vfs) {
     state.dat = await vfs.openPath(path);
     const names = [...archiveMembers(state.dat).keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => n.replace('.GAM', '')).sort((a, b) => a - b);
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
-    state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat));
+    state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
     state.screen = 'menu'; state.menu = createMenu(defaultSettings(Number($('detail').value))); state.menuKey = null; state.menuAccumulator = 0;
     startTrack(); $('stage').hidden = false; setMessage('');
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }

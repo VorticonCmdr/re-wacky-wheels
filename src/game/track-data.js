@@ -4,7 +4,7 @@
 import { K } from '../evidence/k.js';
 import { parseDatDirectory } from '../formats/dat.js';
 import { parseGam } from '../formats/gam.js';
-import { parseMap, parseRoute } from '../formats/track-files.js';
+import { parseMap, parseRoute, parsePos } from '../formats/track-files.js';
 import { decodePcxMember, splitTiles } from '../formats/pcx.js';
 import { parseAtr } from '../formats/atr.js';
 import { parseSpw } from '../formats/track-files.js';
@@ -46,7 +46,7 @@ export function loadTrack(dat, name, engine = 1) {
   const spw = parseSpw(member(members, `${name}.SPW`)), objects = Array.from(spw, o => ({ id: o[0], consumed: o[1], x: o[2] + OBJECT_BIAS, y: o[3] + OBJECT_BIAS, counter: o[4], frame: o[5] })); // @math the .SPW words: sprite id, consumed, x, y, counter, frame
   return {
     sprites, shapes, objects, carFrames: { cars: member(members, 'CARS.SP'), driver: member(members, 'TIGER.SP') }, slp: asView(member(members, 'SLP')), view: asView(member(members, 'VIEW')), rows: buildRowTable(), carShape: parseInf(member(members, '38X28.INF')),
-    name, gam, route, tiles: map.tiles, sheets, palette: images[0].vga,
+    name, gam, route, pos: parsePos(member(members, `${name}.POS`)), tiles: map.tiles, sheets, palette: images[0].vga,
     sky: decodePcxMember(member(members, gam.sky)).indices, par: member(members, `${name}.PAR`),
     trig: asView(member(members, 'TRIG.DAT')), ndist: asView(member(members, 'NDIST')), speeds,
     // the car's start position: the first start pair plus the bias (gam.read, racer.start-grid)
