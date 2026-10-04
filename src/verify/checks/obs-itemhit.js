@@ -57,12 +57,24 @@ function validate(dat, records, V, { distance = V.hit.hitDistance, stun = V.hit.
   });
 }
 
+// probe-1: nothing held, no counter, Ctrl pressed at tick 33: nothing is fired, and the held word still becomes 8 at the same tick.
+function probe(r, V, { rewardTick = V.hit.rewardTick } = {}) {
+  const K = V.hit, c = Object.fromEntries(r.columns.map((name, i) => [name, i])), S = r.samples;
+  assert.equal(S[0][c.held], 0, 'nothing held'); // @math nothing held
+  assert.ok(S.every(s => s[c.shots] === 0), 'nothing was fired');
+  const press = S.find(s => s[0] === 1); // @math the second phase presses Ctrl
+  assert.equal(press[c.tick], K.probeTicks[0], 'Ctrl pressed at tick 33');
+  const first = S.find(s => s[c.held] !== 0);
+  assert.deepEqual([first[c.tick], first[c.held]], [rewardTick, K.rewardItem], 'the held word becomes 8 at tick 55 although nothing was fired');
+  assert.equal(K.probeTicks[1], K.rewardTick, 'the same tick as after a shot');
+}
+
 export default {
   id: 'obs-itemhit',
   claims: ['item.racer-hit-observed'],
-  obs: IDS,
+  obs: [...IDS, 'probe-1'],
   reviewed: { by: 'main-session', date: '2026-10-04' },
-  async run(ctx) { validate(await ctx.open('WACKY.DAT'), IDS.map(id => ctx.obs(id)), values()); },
+  async run(ctx) { const V = values(); validate(await ctx.open('WACKY.DAT'), IDS.map(id => ctx.obs(id)), V); probe(ctx.obs('probe-1'), V); },
   async discriminate(ctx) {
     const dat = await ctx.open('WACKY.DAT'), records = IDS.map(id => ctx.obs(id)), V = values(), K = V.hit;
     return [
@@ -71,6 +83,7 @@ export default {
       { label: 'a stun of 49', fn: () => validate(dat, records, V, { stun: [K.stun[0], K.stun[1] - 1] }) },
       { label: 'a hit word altered', fn: () => validate(dat, records.map((r, i) => (i === 1 ? { ...r, samples: r.samples.map(s => (s[r.columns.indexOf('tick')] === 36 ? s.map((x, k) => (k === r.columns.indexOf('h1') ? 1 : x)) : s)) } : r)), V) }, // @math the tick of the hit
       { label: 'a shot moved', fn: () => validate(dat, records.map((r, i) => (i === 0 ? { ...r, samples: r.samples.map(s => (s[r.columns.indexOf('tick')] === 36 ? s.map((x, k) => (k === r.columns.indexOf('sAy') ? x + 1 : x)) : s)) } : r)), V) }, // @math the tick of the hit
+      { label: 'a reward at tick 54', fn: () => probe(ctx.obs('probe-1'), V, { rewardTick: K.rewardTick - 1 }) },
       { label: 'one archive byte changed', fn: () => validate(Uint8Array.from(dat, (x, i) => (i === dat.length - 1 ? x ^ 1 : x)), records, V) }, // @math flip the lowest bit of the last byte
     ];
   },
