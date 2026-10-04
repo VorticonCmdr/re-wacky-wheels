@@ -51,5 +51,5 @@ export default defineConfig({
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: await readFile(resolve('THIRD_PARTY_NOTICES.md'), 'utf8') });
     },
   }],
-  build: { rolldownOptions: { input: { index: resolve('index.html'), viewer: resolve('viewer.html'), track: resolve('track.html') } } },
+  build: { rolldownOptions: { input: { index: resolve('index.html'), viewer: resolve('viewer.html'), track: resolve('track.html'), play: resolve('play.html') } } },
 });

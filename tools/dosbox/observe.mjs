@@ -368,6 +368,31 @@ const scenarios = {
     const cstr = async a => { const b = await readMemory(a, 16); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); }; // @math 16 bytes hold a name
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), flagAt: 0x1e574, flag: await u32(b2 + 0x1e574), levelAt: 0x1eca0, level: await u32(b2 + 0x1eca0), lookupAt: 0x28bd6, lookup: await u16(b2 + 0x28bd6), names: [await cstr(b2 + 0x1eb8), await cstr(b2 + 0x1ec0)] };
   },
+  async demoinput() {
+    // The attract-mode demo's control byte: `--args` {count, ms: [lo, hi]}. Per pause: the tick, the byte obj2+0x28cef, the bytes +0x28cd5 (left), +0x28cdd (right), +0x28cec, the words +0x28b40, +0x28b42, +0x28b44, +0x28b46 (the four buttons) and the word +0x28c0c.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms)), post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const u8 = async a => (await readMemory(a, 1))[0], u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const [lo, hi] = spec.ms ?? [100, 300], samples = [];
+    for (let i = 0; i < (spec.count ?? 60); i++) {
+      await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(30);
+      samples.push({ tick: await u32(b2 + 0x1ec64), byte: await u8(b2 + 0x28cef), left: await u8(b2 + 0x28cd5), right: await u8(b2 + 0x28cdd), flag: await u8(b2 + 0x28cec), buttons: [await u16(b2 + 0x28b40), await u16(b2 + 0x28b42), await u16(b2 + 0x28b44), await u16(b2 + 0x28b46)], demo: await u16(b2 + 0x28c0c) });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), byteAt: 0x28cef, samples };
+  },
+  async hscroll() {
+    // The horizon strip's pointer and the steering words, pause by pause: `--args` {count, ms: [lo, hi]}. Per pause: the tick obj2+0x1ec64, the pointer obj2+0x1d860, the heading dword +0x1d5d4, the player car's words +0x52 and +0x54
+    // (the car record is the one the dword obj2+0x1d5b0 points to), the left and right bytes +0x28cd5 and +0x28cdd, the amounts +0x28b92 and +0x28b90 and the mode word +0x28c42.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms)), post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const rd = async (a, n) => { for (let k = 0; k < 20; k++) { try { return await readMemory(a, n); } catch { await sleep(25); } } throw new Error(`read failed at ${a}`); }; // @math retry a read that fails while the pause takes effect
+    const u32 = async a => Buffer.from(await rd(a, 4)).readUInt32LE(0), i16 = async a => Buffer.from(await rd(a, 2)).readInt16LE(0), u8 = async a => (await rd(a, 1))[0];
+    const [lo, hi] = spec.ms ?? [40, 80], samples = [];
+    for (let i = 0; i < (spec.count ?? 300); i++) {
+      await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(70);
+      const car = await u32(b2 + 0x1d5b0);
+      samples.push({ tick: await u32(b2 + 0x1ec64), pointer: await u32(b2 + 0x1d860), heading: await u32(b2 + 0x1d5d4), w52: await i16(car + 0x52), w54: await i16(car + 0x54), left: await u8(b2 + 0x28cd5), right: await u8(b2 + 0x28cdd), leftAmount: await i16(b2 + 0x28b92), rightAmount: await i16(b2 + 0x28b90), mode: await i16(b2 + 0x28c42) });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), base: 0xa7d00, samples };
+  },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
     // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero

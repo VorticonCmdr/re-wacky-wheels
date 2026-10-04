@@ -39,7 +39,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.
 - [PROVEN] `floor.render-observed`: two frames of a race (camera (1280, 1476) heading 480; (1337, 2101) heading 160) show exactly the floor the model of `floor.render-loop` predicts from the camera words, the heading, TRIG, NDIST, the `.M` map and the track's two tile sheets, in every column that is not under a car, an object or the speedometer.
 - [STATIC] `view.setup`: the view is a fan of 320 TRIG entries (the heading ± 160 of 1920) reaching 1122 world units, the largest NDIST dword; it also forms a bounding box of the visible points.
-- [STATIC] `floor.render-loop`: the floor is 320 columns of 70 steps. Column *c* uses the TRIG entry at heading − 160 + *c*; step *k* takes the NDIST dword for that column and step, adds `(TRIG × NDIST) >> 16` to the camera words `obj2+0x28b0a`/`+0x28b0e`, looks the world point up in the 128×128 tile-pointer table and copies the tile pixel one scan line up. Never compared with a frame.
+- [PROVEN] `floor.render-loop` (`exe-floorloop`), `floor.render-observed`, `floor.detail-modes-observed`: the floor is 320 columns of 70 steps (160 or 80 rays in the lower detail modes). Column *c* uses the TRIG entry at heading − 160 + *c*; step *k* takes the NDIST dword for that column and step, adds `(TRIG × NDIST) >> 16` to the camera words `obj2+0x28b0a`/`+0x28b0e`, looks the world point up in the 128×128 tile-pointer table and copies the tile pixel one scan line up. The port's renderer (`src/render/floor.js`) reproduces the five observed frames (`port-floor`).
 
 ## Axes and angles
 
@@ -73,3 +73,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 ## What is not known
 
 The player 2 and mode-specific input paths (other routines write the same flags), the car state words (`+0x44`, `+0x18` and the animation machine), the AI step (`FUN_00028cac`, `ai.step-rules`), lap counting beyond the ranking keys (`pos.progress`), the minimap and HUD, and every sound the routines trigger by number. See [TODO.md](TODO.md).
+
+## Port notes (2026-10-04)
+
+- The car record's position is not the camera: the camera is the car less the rounded step of 0x7c along the heading (`car.model`, checked on the grid frames and a horizon frame), and while the car turns its record position moves with the heading even at a stand-still. A fit on `steps-3` puts a pivot about 9 units ahead of the record along the heading (record = pivot − 9.25 × the heading vector, within one unit; `UNKNOWN_CAR_TURN_MOVE`), and with speed the pivot moves by about the straight step of the old heading (20 of 43 one-tick pairs exact). The player control routine at obj1+0x190a0 moves the position words `obj2+0x28b0a`/`+0x28b0e` (clamped to 0x400..0xbfe) and sets `obj2+0x28b68`/`+0x28b6a` to the point 0x7c ahead of them, which is the relation to read next.

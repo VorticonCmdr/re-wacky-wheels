@@ -71,6 +71,17 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: layout and run-time placement are proven (`static.layout`, `static.read`); no reader of the live buffers has been read.
   - Next: the remaining TRIG sites (38; three routines read in `floor.table-use`); the CARS readers are read (`cars.slots`), MAP.XY (`mapxy.use`), MOV (`mov.use`), TRIG and NDIST layout and use, and the SDX terrain index (`terrain.sdx-index`) are read.
 
+### Port (`src/game`, `src/render`)
+
+- [ ] `UNKNOWN_CAR_TURN_MOVE` [UNKNOWN] — how the car moves in a tick with a steering key held (the position drifts by 1 to 2 units at a stand-still; the straight step does not apply)
+  - Next: fit `steps-3` against the old and the new heading; read the move routine for the order and the drift.
+- [ ] `UNKNOWN_START_HEADING` [UNKNOWN] — where the start heading comes from (480 in every observed start; the first route angle for 38 of 42 tracks)
+  - Next: a start frame on a track whose first route angle is not 480, and the writers of obj2+0xab48.
+- [ ] `UNKNOWN_TICK_RATE` [UNKNOWN] — the real-time rate of the logic tick (88.5 ms measured in the attract demo)
+  - Next: read the timer interrupt and measure both counters in a played race.
+- [ ] `UNKNOWN_HORIZON_SCROLL` [UNKNOWN] — the start value and the step of the horizon strip's offset while the car turns (observed 66, 28, 16)
+  - Next: sample the pointer every tick while steering; read obj1+0x14832.
+
 ### Sprites (`SPRITE.ATR`, `.SP`)
 
   - Seen 2026-10-04: `GIG.MOV` is the path of the driver reaction figure (`devil.draw-observed`); the other five tables are still without a use seen in play.

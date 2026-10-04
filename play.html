@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#10181d" />
+    <title>Playtest · Wacky Wheels</title>
+    <link rel="stylesheet" href="./src/play.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <a class="brand" href="./index.html"><span class="icon">W</span> Wacky Wheels <small>PLAYTEST</small></a>
+      <div class="actions">
+        <button id="local">Load local game</button>
+        <button id="open">Open WACKY.DAT</button>
+        <input id="file" type="file" accept=".dat" hidden />
+      </div>
+    </header>
+    <main>
+      <p id="message" class="message">Choose your own WACKY.DAT (nothing is uploaded) to drive a track.</p>
+      <div class="stage" id="stage" hidden>
+        <canvas id="screen" width="320" height="200" aria-label="Driver's view"></canvas>
+        <div class="panel">
+          <label>Track <select id="track"></select></label>
+          <label>Detail <select id="detail"><option value="1">High</option><option value="2">Medium</option><option value="3">Low</option></select></label>
+          <label>Engines <select id="engine"><option value="1">12 horsepower</option><option value="2">6 horsepower</option></select></label>
+          <button id="reset">Restart (R)</button>
+          <dl id="readout"></dl>
+          <p id="badge" class="badge"></p>
+          <p class="help">Arrows steer, Up or A accelerate, Down or Z brake, Space hand brake turn.</p>
+        </div>
+      </div>
+    </main>
+    <script type="module" src="./src/play.js"></script>
+  </body>
+</html>
