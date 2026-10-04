@@ -11,6 +11,9 @@ export const menuIds = () => ['main', ...Object.keys(TREE().menus)];
 // Where the state words of a menu lie, in bytes below the block of the main menu (menu.tree-observed): what a recorder has to read.
 export const shiftOf = id => TREE().shifts[id];
 
+// The place of a Race Screen Options switch in the settings, by the game word it sets (obj2+0x175d0, +0x175d2, +0x175d4): -1 when no switch sets it.
+export const switchOf = word => TREE().menus.toggles.words.indexOf(word);
+
 // The settings the menus change: the switches of the race screen (1 on, 0 off) and the detail levels of the single and split screen (1 high, 2 medium, 3 low). Where
 // they start is not established (UNKNOWN_MENU_DEFAULT_SETTINGS): every switch on and both levels at the first item until the page says otherwise.
 export const defaultSettings = (detail = 1) => ({ switches: TREE().menus.toggles.words.map(() => 1), detail: { single: detail, split: detail }, flow: Object.fromEntries(TREE().flow.map(id => [id, 1])) }); // @math one switch for each word; the first level and the first item of every setup menu

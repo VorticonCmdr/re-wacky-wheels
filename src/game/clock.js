@@ -9,5 +9,8 @@ export function frameMs(period) {
   return 1000 * p / C.counters[0].hz; // @math milliseconds in a second
 }
 
+// Milliseconds between two counts of the race timer's 10 Hz counter.
+export function timerPeriodMs() { return 1000 / CLOCK().counters[1].hz; } // @math milliseconds in a second
+
 // The race timer counts at the registered rate of its counter (tenths of a second): `ticks` counts to seconds.
 export function timerSeconds(ticks) { return ticks / CLOCK().counters[1].hz; }

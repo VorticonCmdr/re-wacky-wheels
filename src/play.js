@@ -13,12 +13,13 @@ import { viewSetup } from './game/view.js';
 import { objectRecords, objectFrame } from './game/objects.js';
 import { playerRecord } from './game/player-car.js';
 import { renderMenu, loadMenuArt } from './render/menu.js';
+import { renderHud, loadHudArt } from './render/hud.js';
+import { createHud, stepHud, advanceTimer, speedDigits, timerText, hudGates } from './game/hud.js';
 import { menuDef, defaultSettings } from './game/menus.js';
 import { createMenu, stepFrame, viewOf, menuPeriod } from './game/menu.js';
 
 const $ = id => document.getElementById(id);
-const TICK_MS = 100; // UNKNOWN_TICK_RATE: the HUD reads a tick as a tenth of a second; 88.5 ms was measured in DOSBox
-const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuAccumulator: 0, menuArt: null, dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
+const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuAccumulator: 0, menuArt: null, hudArt: null, hud: createHud(), dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 
@@ -28,7 +29,7 @@ function startTrack() {
   const name = $('track').value, engine = Number($('engine').value);
   state.world = loadTrack(state.dat, name, engine);
   state.car = createCar(state.world.start, state.world);
-  state.tick = 0; state.accumulator = 0; state.unproven = new Set();
+  state.tick = 0; state.accumulator = 0; state.unproven = new Set(['the place digit (1, as the only car; not observed with one racer)']); state.hud = createHud();
   rgba = rgbaPalette(state.world.palette);
 }
 
@@ -37,6 +38,8 @@ function tickOnce() {
   const { result, steps } = withSteps(() => stepCar(state.car, input, state.world));
   state.car = result.car; state.tick++; state.steps = steps;
   for (const u of result.unproven) state.unproven.add(u);
+  const after = stepHud(state.hud, state.car); state.hud = after.hud; // the HUD routine follows the car step in a frame
+  for (const u of after.unproven) state.unproven.add(u);
 }
 
 function blit(palette) {
@@ -82,19 +85,21 @@ function draw() {
   renderFloor(state.world, camera, mode, index);
   const objects = state.world.objects.map(o => ({ ...o, frame: objectFrame(state.world, o.id, state.tick) })), view = viewSetup(state.world, camera);
   drawList(index, [...objectRecords(state.world, view, camera, objects), playerRecord(state.world, state.car)]);
+  const gates = hudGates(state.menu.settings);
+  if (!gates.speedometer || !gates.timer) state.unproven.add('the SPEEDOMETER and CLOCK DISPLAY switches hiding the HUD');
+  renderHud(index, state.hudArt, { place: 1, speed: gates.speedometer ? speedDigits(state.hud.shown) : null, timer: gates.timer ? timerText(state.hud.timerShown) : null }); // place 1: no other car exists here (listed as unproven in startTrack)
   blit(rgba);
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, screen.width, 24);
-  ctx.fillStyle = '#f2b134'; ctx.font = '10px monospace'; ctx.fillText('HUD, AI cars, items and sound are not ported yet', 6, 15);
   const c = state.car, row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Camera', `${c.cx}, ${c.cy}`) + row('Heading', c.heading);
   $('badge').className = state.unproven.size ? 'badge bad' : 'badge';
-  $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor, the straight road, the objects and the player car); the HUD, laps, the AI cars, pickups and sound are not ported yet.';
+  $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor, the straight road, the objects, the player car, the speedometer and the timer); the top banner, the minimap, laps, the AI cars, pickups and sound are not ported yet.';
 }
 
 function frame(now) {
   if (!state.dat) return;
   if (state.screen === 'menu') { stepMenuClock(now); state.last = now; if (state.screen === 'menu') drawMenu(); requestAnimationFrame(frame); return; }
-  state.accumulator += Math.min(now - state.last, 250); state.last = now; // @math at most a quarter second at a time after a pause
+  const elapsed = Math.min(now - state.last, 250); // @math at most a quarter second at a time after a pause
+  state.accumulator += elapsed; state.last = now; state.hud = advanceTimer(state.hud, elapsed);
   const frame_ms = frameMs();
   while (state.accumulator >= frame_ms) { tickOnce(); state.accumulator -= frame_ms; }
   draw(); requestAnimationFrame(frame);
@@ -107,7 +112,7 @@ async function load(vfs) {
     state.dat = await vfs.openPath(path);
     const names = [...archiveMembers(state.dat).keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => n.replace('.GAM', '')).sort((a, b) => a - b);
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
-    state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga);
+    state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat));
     state.screen = 'menu'; state.menu = createMenu(defaultSettings(Number($('detail').value))); state.menuKey = null; state.menuAccumulator = 0;
     startTrack(); $('stage').hidden = false; setMessage('');
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
