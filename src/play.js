@@ -49,7 +49,7 @@ function drawMenu() {
   renderMenu(index, art, viewOf(state.menu)); blit(art.rgba);
   $('readout').innerHTML = `<dt>Selected</dt><dd>${menuItems()[state.menu.cursor - 1].trim()}</dd>`;
   $('badge').className = 'badge bad';
-  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether Space selects like Enter, and what Esc does in the menu. Only SINGLE PLAYER RACING leads anywhere (straight into the race).';
+  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. Only SINGLE PLAYER RACING leads anywhere (straight into the race).';
 }
 
 // One step of the menu per 8 counts of the 136 Hz clock, with the first key pressed since the last step.

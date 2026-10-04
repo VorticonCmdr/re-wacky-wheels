@@ -29,6 +29,12 @@ test('a cursor key while the icons are busy is dropped, Enter chooses the cursor
   assert.equal(stepFrame(createMenu(), 'escape').chosen, 0);
 });
 
+test('Esc puts the cursor on the last item at once, icons settled', () => {
+  const { menu } = stepFrame(createMenu(), 'escape');
+  assert.deepEqual([menu.cursor, menu.lionTop, menu.busy, menu.lionFrame], [9, lionTopOf(9), 0, 0]);
+  assert.equal(stepFrame(menu, 'escape').menu.cursor, 9);
+});
+
 test('the cars run a 51 step cycle and move to the next pair', () => {
   let s = { phase: 1, count: 1, pair: 1 };
   const sizes = [];

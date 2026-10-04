@@ -83,8 +83,9 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 - [x] `UNKNOWN_MENU_CAR_FRAME_STEP` resolved into `menu.animation-observed` (PROVEN, `obs-menustate`): the cars' frame is half the position in the 51-step cycle, modulo 8
 - [ ] `UNKNOWN_MENU_START_STATE` [UNKNOWN] — the state the main menu's animations start in when the menu is entered
   - Next: record the first pauses after the title picture ends and after leaving a race, and read the routine that sets the words obj2+0x32f64 to +0x32fac.
-- [ ] `UNKNOWN_MENU_KEYS` [UNKNOWN] — whether Space selects, whether a held key repeats, what Esc does in the main menu
-  - Next: tap Space, hold Down and tap Esc in the running main menu and record the cursor word and the screen.
+- [x] `UNKNOWN_MENU_KEYS` resolved into `menu.keys-observed` (PROVEN, `obs-menukeys`, records `menukeys-1`, `menukeys-2`): Space and Enter select, Esc goes back or puts the cursor on item 9 in the main menu; a held key and Esc during the icons' animation remain open as `UNKNOWN_MENU_HELD_KEYS`
+- [ ] `UNKNOWN_MENU_HELD_KEYS` [UNKNOWN] — whether a held cursor key repeats and what Esc does while the icons animate
+  - Next: hold Down for a second in the main menu and tap Esc during the animation, recording the cursor word each pause.
 - [ ] `atr.kind-effects` [STATIC] — kind 0 obstacle (wrecks a fast car), 1 one-off pickup, 2 counter pickup (+4, cap 99), 3 to 7 held item; `.SPW` word +2 set to 0xffff on pickup
   - Gap: read in full, not run. Next: a run that drives the car into a pickup (or force the zone words at a breakpoint) and compare the car words +0x6a/+0x16 and the `.SPW` word +2.
 - [ ] `sp.draw` [STATIC] — the blitter `FUN_00036fd0` consumes a frame column by column (word +4 columns of word +6 bytes), index 0 transparent

@@ -115,10 +115,17 @@ export default [
     leads: ['docs/leads/menus.md'],
   },
   {
-    id: 'UNKNOWN_MENU_KEYS', tag: 'UNKNOWN',
-    statement: 'Whether Space selects an item like Enter (the lead reads the Enter-or-Space flag obj2+0x28cce as fire), whether a key held down repeats, and what Esc does in the main menu (the lead says the menu restarts) are not established by an observation. The port treats Enter and Space as selecting and ignores Esc.',
+    id: 'menu.keys-observed', tag: 'PROVEN',
+    statement: 'Observed in the running game (records menukeys-1: the Game Options submenu and a menu opened from it with Space, Esc, Enter, Esc, Esc tapped 30 pauses apart, and menukeys-2: the main menu with Esc, Up, Esc, Down, Esc tapped; the cursor word obj2+0x32f8c, the selection icons\' row and the 136 Hz counter at each pause): Space and Enter both select the item under the cursor - either opens the next menu, which starts with its cursor word at 1 and the 136 Hz counter reset to about zero; Esc inside a menu goes back to the parent with the cursor on the item that was opened (menukeys-1: item 3 of the options menu, then item 6 of the main menu); Esc in the main menu does not leave the game but puts the cursor on item 9 (LEAVE GAME) at once, with the selection icons already at its row and no animation, and stays there when pressed again. The check replays the main menu records through the port\'s step. Not observed: Esc while the icons are busy, a key held down, and what the other menus draw.',
+    value: { selectKeys: ['KBD_space', 'KBD_enter'], escapeKey: 'KBD_esc', escapeTo: 9, openedCursor: 1 },
+    evidence: { checks: ['obs-menukeys'], obs: ['menukeys-1', 'menukeys-2'] },
+    leads: ['docs/leads/menus.md'],
+  },
+  {
+    id: 'UNKNOWN_MENU_HELD_KEYS', tag: 'UNKNOWN',
+    statement: 'Whether a cursor key held down repeats, and what Esc does while the selection icons are animating, are not established; the port drops a cursor key while the icons are busy and applies Esc at once.',
     evidence: {},
-    todo: 'Tap Space, hold Down and tap Esc in the running main menu (input interface) and record the cursor word and the screen.',
+    todo: 'Hold Down for a second in the main menu (input interface, key down and up 70 frames apart) and tap Esc during the icons\' animation, recording the cursor word each pause.',
     leads: ['docs/leads/menus.md'],
   },
 ];
