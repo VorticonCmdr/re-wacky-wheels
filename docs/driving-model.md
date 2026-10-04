@@ -32,6 +32,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 - [PROVEN] `car.racer-hit-observed`: with the car put on a stationary racer in the countdown, the collision word obj2+0x28bae is 3 while another racer is closer than 14 (Manhattan; hit at 13, none at 14), the heading rises by 18 and the position word y by 1 per call, the throttle is kept (records steps-4 to steps-8).
 
+- [PROVEN] `item.racer-hit-observed`: a shot that reaches a racer stops 17 units from it and sets its hit word +0x58: 1 (33 ticks) for item 3's fan and the counter's shot, 2 (50 ticks, switching with 3) for item 8's single shot; fire is ignored before the green light (records shot-1 to shot-3).
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.

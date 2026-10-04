@@ -113,3 +113,5 @@ Sound numbers index the 26+ records at obj2+0x1a9c8 (audio.load: slots of AUDIOT
 * Whether kind 1 (tyres) has any effect beyond the animation and sound 0x16.
 * That the "armed" flag +8 is cleared exactly as read (obj1+0x119d9..0x11a08 is a tangled branch).
 * Not run: nothing here was observed in DOSBox. Candidates for observation: press fire with kind 3 held (3 entries appear in 0x1f2b0 with types 0 and lanes 0,1,2), hold fire 20 ticks (car+0x16 becomes 8), hit an AI racer (racer+0x58 = 1 for ~33 ticks).
+
+> **Checked 2026-10-04** (`item.racer-hit-observed`, PROVEN, records shot-1 to shot-3): a shot of item 3's fan, of the counter (hedgehog) and of item 8 stops 17 units (Manhattan) from the racer it reaches and sets that racer's hit word +0x58 (1, 1 and 2); 1 lasts 33 ticks, 2 lasts 50 ticks and alternates with 3 (`ai.step-helpers`' limits 0x21 and 0x32); fire is ignored before the green light.
