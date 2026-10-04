@@ -1,5 +1,8 @@
 <!-- WF: output of a subagent's read of the disassembly on 2026-10-03; a lead, not evidence. The maintainer has not re-read it. Citations inside were produced by the subagent and are re-hashed by nothing until a claim cites them. -->
 
+> **Checked 2026-10-04 against the running main menu** (`menu.screen-model`, `menu.animation-observed`, `menu.cursor-observed`, PROVEN): the menu background is `CHECK.PCX` (section 2.3 is right; `boot.pictures-observed` never said otherwise, its 32 s sample is the intro's WINTRO), the items are drawn padded to one bar length with the tile font (`text.menu-observed`), the selection icons are `HANDLE.SP` frames and the corner cars are `CARS.SP` pictures drawn through `38X28.INF`; the cursor wraps and the idle counter (word obj2+0x32f74, 500 starts the attract mode) is held at 0 while the icons animate. The rest of the report is still unchecked.
+
+
 > **Checked 2026-10-03 against the running game** (`boot.pictures-observed`, PROVEN, record boot-1): after the notice screen the screen shows APOG1.PCX, then BEAVIS.PCX, then WINTRO.PCX (the CRC-32 of the 320x200 indexes read from video memory equals that of the picture; WINTRO also reappears later as the menu's background). The rest of this report (the menus' text and flow) is still unchecked.
 
 # WF: menu and screen flow of WW.EXE (lead, not fact)

@@ -419,6 +419,29 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), tableAt: 0x13938, samples };
   },
+  async menuframe() {
+    // The main menu pause by pause: `--args` {count, ms: [lo, hi], keys: [[sampleIndex, 'KBD_down'], ...]}. Per pause the CRC-32 of the whole displayed page (mode X, read plane by plane) and the words the menu animation runs on:
+    // the cursor (obj2+0x32f8c, 1 to 9), the idle counter (+0x32f74, also what +0x1ed0c counts), the animation phase (+0x32fa0), the car slot pair (+0x32fa4), the count in the phase (+0x32f88), the size class (+0x32fac), the selection icons' frame (+0x32f64), row (+0x32f68) and busy flag (+0x32f7c) the time of the last menu frame (+0x1ea70) and the 136 Hz counter (+0x1e720).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms)), post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    const rd = async (a, n) => { for (let k = 0; k < 20; k++) { try { return Buffer.from(await readMemory(a, n)); } catch { await sleep(25); } } throw new Error(`read failed at ${a}`); }; // @math retry a read that fails while the pause takes effect
+    const W = 320, H = 200, LINE = 80, planes = 4; // @math the 320x200 mode-X picture, 80 bytes a line and plane
+    const grab = async () => {
+      await io(0x3d4, 0x0c, 1); const high = await inPort(0x3d5); await io(0x3d4, 0x0d, 1); const low = await inPort(0x3d5), start = high * 256 + low; // @math the start address registers 0x0c and 0x0d
+      const plane = []; for (let p = 0; p < planes; p++) { await io(0x3ce, (p << 8) | 4, 2); plane.push(await rd(0xa0000 + start, LINE * H)); }
+      const image = Buffer.alloc(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) image[y * W + x] = plane[x & 3][y * LINE + (x >> 2)];
+      return image;
+    };
+    const tap = key => fetch(`${API}/api/v1/input/sequence`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ events: [{ type: 'key', key, pressed: true, frame: 2 }, { type: 'key', key, pressed: false, frame: 7 }] }) }); // @math press at frame 2, release 5 frames later
+    const [lo, hi] = spec.ms ?? [30, 120], keys = new Map((spec.keys ?? []).map(([i, k]) => [i, k])), samples = [];
+    for (let i = 0; i < (spec.count ?? 100); i++) {
+      await post('/debug/continue'); if (keys.has(i)) await tap(keys.get(i)); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(70);
+      const image = await grab(), state = await rd(b2 + 0x32f60, 0x50), i32 = off => state.readInt32LE(off - 0x32f60), t136 = (await rd(b2 + 0x1e720, 4)).readInt32LE(0), frameTime = (await rd(b2 + 0x1ea70, 4)).readInt32LE(0);
+      samples.push({ frameTime, frameCrc: hex8(crc32(image)), cursor: i32(0x32f8c), idle: i32(0x32f74), lionFrame: i32(0x32f64), lionRow: i32(0x32f68), busy: i32(0x32f7c), phase: i32(0x32fa0), pair: i32(0x32fa4), count: i32(0x32f88), size: i32(0x32fac), t136 });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, k) => [k + 1, b])), keys: [...keys].map(([i, k]) => [i, k]), words: { cursor: 0x32f8c, idle: 0x32f74, phase: 0x32fa0, pair: 0x32fa4, count: 0x32f88, size: 0x32fac, lionFrame: 0x32f64, lionRow: 0x32f68, busy: 0x32f7c, frameTime: 0x1ea70 }, samples };
+  },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
     // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero

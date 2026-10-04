@@ -12,12 +12,12 @@ import { drawList } from './render/draw-list.js';
 import { viewSetup } from './game/view.js';
 import { objectRecords, objectFrame } from './game/objects.js';
 import { playerRecord } from './game/player-car.js';
-import { renderMenu, loadTiles, loadTitle, menuItems, brightest, drawPlaceholder } from './render/menu.js';
-import { createMenu, stepMenu } from './game/menu.js';
+import { renderMenu, loadMenuArt, menuItems } from './render/menu.js';
+import { createMenu, stepFrame, viewOf, menuPeriod } from './game/menu.js';
 
 const $ = id => document.getElementById(id);
 const TICK_MS = 100; // UNKNOWN_TICK_RATE: the HUD reads a tick as a tenth of a second; 88.5 ms was measured in DOSBox
-const state = { running: false, screen: 'menu', menu: createMenu(), menuArt: null, dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
+const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuAccumulator: 0, menuArt: null, dat: null, world: null, car: null, camera: null, keys: new Set(), tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 
@@ -43,18 +43,28 @@ function blit(palette) {
   ctx.putImageData(image, 0, 0);
 }
 
-// The main menu: the title picture, the nine items and, for the selection, a placeholder (the game's highlight is not observed).
+// The main menu: the picture, the nine items, the selection icons and the two corner cars, all as the game draws them (menu.screen-model).
 function drawMenu() {
   const art = state.menuArt;
-  renderMenu(index, art.title, art.tiles); drawPlaceholder(index, state.menu.selected, art.mark); blit(art.rgba);
-  $('readout').innerHTML = `<dt>Selected</dt><dd>${menuItems()[state.menu.selected]}</dd>`;
+  renderMenu(index, art, viewOf(state.menu)); blit(art.rgba);
+  $('readout').innerHTML = `<dt>Selected</dt><dd>${menuItems()[state.menu.cursor - 1].trim()}</dd>`;
   $('badge').className = 'badge bad';
-  $('badge').textContent = 'Not observed yet and approximated here: how the game highlights the selected item (the marked box stands in), what the cursor does at the first and last item (it stops), and every item but SINGLE PLAYER RACING (not ported).';
+  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether Space selects like Enter, and what Esc does in the menu. Only SINGLE PLAYER RACING leads anywhere (straight into the race).';
 }
 
-function chooseItem(m) {
-  if (m === 0) { state.screen = 'race'; startTrack(); setMessage(''); return; }
-  setMessage(`${menuItems()[m].trim()} is not ported yet.`);
+// One step of the menu per 8 counts of the 136 Hz clock, with the first key pressed since the last step.
+function stepMenuClock(now) {
+  state.menuAccumulator += Math.min(now - state.last, 250); // @math at most a quarter second at a time after a pause
+  const ms = frameMs(menuPeriod());
+  while (state.menuAccumulator >= ms) {
+    const { menu, chosen } = stepFrame(state.menu, state.menuKey); state.menu = menu; state.menuKey = null; state.menuAccumulator -= ms;
+    if (chosen) { chooseItem(chosen); if (state.screen !== 'menu') return; }
+  }
+}
+
+function chooseItem(item) {
+  if (item === 1) { state.screen = 'race'; startTrack(); setMessage(''); return; } // @math the first item of the menu, SINGLE PLAYER RACING
+  setMessage(`${menuItems()[item - 1].trim()} is not ported yet.`);
 }
 
 function draw() {
@@ -76,8 +86,8 @@ function draw() {
 
 function frame(now) {
   if (!state.dat) return;
+  if (state.screen === 'menu') { stepMenuClock(now); state.last = now; if (state.screen === 'menu') drawMenu(); requestAnimationFrame(frame); return; }
   state.accumulator += Math.min(now - state.last, 250); state.last = now; // @math at most a quarter second at a time after a pause
-  if (state.screen === 'menu') { state.accumulator = 0; drawMenu(); requestAnimationFrame(frame); return; }
   const frame_ms = frameMs();
   while (state.accumulator >= frame_ms) { tickOnce(); state.accumulator -= frame_ms; }
   draw(); requestAnimationFrame(frame);
@@ -90,9 +100,8 @@ async function load(vfs) {
     state.dat = await vfs.openPath(path);
     const names = [...archiveMembers(state.dat).keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => n.replace('.GAM', '')).sort((a, b) => a - b);
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
-    const members = archiveMembers(state.dat), title = loadTitle(members);
-    state.menuArt = { title, tiles: loadTiles(members.get('WFONT1.SP')), rgba: rgbaPalette(title.vga), mark: brightest(title.vga) };
-    state.screen = 'menu'; state.menu = createMenu();
+    state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga);
+    state.screen = 'menu'; state.menu = createMenu(); state.menuKey = null; state.menuAccumulator = 0;
     startTrack(); $('stage').hidden = false; setMessage('');
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
   } catch (e) { state.dat = null; setMessage(`${e.message}`, true); }
@@ -108,9 +117,9 @@ $('reset').addEventListener('click', () => state.dat && startTrack());
 const MENU_KEYS = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', Space: 'enter', Escape: 'escape' };
 addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || !state.dat) return;
-  if (state.screen === 'race' && e.code === 'Escape') { state.screen = 'menu'; state.keys.clear(); setMessage(''); return; }
+  if (state.screen === 'race' && e.code === 'Escape') { state.screen = 'menu'; state.keys.clear(); state.menuAccumulator = 0; state.last = performance.now(); setMessage(''); return; }
   if (state.screen === 'menu' && MENU_KEYS[e.code]) {
-    e.preventDefault(); const { menu, chosen } = stepMenu(state.menu, MENU_KEYS[e.code]); state.menu = menu; if (chosen >= 0) chooseItem(chosen); return;
+    e.preventDefault(); if (!state.menuKey) state.menuKey = MENU_KEYS[e.code]; return;
   }
   if (state.screen !== 'race') return;
   if (e.code === 'KeyR') { startTrack(); return; } if (/^(Arrow|Key[AZ]|Space)/.test(e.code)) { state.keys.add(e.code); e.preventDefault(); }

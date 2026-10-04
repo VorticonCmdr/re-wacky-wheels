@@ -1,0 +1,737 @@
+{
+  "id": "menucur-1",
+  "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+  "via": "REST GET /api/v1/memory/{offset}/{len}",
+  "date": "2026-10-04",
+  "exe": {
+    "name": "WW.EXE",
+    "size": 650437,
+    "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+  },
+  "archive": {
+    "name": "WACKY.DAT",
+    "size": 7771880,
+    "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+  },
+  "moment": "the main menu of the plain archive: Up tapped at 13 and Down at 13 of 60 pauses 200 to 260 ms apart, the cursor word and the animation words at each pause",
+  "bases": {
+    "1": 2015232,
+    "2": 2330624
+  },
+  "keys": [
+    [
+      3,
+      "KBD_up"
+    ],
+    [
+      5,
+      "KBD_up"
+    ],
+    [
+      7,
+      "KBD_up"
+    ],
+    [
+      9,
+      "KBD_up"
+    ],
+    [
+      11,
+      "KBD_up"
+    ],
+    [
+      13,
+      "KBD_up"
+    ],
+    [
+      15,
+      "KBD_up"
+    ],
+    [
+      17,
+      "KBD_up"
+    ],
+    [
+      19,
+      "KBD_up"
+    ],
+    [
+      21,
+      "KBD_up"
+    ],
+    [
+      23,
+      "KBD_up"
+    ],
+    [
+      25,
+      "KBD_up"
+    ],
+    [
+      27,
+      "KBD_up"
+    ],
+    [
+      29,
+      "KBD_down"
+    ],
+    [
+      31,
+      "KBD_down"
+    ],
+    [
+      33,
+      "KBD_down"
+    ],
+    [
+      35,
+      "KBD_down"
+    ],
+    [
+      37,
+      "KBD_down"
+    ],
+    [
+      39,
+      "KBD_down"
+    ],
+    [
+      41,
+      "KBD_down"
+    ],
+    [
+      43,
+      "KBD_down"
+    ],
+    [
+      45,
+      "KBD_down"
+    ],
+    [
+      47,
+      "KBD_down"
+    ],
+    [
+      49,
+      "KBD_down"
+    ],
+    [
+      51,
+      "KBD_down"
+    ],
+    [
+      53,
+      "KBD_down"
+    ]
+  ],
+  "samples": [
+    {
+      "frameCrc": "9cdce4a9",
+      "cursor": 8,
+      "idle": 292,
+      "phase": 1,
+      "pair": 7,
+      "count": 2,
+      "size": 8,
+      "t136": 7383
+    },
+    {
+      "frameCrc": "cbc1ff6b",
+      "cursor": 8,
+      "idle": 297,
+      "phase": 1,
+      "pair": 7,
+      "count": 7,
+      "size": 3,
+      "t136": 7419
+    },
+    {
+      "frameCrc": "ecf66b5e",
+      "cursor": 8,
+      "idle": 301,
+      "phase": 2,
+      "pair": 7,
+      "count": 1,
+      "size": 0,
+      "t136": 7457
+    },
+    {
+      "frameCrc": "6b332217",
+      "cursor": 7,
+      "idle": 0,
+      "phase": 2,
+      "pair": 7,
+      "count": 6,
+      "size": 0,
+      "t136": 7492
+    },
+    {
+      "frameCrc": "e2055f59",
+      "cursor": 7,
+      "idle": 3,
+      "phase": 2,
+      "pair": 7,
+      "count": 10,
+      "size": 0,
+      "t136": 7523
+    },
+    {
+      "frameCrc": "47114ba7",
+      "cursor": 6,
+      "idle": 0,
+      "phase": 2,
+      "pair": 7,
+      "count": 14,
+      "size": 0,
+      "t136": 7557
+    },
+    {
+      "frameCrc": "072d7dc6",
+      "cursor": 6,
+      "idle": 3,
+      "phase": 2,
+      "pair": 7,
+      "count": 18,
+      "size": 0,
+      "t136": 7594
+    },
+    {
+      "frameCrc": "4b6f8207",
+      "cursor": 5,
+      "idle": 0,
+      "phase": 2,
+      "pair": 7,
+      "count": 22,
+      "size": 0,
+      "t136": 7625
+    },
+    {
+      "frameCrc": "bb5bfaab",
+      "cursor": 5,
+      "idle": 3,
+      "phase": 2,
+      "pair": 7,
+      "count": 27,
+      "size": 0,
+      "t136": 7659
+    },
+    {
+      "frameCrc": "f4e3becd",
+      "cursor": 4,
+      "idle": 0,
+      "phase": 3,
+      "pair": 7,
+      "count": 0,
+      "size": 0,
+      "t136": 7694
+    },
+    {
+      "frameCrc": "6e1c998d",
+      "cursor": 4,
+      "idle": 3,
+      "phase": 3,
+      "pair": 7,
+      "count": 4,
+      "size": 4,
+      "t136": 7725
+    },
+    {
+      "frameCrc": "7291deb5",
+      "cursor": 3,
+      "idle": 0,
+      "phase": 3,
+      "pair": 7,
+      "count": 8,
+      "size": 8,
+      "t136": 7761
+    },
+    {
+      "frameCrc": "90d8e4d4",
+      "cursor": 3,
+      "idle": 4,
+      "phase": 1,
+      "pair": 1,
+      "count": 3,
+      "size": 7,
+      "t136": 7797
+    },
+    {
+      "frameCrc": "93babc0e",
+      "cursor": 2,
+      "idle": 0,
+      "phase": 1,
+      "pair": 1,
+      "count": 8,
+      "size": 2,
+      "t136": 7836
+    },
+    {
+      "frameCrc": "cae3aa90",
+      "cursor": 2,
+      "idle": 4,
+      "phase": 2,
+      "pair": 1,
+      "count": 2,
+      "size": 0,
+      "t136": 7870
+    },
+    {
+      "frameCrc": "74aa2fec",
+      "cursor": 1,
+      "idle": 0,
+      "phase": 2,
+      "pair": 1,
+      "count": 6,
+      "size": 0,
+      "t136": 7903
+    },
+    {
+      "frameCrc": "17c5c765",
+      "cursor": 1,
+      "idle": 4,
+      "phase": 2,
+      "pair": 1,
+      "count": 11,
+      "size": 0,
+      "t136": 7940
+    },
+    {
+      "frameCrc": "e4982959",
+      "cursor": 9,
+      "idle": 0,
+      "phase": 2,
+      "pair": 1,
+      "count": 15,
+      "size": 0,
+      "t136": 7977
+    },
+    {
+      "frameCrc": "975c944e",
+      "cursor": 9,
+      "idle": 3,
+      "phase": 2,
+      "pair": 1,
+      "count": 19,
+      "size": 0,
+      "t136": 8009
+    },
+    {
+      "frameCrc": "9da3e0c8",
+      "cursor": 8,
+      "idle": 0,
+      "phase": 2,
+      "pair": 1,
+      "count": 23,
+      "size": 0,
+      "t136": 8041
+    },
+    {
+      "frameCrc": "ac0d5aa7",
+      "cursor": 8,
+      "idle": 2,
+      "phase": 2,
+      "pair": 1,
+      "count": 27,
+      "size": 0,
+      "t136": 8073
+    },
+    {
+      "frameCrc": "3da8050f",
+      "cursor": 7,
+      "idle": 0,
+      "phase": 3,
+      "pair": 1,
+      "count": 1,
+      "size": 1,
+      "t136": 8107
+    },
+    {
+      "frameCrc": "dee89c61",
+      "cursor": 7,
+      "idle": 4,
+      "phase": 3,
+      "pair": 1,
+      "count": 5,
+      "size": 5,
+      "t136": 8140
+    },
+    {
+      "frameCrc": "eef6d081",
+      "cursor": 6,
+      "idle": 0,
+      "phase": 3,
+      "pair": 1,
+      "count": 9,
+      "size": 9,
+      "t136": 8171
+    },
+    {
+      "frameCrc": "14c7d9f5",
+      "cursor": 6,
+      "idle": 3,
+      "phase": 1,
+      "pair": 3,
+      "count": 3,
+      "size": 7,
+      "t136": 8207
+    },
+    {
+      "frameCrc": "26794348",
+      "cursor": 5,
+      "idle": 0,
+      "phase": 1,
+      "pair": 3,
+      "count": 7,
+      "size": 3,
+      "t136": 8238
+    },
+    {
+      "frameCrc": "e38f8047",
+      "cursor": 5,
+      "idle": 3,
+      "phase": 2,
+      "pair": 3,
+      "count": 1,
+      "size": 0,
+      "t136": 8273
+    },
+    {
+      "frameCrc": "c9fb8ebd",
+      "cursor": 4,
+      "idle": 0,
+      "phase": 2,
+      "pair": 3,
+      "count": 6,
+      "size": 0,
+      "t136": 8307
+    },
+    {
+      "frameCrc": "44eeaf2f",
+      "cursor": 4,
+      "idle": 3,
+      "phase": 2,
+      "pair": 3,
+      "count": 10,
+      "size": 0,
+      "t136": 8340
+    },
+    {
+      "frameCrc": "506ff829",
+      "cursor": 5,
+      "idle": 0,
+      "phase": 2,
+      "pair": 3,
+      "count": 14,
+      "size": 0,
+      "t136": 8373
+    },
+    {
+      "frameCrc": "e38f8047",
+      "cursor": 5,
+      "idle": 3,
+      "phase": 2,
+      "pair": 3,
+      "count": 18,
+      "size": 0,
+      "t136": 8410
+    },
+    {
+      "frameCrc": "1ccd23e9",
+      "cursor": 5,
+      "idle": 7,
+      "phase": 2,
+      "pair": 3,
+      "count": 22,
+      "size": 0,
+      "t136": 8441
+    },
+    {
+      "frameCrc": "a5d10016",
+      "cursor": 5,
+      "idle": 11,
+      "phase": 2,
+      "pair": 3,
+      "count": 26,
+      "size": 0,
+      "t136": 8474
+    },
+    {
+      "frameCrc": "c8473071",
+      "cursor": 6,
+      "idle": 0,
+      "phase": 3,
+      "pair": 3,
+      "count": 0,
+      "size": 0,
+      "t136": 8513
+    },
+    {
+      "frameCrc": "9b28c145",
+      "cursor": 6,
+      "idle": 3,
+      "phase": 3,
+      "pair": 3,
+      "count": 4,
+      "size": 4,
+      "t136": 8544
+    },
+    {
+      "frameCrc": "709b4821",
+      "cursor": 7,
+      "idle": 0,
+      "phase": 3,
+      "pair": 3,
+      "count": 9,
+      "size": 9,
+      "t136": 8582
+    },
+    {
+      "frameCrc": "fe16f542",
+      "cursor": 7,
+      "idle": 4,
+      "phase": 1,
+      "pair": 5,
+      "count": 3,
+      "size": 7,
+      "t136": 8615
+    },
+    {
+      "frameCrc": "743d9710",
+      "cursor": 8,
+      "idle": 0,
+      "phase": 1,
+      "pair": 5,
+      "count": 8,
+      "size": 2,
+      "t136": 8652
+    },
+    {
+      "frameCrc": "cdd3ee24",
+      "cursor": 8,
+      "idle": 4,
+      "phase": 2,
+      "pair": 5,
+      "count": 2,
+      "size": 0,
+      "t136": 8685
+    },
+    {
+      "frameCrc": "c3126d40",
+      "cursor": 9,
+      "idle": 0,
+      "phase": 2,
+      "pair": 5,
+      "count": 7,
+      "size": 0,
+      "t136": 8723
+    },
+    {
+      "frameCrc": "583a3c0e",
+      "cursor": 9,
+      "idle": 4,
+      "phase": 2,
+      "pair": 5,
+      "count": 11,
+      "size": 0,
+      "t136": 8755
+    },
+    {
+      "frameCrc": "ebf76064",
+      "cursor": 1,
+      "idle": 0,
+      "phase": 2,
+      "pair": 5,
+      "count": 15,
+      "size": 0,
+      "t136": 8790
+    },
+    {
+      "frameCrc": "029288f0",
+      "cursor": 1,
+      "idle": 3,
+      "phase": 2,
+      "pair": 5,
+      "count": 19,
+      "size": 0,
+      "t136": 8826
+    },
+    {
+      "frameCrc": "6b98bdc4",
+      "cursor": 2,
+      "idle": 0,
+      "phase": 2,
+      "pair": 5,
+      "count": 24,
+      "size": 0,
+      "t136": 8863
+    },
+    {
+      "frameCrc": "f0b0ec8a",
+      "cursor": 2,
+      "idle": 4,
+      "phase": 2,
+      "pair": 5,
+      "count": 28,
+      "size": 0,
+      "t136": 8893
+    },
+    {
+      "frameCrc": "fe20cb3d",
+      "cursor": 3,
+      "idle": 0,
+      "phase": 3,
+      "pair": 5,
+      "count": 1,
+      "size": 1,
+      "t136": 8928
+    },
+    {
+      "frameCrc": "18892220",
+      "cursor": 3,
+      "idle": 3,
+      "phase": 3,
+      "pair": 5,
+      "count": 5,
+      "size": 5,
+      "t136": 8960
+    },
+    {
+      "frameCrc": "36b6093c",
+      "cursor": 4,
+      "idle": 0,
+      "phase": 4,
+      "pair": 5,
+      "count": 0,
+      "size": 9,
+      "t136": 8995
+    },
+    {
+      "frameCrc": "c0a24c3a",
+      "cursor": 4,
+      "idle": 4,
+      "phase": 1,
+      "pair": 7,
+      "count": 4,
+      "size": 6,
+      "t136": 9030
+    },
+    {
+      "frameCrc": "9d589a1b",
+      "cursor": 5,
+      "idle": 0,
+      "phase": 1,
+      "pair": 7,
+      "count": 8,
+      "size": 2,
+      "t136": 9063
+    },
+    {
+      "frameCrc": "bb0b15b9",
+      "cursor": 5,
+      "idle": 4,
+      "phase": 2,
+      "pair": 7,
+      "count": 3,
+      "size": 0,
+      "t136": 9100
+    },
+    {
+      "frameCrc": "6d612a5b",
+      "cursor": 6,
+      "idle": 0,
+      "phase": 2,
+      "pair": 7,
+      "count": 7,
+      "size": 0,
+      "t136": 9134
+    },
+    {
+      "frameCrc": "68977594",
+      "cursor": 6,
+      "idle": 3,
+      "phase": 2,
+      "pair": 7,
+      "count": 11,
+      "size": 0,
+      "t136": 9166
+    },
+    {
+      "frameCrc": "26aba632",
+      "cursor": 7,
+      "idle": 0,
+      "phase": 2,
+      "pair": 7,
+      "count": 16,
+      "size": 0,
+      "t136": 9203
+    },
+    {
+      "frameCrc": "bc75a012",
+      "cursor": 7,
+      "idle": 3,
+      "phase": 2,
+      "pair": 7,
+      "count": 19,
+      "size": 0,
+      "t136": 9234
+    },
+    {
+      "frameCrc": "bf2932a4",
+      "cursor": 7,
+      "idle": 8,
+      "phase": 2,
+      "pair": 7,
+      "count": 24,
+      "size": 0,
+      "t136": 9270
+    },
+    {
+      "frameCrc": "bc254f00",
+      "cursor": 7,
+      "idle": 12,
+      "phase": 2,
+      "pair": 7,
+      "count": 28,
+      "size": 0,
+      "t136": 9305
+    },
+    {
+      "frameCrc": "4119f20e",
+      "cursor": 7,
+      "idle": 17,
+      "phase": 3,
+      "pair": 7,
+      "count": 2,
+      "size": 2,
+      "t136": 9341
+    },
+    {
+      "frameCrc": "42729789",
+      "cursor": 7,
+      "idle": 21,
+      "phase": 3,
+      "pair": 7,
+      "count": 6,
+      "size": 6,
+      "t136": 9376
+    },
+    {
+      "frameCrc": "4e4578ad",
+      "cursor": 7,
+      "idle": 25,
+      "phase": 4,
+      "pair": 7,
+      "count": 0,
+      "size": 9,
+      "t136": 9410
+    }
+  ],
+  "words": {
+    "cursor": 208780,
+    "idle": 208756,
+    "phase": 208800,
+    "pair": 208804,
+    "count": 208776,
+    "size": 208812
+  }
+}
