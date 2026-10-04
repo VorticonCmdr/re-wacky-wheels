@@ -1,0 +1,86 @@
+{
+ "id": "start-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "a shootout race (zone 1, track 16) of the plain archive, paused at the countdown or a little after the start: the start tables, the racers' first words and the branch words",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "16"
+ },
+ "branchAt": 126068,
+ "branch": 0,
+ "gridFlagAt": 166882,
+ "gridFlag": 1,
+ "twoPlayerAt": 166876,
+ "twoPlayer": 0,
+ "countWord": 1,
+ "levelAt": 166788,
+ "level": 84,
+ "tables": {
+  "x": [
+   1248,
+   2848,
+   1248,
+   1312,
+   1248,
+   1312,
+   1248,
+   1312
+  ],
+  "y": [
+   2042,
+   2072,
+   1792,
+   1888,
+   1984,
+   2080,
+   2176,
+   2272
+  ]
+ },
+ "racers": [
+  [
+   1248,
+   2042,
+   0,
+   0,
+   4,
+   0,
+   0,
+   24,
+   84,
+   74,
+   10,
+   22
+  ],
+  [
+   2848,
+   2072,
+   4,
+   0,
+   4,
+   0,
+   0,
+   24,
+   24,
+   24,
+   20,
+   28
+  ]
+ ],
+ "routeCompass0": 7
+}

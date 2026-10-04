@@ -74,4 +74,11 @@ export default [
     leads: ['docs/gam.md'],
     todo: 'Find the readers of obj2+0x28b0a/+0x28b0e, the word tables obj2+0x1d7cc/+0x1d7e0, obj2+0x28b60 and obj2+0x28b5a/+0x28b4e/+0x28b4c.',
   },
+  {
+    id: 'palette.cycle-observed', tag: 'PROVEN',
+    statement: 'Observed in the running game (record dac-1: a shootout race on track 16 of the plain archive, whose .GAM has the palette-cycling flag 1 and the delays 2, 4 and 3 like track 2; the VGA DAC entries 144 to 180 read through ports 0x3c7 and 0x3c9 at 40 pauses of 0.1 to 0.3 s, 535 to about 640 ticks): exactly 13 of the 37 entries change over time, the entries 148, 161 to 164 and 168 to 175, the sets that the wiki names for the cycling, and the other 24 never change (144 to 147, 149 to 160, 165 to 167 and 176 to 180); every colour the 13 entries take is one of the colours of the palette of BEACH.PCX (the palette the cycling uses, 6-bit values as the DAC holds them), the values at the entries 161 to 164 and 168 to 175 are the entries 0 to 76 of that palette in groups (the entries 1, 5, 10, 25, ..., 2, 6, 15, ..., 3, 7, 11, ... and so on are equal colours: the palette repeats its colours in a pattern) and the whole cycle of the group 148 and 161 to 164 comes round to the same colours about every 20 ticks. Not observed: the rule that picks the entries of BEACH.PCX at each step (the roles of the three delays 2, 4 and 3 are read in gam.read-rest), the effect on the picture, and the first palette load. A flag-1 track in a played race is reached through the two player shootout menu (zone 1 is track 16).',
+    value: { track: 16, from: 144, to: 180, samples: 40, changing: [148, 161, 162, 163, 164, 168, 169, 170, 171, 172, 173, 174, 175], groupA: [148, 161, 162, 163, 164], stable: 24, delays: [2, 4, 3], palette: 'BEACH.PCX', minChanges: 15, returnTicks: [535, 555, 577, 595, 615, 636] },
+    evidence: { checks: ['obs-dac'], obs: ['dac-1'] },
+    leads: ['docs/gam.md'],
+  },
 ];

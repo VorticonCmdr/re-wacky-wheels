@@ -33,12 +33,26 @@ function validateSecond(dat, r, V) {
   assert.ok(h.camera.racers.every(p => p[1] === y0 && p[1] === S.y), 'every racer on the first pair\'s y');
 }
 
+// The other branch: with the second word (obj2+0x28be2) set, as in a shootout race, the tables are the file's eight coordinate pairs plus the bias, unchanged.
+function validateShoot(dat, r, V) {
+  const G = V.grid, S = G.shoot, gam = parseGam(parseDatDirectory(dat).find(e => e.name === `${r.names.track}.GAM`).data);
+  assertArchive(r, dat);
+  assert.equal(Number(r.names.track), S.track, 'the shootout track');
+  assert.equal(r.branch, G.branch, 'the first word is still 0');
+  assert.equal(r.gridFlag, S.gridFlag, 'the second word is 1');
+  assert.deepEqual(r.tables.x, gam.starts.map(p => p.x + V.bias), 'the x table is the file\'s x values plus the bias');
+  assert.deepEqual(r.tables.y, gam.starts.map(p => p.y + V.bias), 'the y table is the file\'s y values plus the bias');
+  assert.deepEqual(r.tables.x, S.x); assert.deepEqual(r.tables.y, S.y);
+  assert.equal(r.countWord + 1, S.racers, 'two racers');
+  r.racers.forEach(([rx, ry], i) => { assert.equal(rx, r.tables.x[i], `racer ${i} at table x`); assert.equal(ry, r.tables.y[i], `racer ${i} at table y`); });
+}
+
 export default {
   id: 'obs-start',
   claims: ['racer.start-grid'],
-  obs: ['start-1', 'grid-7'],
+  obs: ['start-1', 'grid-7', 'start-2'],
   reviewed: { by: 'main-session', date: '2026-10-03' },
-  async run(ctx) { const dat = await ctx.open('WACKY.DAT'), V = values(); validate(dat, ctx.obs('start-1'), V); validateSecond(dat, ctx.obs('grid-7'), V); },
+  async run(ctx) { const dat = await ctx.open('WACKY.DAT'), V = values(); validate(dat, ctx.obs('start-1'), V); validateSecond(dat, ctx.obs('grid-7'), V); validateShoot(dat, ctx.obs('start-2'), V); },
   async discriminate(ctx) {
     const dat = await ctx.open('WACKY.DAT'), record = ctx.obs('start-1'), V = values();
     const tweak = (label, patch) => ({ label, fn: () => validate(dat, record, { ...V, grid: { ...V.grid, ...patch } }) });
@@ -51,6 +65,7 @@ export default {
       tweak('9 entries', { entries: V.grid.entries + 1 }),
       tweak('branch word 1', { branch: V.grid.branch + 1 }),
       tweak('grid flag 1', { gridFlag: V.grid.gridFlag + 1 }),
+      { label: 'shootout: a pair swapped', fn: () => validateShoot(dat, { ...ctx.obs('start-2'), tables: { x: ctx.obs('start-2').tables.x.map((v, i) => (i === 1 ? v + 1 : v)), y: ctx.obs('start-2').tables.y } }, V) }, // @math the second entry
       { label: 'second track: step 0x15', fn: () => validateSecond(dat, ctx.obs('grid-7'), { ...V, grid: { ...V.grid, xStep: V.grid.xStep + 1 } }) },
       { label: 'second track: y altered', fn: () => validateSecond(dat, { ...ctx.obs('grid-7'), horizon: { ...ctx.obs('grid-7').horizon, camera: { ...ctx.obs('grid-7').horizon.camera, racers: ctx.obs('grid-7').horizon.camera.racers.map((p, i) => (i === 3 ? [p[0], p[1] + 1, p[2]] : p)) } } }, V) }, // @math the fourth racer
       { label: 'start bias 0x3df', fn: () => validate(dat, record, { ...V, bias: V.bias - 1 }) },

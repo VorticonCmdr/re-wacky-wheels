@@ -337,6 +337,21 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async dac() {
+    // The VGA palette over time in a running race: `--args` {count, ms: [lo, hi], from, to}. Per pause the tick counter obj2+0x1ec64 and the 6-bit DAC triples of the entries from..to (the read index written to port 0x3c7, then 3 reads of 0x3c9 an entry).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    const from = spec.from ?? 0, to = spec.to ?? 255, samples = []; // @math the whole palette by default
+    for (let n = 0; n < (spec.count ?? 30); n++) { // @math thirty pauses by default
+      await post('/debug/continue'); const [lo, hi] = spec.ms ?? [100, 300]; await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(30); // @math a random run of 0.1 to 0.3 s
+      const tick = Buffer.from(await readMemory(b2 + 0x1ec64, 4)).readInt32LE(0), demo = Buffer.from(await readMemory(b2 + 0x28c0c, 2)).readInt16LE(0);
+      await io(0x3c7, from, 1); const dac = []; for (let k = from; k <= to; k++) dac.push([await inPort(0x3c9), await inPort(0x3c9), await inPort(0x3c9)]);
+      samples.push({ tick, demo, dac });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), from, to, samples };
+  },
   async exit() {
     // The text screen the game leaves when it exits (after `LEAVE GAME`): the CRC-32 of the 4000 bytes at B800:0000 (80 x 25 cells of a character and an attribute), of the following 4000 bytes, the CRTC start address and the text mode check.
     const VRAM = 0xb8000, CELLS = 4000; // @math the colour text segment and 80 x 25 cells of 2 bytes
