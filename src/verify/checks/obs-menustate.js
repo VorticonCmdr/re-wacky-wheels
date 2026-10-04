@@ -1,14 +1,15 @@
 import assert from 'node:assert/strict';
-import { stepFrame, sizeOf, frameOf } from '../../game/menu.js';
+import { stepFrame, sizeOf, frameOf, enterMenu } from '../../game/menu.js';
 import { assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
+const IDS = ['menuanim-2', 'menusub-1', 'menusub-2', 'menusub-3'];
 const values = () => ({ A: expected('menu.animation-observed') });
 const MAX_STEPS = 60; // @math a bit more than a cycle of 51 steps: the most the replay looks ahead between two pauses
 const PICK = 40, PICK_LION = 18, PICK_TIME = 100; // @math pauses to alter in the discriminators: a plain one, one with the icons animating, one later in the run
-const LOST_TAPS = 2; // @math the recording tapped 20 keys and the game dropped at most this many
+const LOST_TAPS = 6; // @math the records tapped about 52 keys and the game dropped at most this many
 
-const stateOf = s => ({ cursor: s.cursor, lionTop: s.lionRow, lionFrame: s.lionFrame, busy: s.busy, phase: s.phase, count: s.count, pair: s.pair });
+const stateOf = (s, id) => ({ ...enterMenu(id), cursor: s.cursor, lionTop: s.lionRow, lionFrame: s.lionFrame, busy: s.busy, phase: s.phase, count: s.count, pair: s.pair });
 const same = (a, b) => ['cursor', 'lionTop', 'lionFrame', 'busy', 'phase', 'count', 'pair'].every(k => a[k] === b[k]);
 
 // Replay every pair of consecutive pauses through the port's step: some number of steps, the key (if one was tapped in the interval) read in one of them
@@ -21,7 +22,7 @@ function replay(r, V, { period = V.A.period } = {}) {
     assert.ok(frameOf(s.phase, s.count) >= 0 && frameOf(s.phase, s.count) < V.A.frames, 'the frame stays within the cycle');
   });
   for (let i = 1; i < S.length; i++) {
-    const a = stateOf(S[i - 1]), b = stateOf(S[i]), key = keys.get(i);
+    const a = stateOf(S[i - 1], r.menu), b = stateOf(S[i], r.menu), key = keys.get(i);
     let steps = null, dropped = false;
     for (let k = 0; k <= MAX_STEPS && steps === null; k++) {
       for (let at = key ? 0 : 0; at <= (key ? Math.max(k, 1) : 0) && steps === null; at++) {
@@ -41,16 +42,20 @@ function replay(r, V, { period = V.A.period } = {}) {
 export default {
   id: 'obs-menustate',
   claims: ['menu.animation-observed'],
-  obs: ['menuanim-2'],
+  obs: IDS,
   reviewed: { by: 'main-session', date: '2026-10-04' },
   async run(ctx) {
-    const r = ctx.obs('menuanim-2'), pairs = replay(r, values());
-    assertArchive(r, await ctx.open('WACKY.DAT'));
-    assert.equal(pairs, r.samples.length - 1, 'every pair of pauses');
+    const V = values(), dat = await ctx.open('WACKY.DAT');
+    for (const id of IDS) {
+      const r = ctx.obs(id), pairs = replay(r, V);
+      assertArchive(r, dat);
+      assert.equal(pairs, r.samples.length - 1, `${id}: every pair of pauses`);
+    }
   },
   async discriminate(ctx) {
-    const r = ctx.obs('menuanim-2'), V = values();
+    const r = ctx.obs('menuanim-2'), V = values(), sub = ctx.obs('menusub-1');
     return [
+      { label: 'a submenu\'s cars moving on by two', fn: () => replay({ ...sub, menu: 'main' }, V) },
       { label: 'a step of 7 counts', fn: () => replay(r, V, { period: V.A.period - 1 }) },
       { label: 'a recorded count altered', fn: () => replay({ ...r, samples: r.samples.map((s, i) => (i === PICK ? { ...s, count: s.count + 1 } : s)) }, V) },
       { label: 'a recorded pair altered', fn: () => replay({ ...r, samples: r.samples.map((s, i) => (i === PICK ? { ...s, pair: (s.pair + 2) % 8 } : s)) }, V) }, // @math the next pair of the four

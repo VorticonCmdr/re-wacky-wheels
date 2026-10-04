@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { archiveMembers } from '../../game/track-data.js';
 // the picture is not compared: every pixel under a tile's non-zero pixels is the tile's (the bar covers the picture), so the picture itself is boot.pictures-observed's
-import { renderMenu, loadMenuArt } from '../../render/menu.js';
+import { renderMenu, loadMenuArt, menuItems } from '../../render/menu.js';
 import { assertArchive, crc } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
@@ -16,7 +16,7 @@ function replay(dat, r, V, { swapTiles = false } = {}) {
   assert.deepEqual(V.boot.order.at(-1), 'WINTRO.PCX', 'the menu is drawn over the last intro picture');
   const art = loadMenuArt(members), tiles = art.tiles, fb = new Uint8Array(SCREEN.width * SCREEN.height);
   if (swapTiles) [tiles[0], tiles[1]] = [tiles[1], tiles[0]]; // @math swap the first two tiles of the font
-  renderMenu(fb, art, { lionTop: 69, lionFrame: 0, pair: 1, size: 0, frame: 0 }); // @math any state: the icons and cars do not cover the characters' tile pixels
+  renderMenu(fb, art, { kind: 'main', items: menuItems(), lionTop: 69, lionFrame: 0, pair: 1, size: 0, frame: 0 }); // @math any state: the icons and cars do not cover the characters' tile pixels
   const positions = r.tiles[0].positions;
   assert.equal(positions.length, M.positions, 'every character position is in the record');
   let compared = 0;

@@ -12,7 +12,8 @@ import { drawList } from './render/draw-list.js';
 import { viewSetup } from './game/view.js';
 import { objectRecords, objectFrame } from './game/objects.js';
 import { playerRecord } from './game/player-car.js';
-import { renderMenu, loadMenuArt, menuItems } from './render/menu.js';
+import { renderMenu, loadMenuArt } from './render/menu.js';
+import { menuDef } from './game/menus.js';
 import { createMenu, stepFrame, viewOf, menuPeriod } from './game/menu.js';
 
 const $ = id => document.getElementById(id);
@@ -47,9 +48,9 @@ function blit(palette) {
 function drawMenu() {
   const art = state.menuArt;
   renderMenu(index, art, viewOf(state.menu)); blit(art.rgba);
-  $('readout').innerHTML = `<dt>Selected</dt><dd>${menuItems()[state.menu.cursor - 1].trim()}</dd>`;
+  $('readout').innerHTML = `<dt>Menu</dt><dd>${state.menu.id}</dd><dt>Selected</dt><dd>${menuDef(state.menu.id).items[state.menu.cursor - 1]}</dd>`;
   $('badge').className = 'badge bad';
-  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. Only SINGLE PLAYER RACING leads anywhere (straight into the race).';
+  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. SINGLE PLAYER RACING goes straight into the race; the menus of GAME OPTIONS and COMM-BAT PLAY (as far as recorded) work, the other items say they are not ported yet.';
 }
 
 // One step of the menu per 8 counts of the 136 Hz clock, with the first key pressed since the last step.
@@ -62,9 +63,11 @@ function stepMenuClock(now) {
   }
 }
 
-function chooseItem(item) {
-  if (item === 1) { state.screen = 'race'; startTrack(); setMessage(''); return; } // @math the first item of the menu, SINGLE PLAYER RACING
-  setMessage(`${menuItems()[item - 1].trim()} is not ported yet.`);
+// What the page does with an item that is not just another menu: the single player race starts, everything else says it is not ported.
+function chooseItem(action) {
+  if (action.race === 1) { state.screen = 'race'; startTrack(); setMessage(''); return; } // @math the first race item of the main menu, SINGLE PLAYER RACING
+  const what = action.race ? 'this race mode' : action.leave ? 'leaving the game (close the tab)' : action.pending ?? 'this item';
+  setMessage(`${what} is not ported yet.`);
 }
 
 function draw() {

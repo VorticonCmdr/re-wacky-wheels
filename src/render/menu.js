@@ -33,12 +33,25 @@ export function drawTile(fb, tile, x, y, [w, h]) {
 }
 const SCREEN = { width: 320, height: 200 }; // @math the VGA mode 13h screen the game draws on (floor.model and every observation read 320 x 200)
 
-const SCREEN_MODEL = () => K({ background: 'CHECK.PCX', items: { lead: 1, trail: 1, width: 20 }, lions: { member: 'HANDLE.SP', size: [20, 23], frameBytes: 460, frames: [0, 4], x: [21, 284], top: 69, step: 12 }, cars: { member: 'CARS.SP', inf: '38X28.INF', frameBytes: 1064, slots: 8, slotFrames: 12, cycle: 8, pairSlots: [6, 7], centres: [27, 294], tops: [2, 3, 4, 6, 7, 8, 9, 10, 11, 12] } }, 'menu.screen-model');
+const SCREEN_MODEL = () => K({ background: 'CHECK.PCX', screenWidth: 320, items: { lead: 1, trail: 1 }, lions: { member: 'HANDLE.SP', size: [20, 23], frameBytes: 460, frames: [0, 4], above: 7, left: 18, rightBack: 1 }, cars: { member: 'CARS.SP', inf: '38X28.INF', frameBytes: 1064, slots: 8, slotFrames: 12, cycle: 8, centres: [27, 294], tops: [2, 3, 4, 6, 7, 8, 9, 10, 11, 12], bottomDelta: 168, layouts: { main: { centre: 130, cars: [[0, 0, 6], [1, 0, 7]] }, sub: { centre: 112, cars: [[0, 0, 4], [0, 1, 5], [1, 0, 6], [1, 1, 7]] } } } }, 'menu.screen-model');
 
-// An item as the game draws it: a space tile in front, the text, then spaces up to the width of the longest item and one more behind, so the bars are all the same length.
-export function drawItem(fb, tiles, text, m) {
-  const M = MAIN(), P = SCREEN_MODEL().items, chars = [...' '.repeat(P.lead), ...text, ...' '.repeat(P.width - [...text].length + P.trail)];
-  chars.forEach((ch, k) => drawTile(fb, tiles[tileOf(ch)], M.x0 + M.step * (k - P.lead), M.y0 + M.lineStep * m, M.tile));
+// Where a menu's bars and icons go (menu.screen-model): the bars are centred across the screen by their text width, the block of rows about a centre row
+// that depends on the variant (the main menu 130, the submenus 112). `items` are the item texts; the bars are all as long as the longest item.
+export function layoutOf(kind, items) {
+  const S = SCREEN_MODEL(), M = MAIN(), max = Math.max(...items.map(t => [...t].length)), chars = max + S.items.lead + S.items.trail;
+  return { max, x0: Math.floor((S.screenWidth - chars * M.step) / 2), y0: S.cars.layouts[kind].centre - (M.lineStep * items.length) / 2, width: chars * M.step + (M.tile[0] - M.step) }; // @math the tiles overlap by their width less the step
+}
+
+// The row the selection icons rest at for a cursor (1-based).
+export function lionTopFor(kind, items, cursor) {
+  const S = SCREEN_MODEL(), M = MAIN();
+  return layoutOf(kind, items).y0 - S.lions.above + M.lineStep * (cursor - 1); // @math the cursor counts from 1
+}
+
+// An item as the game draws it: a space tile in front, the text, then spaces up to the longest item and one more behind, so the bars are all one length.
+export function drawItem(fb, tiles, text, x0, y, max) {
+  const M = MAIN(), P = SCREEN_MODEL().items, chars = [...' '.repeat(P.lead), ...text, ...' '.repeat(max - [...text].length + P.trail)];
+  chars.forEach((ch, k) => drawTile(fb, tiles[tileOf(ch)], x0 + M.step * k, y, M.tile));
 }
 
 // The menu's pictures, decoded once: the background, the font tiles, the lion frames and the car pictures with their ten sizes.
@@ -47,20 +60,23 @@ export function loadMenuArt(members) {
   return { title, tiles: loadTiles(members.get(MAIN().member)), handle: members.get(S.lions.member), cars: members.get(S.cars.member), sizes: parseInf(members.get(S.cars.inf)) };
 }
 
-// The whole screen for a state: { lionTop (the row the selection icons are drawn at), lionFrame (0 to 3), pair (the car slot pair), size (0 to 9), frame (0 to 7 within the cycle) }.
-// Returns the picture's palette (6-bit, as the game's buffer).
+// The whole screen for a state: { kind ('main' or 'sub'), items (the texts), lionTop (the row of the selection icons), lionFrame (0 to 3),
+// pair (the car slot pair), size (0 to 9), frame (0 to 7 within the cycle) }. Returns the picture's palette (6-bit, as the game's buffer).
 export function renderMenu(fb, art, state) {
-  const S = SCREEN_MODEL();
+  const S = SCREEN_MODEL(), M = MAIN(), L = layoutOf(state.kind, state.items);
   fb.set(art.title.indices);
-  menuItems().forEach((text, m) => drawItem(fb, art.tiles, text, m));
-  S.lions.x.forEach((x, side) => {
+  state.items.forEach((text, m) => drawItem(fb, art.tiles, text, L.x0, L.y0 + M.lineStep * m, L.max));
+  [L.x0 - S.lions.left, L.x0 + L.width - S.lions.rightBack].forEach((x, side) => {
     const f = S.lions.frames[side] + state.lionFrame, top = state.lionTop, [w, h] = S.lions.size;
     for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) { const v = art.handle[f * S.lions.frameBytes + i * h + j]; if (v !== 0) fb[(top + j) * SCREEN.width + x + i] = v; }
   });
-  const picture = art.sizes[state.size], slots = [(state.pair + S.cars.pairSlots[0]) % S.cars.slots, (state.pair + S.cars.pairSlots[1]) % S.cars.slots];
-  slots.forEach((slot, side) => {
-    const frame = slot * S.cars.slotFrames + (side === 0 ? state.frame : S.cars.cycle - 1 - state.frame); // the right car is the mirror in the cycle
-    blitRecord(fb, { picture, width: picture.w, height: picture.h, left: S.cars.centres[side] - (picture.w >> 1), top: S.cars.tops[state.size], firstColumn: 0, skipRows: 0, frame: art.cars.subarray(frame * S.cars.frameBytes, (frame + 1) * S.cars.frameBytes) });
+  const picture = art.sizes[state.size];
+  S.cars.layouts[state.kind].cars.forEach(([side, bottom, offset]) => {
+    const f = state.frame, slot = (state.pair + offset) % S.cars.slots, frame = slot * S.cars.slotFrames + (side === 0 ? f : S.cars.cycle - 1 - f); // the right cars are the mirror in the cycle
+    blitRecord(fb, { picture, width: picture.w, height: picture.h, left: S.cars.centres[side] - (picture.w >> 1), top: S.cars.tops[state.size] + bottom * S.cars.bottomDelta, firstColumn: 0, skipRows: 0, frame: art.cars.subarray(frame * S.cars.frameBytes, (frame + 1) * S.cars.frameBytes) });
   });
   return art.title.vga;
 }
+
+// How many corner cars a menu variant shows.
+export const carCount = kind => SCREEN_MODEL().cars.layouts[kind].cars.length;

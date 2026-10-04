@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
-import { stepFrame, lionTopOf } from '../../game/menu.js';
+import { stepFrame, enterMenu } from '../../game/menu.js';
+import { menuDef } from '../../game/menus.js';
+import { lionTopFor } from '../../render/menu.js';
 import { expected } from '../expect.js';
 
 const values = () => ({ K: expected('menu.keys-observed') });
+const mainTop = cursor => lionTopFor(menuDef('main').kind, menuDef('main').items, cursor);
 
 // menukeys-2 (the main menu): every Esc tap is replayed through the port's step and must end at the recorded cursor and icon row, settled.
 function main(r, V, { escapeTo = V.K.escapeTo } = {}) {
@@ -12,9 +15,10 @@ function main(r, V, { escapeTo = V.K.escapeTo } = {}) {
     const key = keys.get(i);
     if (key === V.K.escapeKey) {
       assert.equal(s.cursor, escapeTo, `pause ${i}: Esc puts the cursor on item ${escapeTo}`);
-      assert.equal(s.lionRow, lionTopOf(escapeTo), `pause ${i}: the icons are at its row at once`);
+      assert.equal(s.lionRow, mainTop(escapeTo), `pause ${i}: the icons are at its row at once`);
+      assert.equal(escapeTo, menuDef('main').items.length, `pause ${i}: it is the last item of the menu`);
       assert.equal(s.busy, 0, `pause ${i}: and not animating`); // @math 0 is the settled value of menu.animation-observed
-      const before = { cursor: r.samples[i - 1].cursor, lionTop: r.samples[i - 1].lionRow, lionFrame: r.samples[i - 1].lionFrame, busy: r.samples[i - 1].busy, phase: s.phase, count: s.count, pair: s.pair };
+      const before = { ...enterMenu('main'), cursor: r.samples[i - 1].cursor, lionTop: r.samples[i - 1].lionRow, lionFrame: r.samples[i - 1].lionFrame, busy: r.samples[i - 1].busy, phase: s.phase, count: s.count, pair: s.pair };
       const got = stepFrame(before, 'escape').menu;
       assert.deepEqual([got.cursor, got.lionTop, got.lionFrame, got.busy], [s.cursor, s.lionRow, s.lionFrame, s.busy], `pause ${i}: the port's step agrees`);
       escapes.push(i);
