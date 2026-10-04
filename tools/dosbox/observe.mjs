@@ -531,6 +531,22 @@ const scenarios = {
       const cstr3 = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
       horizon = { columns, pointer: await u32(0x1d860), bounds: [await u32(0x1d824), await u32(0x1d828), await u32(0x1d82c), await u32(0x1d830)], heading: await i32(0x1d5d4), camera: { x: await i16(0x28b0a), y: await i16(0x28b0e), a: await i32(0x1d614), b: await i32(0x1d5e4), racers: await (async () => { const out = []; const n = (await i16(0x28c40)) + 1; for (let k = 0; k < n; k++) out.push([await i16(0xaaa6 + 0x68 * k), await i16(0xaaa8 + 0x68 * k), await i16(0xaaaa + 0x68 * k)]); return out; })(), box: [await i16(0x28c16), await i16(0x28c2a), await i16(0x28c18), await i16(0x28c2c)] }, drawList: list2, track: await cstr3(b2 + 0x1d770), mode: await u32(0x1d998) };
     }
+    // The sprites of the draw list (spec.spritefit): per record the words (width, height, left, top, distance, skip, racer, size class, type), the picture and frame pointers, the CRC-32 of the picture (its two header words and the delta dwords, when the record is not cut), of the first bytes of the source frame
+    // for the frame sizes of the shapes in `spec.frameLengths`, and of the displayed rectangle (left, top, width, height) clipped to the screen; with the camera words, the heading, the render mode and the horizon pointer.
+    let fit;
+    if (spec.spritefit) {
+      const u32f = async a => Buffer.from(await readMemory(b2 + a, 4)).readUInt32LE(0), count3 = await i16(0x28b78), n3 = Math.min(Math.max(count3, 0), 30), raw3 = Buffer.from(await readMemory(b2 + 0x19a50, 0x28 * n3)), records = []; // @math at most 30 draw-list records
+      for (let r = 0; r < n3; r++) {
+        const o = r * 0x28, w = raw3.readUInt16LE(o), h = raw3.readUInt16LE(o + 2), left = raw3.readInt16LE(o + 4), top = raw3.readInt16LE(o + 6), pic = raw3.readUInt32LE(o + 8), frame = raw3.readUInt32LE(o + 12), skip = raw3.readUInt32LE(o + 0x14);
+        const rec = { w, h, left, top, distance: raw3.readInt16LE(o + 0x10), skip, racer: raw3.readInt16LE(o + 0x18), sizeClass: raw3.readInt16LE(o + 0x1a), type: raw3.readInt16LE(o + 0x24), pic, frame }; // @math the words of the 0x28-byte record
+        if (!skip) { const head = Buffer.from(await readMemory(pic - 4, 4)); const fw = head.readUInt16LE(0), fh = head.readUInt16LE(2); if (fw === w && fh === h) rec.picCrc = hex8(crc32(Buffer.from(await readMemory(pic - 4, 4 + (h + 1) * w * 4)))); } // @math the 4-byte header and (h + 1) x w delta dwords
+        const src = Buffer.from(await readMemory(frame, Math.max(...(spec.frameLengths ?? [1])))); rec.frameCrcs = Object.fromEntries((spec.frameLengths ?? []).map(len => [len, hex8(crc32(src.subarray(0, len)))]));
+        const x0 = Math.max(left, 0), y0 = Math.max(top, 0), x1 = Math.min(left + w, W), y1 = Math.min(top + h, H); if (x1 > x0 && y1 > y0) rec.rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0, crc: hex8(crc32(part(x0, y0, x1 - x0, y1 - y0))) };
+        records.push(rec);
+      }
+      const cstr4 = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+      fit = { records, count: count3, camera: [await i16(0x28b0a), await i16(0x28b0e)], heading: await i32(0x1d5d4), mode: await i16(0x28c20), horizonPointer: await u32f(0x1d860), track: await cstr4(b2 + 0x1d770), rowCrcs: Array.from({ length: H }, (_, y) => hex8(crc32(image.subarray(y * W, (y + 1) * W)))), player: await i16(0x28b7e) };
+    }
     // The sky: the CRC-32 of each row of the rectangle spec.sky = [firstRow, lastRow, firstColumn, lastColumn] of the displayed page, with the heading and the sky name of the track.
     let sky;
     if (spec.sky) {
@@ -547,7 +563,7 @@ const scenarios = {
       const racers = []; for (let n = 0; n < 8; n++) racers.push([await i16(0xaaa6 + n * 0x68), await i16(0xaaa8 + n * 0x68)]); // @math eight racer records of 0x68 bytes: the x and y words
       minimap = { dots, racers, count: await i16(0x28c40), mode: await i16(0x28c0c), pictureCrc: hex8(crc32(buf)), tables: { x: [0x202cc, hex8(crc32(Buffer.from(await readMemory(b2 + 0x202cc, 2048))))], y: [0x1faca, hex8(crc32(Buffer.from(await readMemory(b2 + 0x1faca, 2048))))] } }; // @math the two 2048-byte tables of the minimap
     }
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(tiles.length ? { tiles } : {}), ...(words ? { words } : {}), ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(sky ? { sky } : {}), ...(horizon ? { horizon } : {}) };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), startAddress: start, frameCrc: hex8(crc32(image)), hud, hudWords, carWords, rects, sprites, ...(tiles.length ? { tiles } : {}), ...(words ? { words } : {}), ...(minimap ? { minimap } : {}), ...(floor ? { floor } : {}), ...(fit ? { fit } : {}), ...(sky ? { sky } : {}), ...(horizon ? { horizon } : {}) };
   },
   async carframes() {
     // The player's car in the draw list under a schedule of keys (tools/dosbox/car-run.mjs passes --args {schedule, buffer, samples}); the CARS.SP buffer address is in the dword obj2+0x1d708.

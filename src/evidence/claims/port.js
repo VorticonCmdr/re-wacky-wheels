@@ -58,4 +58,11 @@ export default [
     evidence: { checks: ['obs-racepalette'], obs: ['dac-2'] },
     leads: ['docs/pcx.md'],
   },
+  {
+    id: 'sprite.model', tag: 'PROVEN',
+    statement: 'The constants of the scaled sprite drawing as the port uses them (check port-sprites): the .INF member of a shape holds ten pictures, each a width word, a height word and (height + 1) x width dwords (4 bytes each, a 4-byte header), the picture area is 320 x 200 with the last drawable row 199, and the sizes are the ten classes of view.model.',
+    value: { pictures: 10, headerBytes: 4, deltaBytes: 4, width: 320, height: 200, maxRow: 199, headerWords: 2, wordBytes: 2 },
+    evidence: { checks: ['port-sprites'], obs: ['fit-1', 'fit-2', 'fit-3', 'fit-4', 'fit-5', 'fit-6', 'fit-7', 'fit-8', 'fit-9'] },
+    leads: ['docs/inf.md', 'docs/view.md'],
+  },
 ];
