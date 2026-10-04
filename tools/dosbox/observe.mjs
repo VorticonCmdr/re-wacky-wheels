@@ -337,6 +337,34 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async devil() {
+    // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
+    // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero
+    // pixels of the 38 x 44 frames of GIGGLES.SP: all 28 at the entry step - 1, the 4 of the driver's block at the other two.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], VRAM = 0xa0000, W = 320, H = 200, LINE = 80, planes = 4; // @math the 320x200 mode-X picture, 80 bytes a line and plane
+    const spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms)), post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    const i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0);
+    const members = new Map(parseDatDirectory(datBytes).map(e => [e.name, e.data])), giggles = members.get('GIGGLES.SP'), mov = members.get('GIG.MOV'), dvm = new DataView(mov.buffer, mov.byteOffset), FW = 38, FH = 44; // @math the frame size of the report
+    for (const [off, v] of spec.poke ?? []) { const b = Buffer.alloc(4); b.writeInt32LE(v); await fetch(`${API}/api/v1/memory/${b2 + off}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: b }); }
+    const samples = [];
+    for (let n = 0; n < (spec.count ?? 30); n++) { // @math thirty pauses by default
+      await post('/debug/continue'); const [lo, hi] = spec.ms ?? [150, 450]; await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(50); // @math a random run of 0.15 to 0.45 s
+      await io(0x3d4, 0x0c, 1); const high = await inPort(0x3d5); await io(0x3d4, 0x0d, 1); const low = await inPort(0x3d5), start = high * 256 + low; // @math the start address registers
+      const plane = []; for (let p = 0; p < planes; p++) { await io(0x3ce, (p << 8) | 4, 2); plane.push(Buffer.from(await readMemory(VRAM + start, LINE * H))); }
+      const image = Buffer.alloc(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) image[y * W + x] = plane[x & 3][y * LINE + (x >> 2)];
+      const driver = await i32(0x84f4), step = await i32(0x8508), words = [await i32(0x1ec64), driver, await i32(0x8500), await i32(0x8504), step];
+      const under = (k, entry) => { if (entry < 0) return null; const mx = dvm.getInt16(2 + 4 * entry, true), my = dvm.getInt16(4 + 4 * entry, true), picked = []; // @math the count word, then the x and y words of an entry
+        for (let j = 0; j < FH; j++) for (let i = 0; i < FW; i++) { if (giggles[FW * FH * k + i * FH + j] === 0) continue; const X = 0xfa + mx + i, Y = 0x78 + my + j; picked.push(X >= 0 && X < W && Y >= 0 && Y < H ? image[Y * W + X] : 0); } // @math the screen x and row of the report
+        return [picked.length, hex8(crc32(Buffer.from(picked)))]; };
+      const block = Math.max(driver - 1, 0), at = {}; // the entries step - 2, step - 1 and step
+      at.prev = Array.from({ length: 28 }, (_, k) => under(k, step - 1)); // @math all 28 frames
+      at.before = Array.from({ length: 4 }, (_, k) => under(block * 4 + k, step - 2)); at.now = Array.from({ length: 4 }, (_, k) => under(block * 4 + k, step)); // @math the 4 frames of a block
+      samples.push({ words, ...at });
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), count: spec.count ?? 30, columns: ['tick', 'driver', 'flag', 'frame', 'step'], samples };
+  },
   async steps() {
     // (a played race, paused) tick-resolution samples of the player's car while keys are held: --phases '[[["KBD_leftalt"],40],[[],40],...]' (keys, samples), --ms 'lo,hi' the random run in ms between the samples.
     // Per sample: the tick counter obj2+0x1ec64, the car's throttle +0x42 and speed +0x26, the player's world x and y (obj2+0xaaa6, +0xaaa8), the angle dword obj2+0x1d5d4, the accelerate and brake words

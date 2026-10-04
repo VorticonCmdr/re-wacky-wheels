@@ -16,3 +16,5 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 - [Miscellaneous formats](https://moddingwiki.shikadi.net/wiki/Miscellaneous_Wacky_Wheels_File_Formats)
 
 Read on 2026-10-02. [Format index](README.md).
+
+- [PROVEN] (`obs-devil`, claim `devil.draw-observed`): the entries are the screen offsets of the driver reaction figure (a red devil for driver 1): frame (driver - 1) x 4 + f of `GIGGLES.SP` (28 frames of 38 x 44, seven blocks of four) at the column 0xfa + x and row 0x78 + y of the entry one step behind the step word obj2+0x8508 (which runs on one per tick from the start value to the entry 76 and further, then the driver word obj2+0x84f4 returns to 0).

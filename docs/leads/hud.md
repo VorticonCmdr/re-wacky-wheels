@@ -110,3 +110,5 @@ Called from the frame routine when the state value in dx is 3 or 4 (obj1+0x22553
 * "No code stores the item pointers for items 1 and 2": only a text search of obj1.asm for `0x1c0a8`/`0x1c0ac` (and their `[reg+0x1c0a4]` forms, which would not match my pattern), so this is not a proven negative.
 
 > **Checked 2026-10-04** (`text.banner-observed`, PROVEN, records text-2 to text-5): the lap banner at (4, 164) shows LAP n while the lap word obj2+0x84c2 is below the laps word obj2+0x28b9c, LAST LAP! at or above it, FINISHED! when obj2+0x28c3c is not 0, all drawn with the 8 x 8 OFONT.SP glyphs of `text.char-map` at the advance 8.
+
+> **Checked 2026-10-04** (`devil.draw-observed`, PROVEN, record devil-1): the 'driver reaction animation' of this report is a frame of `GIGGLES.SP` (the source of `[0x1ea90]` that the report could not name), 38 x 44, 4 frames a driver, at x = 0xfa + GIG.MOV x, y = 0x78 + GIG.MOV y, drawn by the routine at obj1+0x1a740 for the driver in obj2+0x84f4.
