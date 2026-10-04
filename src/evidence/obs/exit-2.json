@@ -1,0 +1,22 @@
+{
+ "id": "exit-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "the text screen after LEAVE GAME with the dword obj2+0x1e574 poked to 1 first (main menu: Esc then Enter on LEAVE GAME; an order picture, then a key)",
+ "textAt": 753664,
+ "cells": 4000,
+ "crtcStart": 0,
+ "textCrc": "9b770803",
+ "nextCrc": "6259ba60"
+}
