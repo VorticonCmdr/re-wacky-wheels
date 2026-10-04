@@ -115,6 +115,20 @@ export default [
     leads: ['docs/leads/hud.md'],
   },
   {
+    id: 'menu.zone-observed', tag: 'PROVEN',
+    statement: 'Observed in the running game (record menu-3: the Esc menu of a two player shootout race, zone 1 on track 16, split screen, paused; for each of the 22 character positions the number and CRC-32 of the screen pixels under the non-zero pixels of each of the 42 tiles of WFONT1.SP): the menu has two items, BACK TO ZONE and LEAVE ZONE, drawn with the tile font of text.menu-observed at the step 11 and 12 rows apart like the other menus, left aligned at the screen x 83 and the rows 84 and 96 (the race menu of text.menu-observed has four items from x 88, the main menu nine from x 50: the x depends on the menu, how is not known). At every position the tile that fits the screen under all its pixels with the most pixels is the character\'s (letters are the tiles 0 to 25, the space 36). Not observed: the rule that places the items, the other split-screen parts, and the selection moving.',
+    value: { member: 'WFONT1.SP', tile: [15, 13], tiles: 42, x0: 83, y0: 84, step: 11, lineStep: 12, items: ['BACK TO ZONE', 'LEAVE ZONE'], letterBase: 0x41, spaceTile: 36, positions: 22 },
+    evidence: { checks: ['obs-zonemenu'], obs: ['menu-3'] },
+    leads: ['docs/leads/menus.md'],
+  },
+  {
+    id: 'text.shootout-observed', tag: 'PROVEN',
+    statement: 'Observed in the running game (record text-6: the Esc menu of a two player shootout race, zone 1 on track 16, split screen, paused; the displayed page read from video memory, the CRC-32 of the screen under each of the first 41 OFONT.SP glyph slots at each place): the split-screen HUD text of the shootout is drawn with the 8 x 8 glyphs of text.glyphs-observed at the advance 8: the driver names RINGO at the column 4 and the row 1 (the upper player) and TIGI at the column 4 and the row 101 (the lower player), and the word SCORE at the column 221 and the row 1, each letter the slot of the code minus 0x41; at each place the glyph with the most pixels among those that fit the screen is the expected one. Not observed: the number after SCORE (at the columns 269 and 277 it is not made of these glyphs: no OFONT.SP slot fits the screen there, so it is drawn another way, probably with the 10 x 9 digits of LAP.SP), the counters beside the pictures and the other screen parts.',
+    value: { member: 'OFONT.SP', candidates: 41, strings: [['RINGO', 4, 1], ['TIGI', 4, 101], ['SCORE', 221, 1]], advance: 8 },
+    evidence: { checks: ['obs-shoottext'], obs: ['text-6'] },
+    leads: ['docs/leads/hud.md'],
+  },
+  {
     id: 'view.row-table', tag: 'PROVEN',
     statement: 'The race builds a table of 0x1000 words at obj2+0xbd00 with the routine at obj1+0x174a4 (the screen row at which something at a given distance is drawn, see view.object-projection): entry 0 is 0xf0; for the distance d from 1 to 0xfff the value is b = 0x4650 / d rounded to the nearest integer, halves rounding down (the remainder must exceed d / 2 rounded down, obj1+0x174ff), clamped to 0x15 to 0xf0 (obj1+0x17504, +0x1750e), and the entry is 0x78 - (b >> 1) + b (obj1+0x17527 to +0x17533), stored as a word at obj2+0xbd00 + 2 d (obj1+0x17536). Observed in the running game (record projtable-1, a played race): the CRC-32 of the 8192 bytes of the live table equals the CRC-32 of the table computed this way; the check also reads the five constants (0xf0, 0x4650, 0x15, 0xf0, 0x78) from the immediates of the cited instructions, since the table alone cannot tell 0x4650 from 0x464f or the cap 0xf0 from 0xef (both give the same entries). So the value is 240 for every distance up to 74, 233 at 0x50, 193 at 0x7c and 131 at 0x462, the farthest drawn.',
     value: { tableAt: 0xbd00, entries: 0x1000, first: 0xf0, numerator: 0x4650, minimum: 0x15, maximum: 0xf0, base: 0x78 },
