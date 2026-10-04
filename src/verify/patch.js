@@ -18,6 +18,17 @@ export function replaceMember(dat, name, data) {
   return out;
 }
 
+// A copy of the archive in which a directory entry has another name (the name field is NUL-padded up to the size field, dat.layout); the member's bytes stay where they are.
+export function renameMember(dat, name, newName) {
+  const L = expected('dat.layout'), entry = parseDatDirectory(dat).find(e => e.name === name);
+  if (!entry) throw new Error(`the archive has no ${name}`);
+  if (newName.length >= L.sizeAt) throw new Error('the new name does not fit before the size field');
+  const out = Uint8Array.from(dat);
+  out.fill(0, entry.entryAt, entry.entryAt + L.sizeAt);
+  out.set(Buffer.from(newName, 'latin1'), entry.entryAt);
+  return out;
+}
+
 // `edits`: [[zero-based line index, new text], ...]. Lines are separated by the GAM's CRLF; text is written as Latin-1.
 export function editLines(bytes, edits) {
   const sep = expected('gam.layout').separator, lines = Buffer.from(bytes).toString('latin1').split(sep);

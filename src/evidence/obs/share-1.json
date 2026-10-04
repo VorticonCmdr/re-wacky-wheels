@@ -1,0 +1,31 @@
+{
+ "id": "share-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "the game started from the plain archive (42.GAM and 20.GAM present) in a fresh DOSBox, a key pressed at the prompt, paused in the title or menu; the registration probe's words",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "flagAt": 124276,
+ "flag": 0,
+ "levelAt": 126112,
+ "level": 3,
+ "lookupAt": 166870,
+ "lookup": 1,
+ "names": [
+  "42.GAM",
+  "20.GAM"
+ ]
+}

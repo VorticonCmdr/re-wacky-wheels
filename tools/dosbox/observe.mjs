@@ -361,6 +361,13 @@ const scenarios = {
     const mem = Buffer.from(await readMemory(VRAM, 2 * CELLS + 96)); // @math two screens' worth, a little over
     return { ...header, textAt: VRAM, cells: CELLS, crtcStart: high * 256 + low, textCrc: hex8(crc32(mem.subarray(0, CELLS))), nextCrc: hex8(crc32(mem.subarray(CELLS, 2 * CELLS))) };
   },
+  async shareflag() {
+    // The registration probe of the game's start (obj1+0x24458): the flag dword obj2+0x1e574, the level dword +0x1eca0 and the result word +0x28bd6 of its last directory lookup, with the member names it looked for.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1];
+    const u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), u32 = async a => Buffer.from(await readMemory(a, 4)).readUInt32LE(0);
+    const cstr = async a => { const b = await readMemory(a, 16); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); }; // @math 16 bytes hold a name
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), flagAt: 0x1e574, flag: await u32(b2 + 0x1e574), levelAt: 0x1eca0, level: await u32(b2 + 0x1eca0), lookupAt: 0x28bd6, lookup: await u16(b2 + 0x28bd6), names: [await cstr(b2 + 0x1eb8), await cstr(b2 + 0x1ec0)] };
+  },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
     // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero
