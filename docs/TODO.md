@@ -133,8 +133,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
   - Gap: the chain (key to byte to word to amount) and its sign were observed in a played race (`input.steer-observed`, PROVEN); player 2's steering path and the mode-specific routines that write the same flags are not followed.
 - [ ] `setup.sound-options` [STATIC] — voices (cfg 0x796: 2/4/6/8), mixing bits (0x79a: 8/16), MIDI address (0x7a2) and menu position (0x7a6); the game hands them to the sound library's init
   - Gap: read, not run; the library routines `obj1+0x31820` and `obj1+0x31fc8` are unread, the word 0x79e and the entry values of the MIDI address list are unknown. Next: read the library init, or run with a changed voice count (DOSBox run copy).
-- [ ] `setup.score-reset` [STATIC] — "Reset score tables" deletes WACKY1.TIM, WACKY2.TIM, WACKY1.HI, WACKY2.HI and WACKY.DTT
-  - Gap: read, not run; that the game recreates them from the default score members is not read.
+- [x] `setup.score-reset` PROVEN (`obs-setupreset`, record `setup-1`, 2026-10-04): SETUP.EXE's RESET SCORES strings, file names and the DOS delete helper are read, and a run deleted exactly the named files that existed (WACKY.DTT, WACKY1.HI, WACKY1.TIM) and not WACKY0.*; that WW.EXE recreates them is not established
 - [ ] `setup.volume-detail` [STATIC] — volumes at cfg 0x7aa (fx), 0x7ae (music), 0x85c (engine), split-screen detail at 0x860, version stamp 0xfa at 0x7b2
   - Gap: read, not run; the volume scale (0 to 255?) and the library calls are unread; what obj2+0x28c80 does is unknown; cfg 0x862 and 0x864 (SETUP obj2+0x84b8, +0x84ba) are unread.
 - [ ] `score.insert` [STATIC] — how new results enter the duck-shoot and time tables (sorted insertion, shifting, the overall time replacing its record)

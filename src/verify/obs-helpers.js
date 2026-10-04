@@ -45,3 +45,10 @@ export function assertArchive(record, dat) {
   assert.equal(record.archive.size, dat.length, 'the archive is the size the game was run from');
   assert.equal(record.archive.sha1, createHash('sha1').update(dat).digest('hex'), 'the archive is the one the game was run from');
 }
+
+// The record names the SETUP.EXE the run used (tools/dosbox/dir-record.mjs).
+export function assertSetupExe(record, exe) {
+  assert.equal(record.exe?.name, 'SETUP.EXE', 'the record names its program');
+  assert.equal(record.exe.size, exe.length, 'the program is the size that ran');
+  assert.equal(record.exe.sha1, createHash('sha1').update(exe).digest('hex'), 'the program is the one that ran');
+}
