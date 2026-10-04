@@ -53,8 +53,19 @@ test('Esc in the main menu puts the cursor on the last item at once, icons settl
   assert.equal(stepFrame(menu, 'escape').menu.cursor, 9);
 });
 
+test('SINGLE PLAYER RACING leads through the setup menus and the last one starts the race', () => {
+  let menu = stepFrame(createMenu(), 'enter').menu;
+  assert.deepEqual([menu.id, menu.stack.length], ['class', 1]);
+  for (const id of ['laps', 'engine', 'races']) { menu = stepFrame(menu, 'enter').menu; assert.equal(menu.id, id); }
+  menu = settle(stepFrame(menu, 'down').menu);
+  const out = stepFrame(menu, 'enter');
+  assert.equal(out.chosen.race, 1);
+  assert.equal(out.chosen.settings.flow.races, 2);
+  assert.equal(out.chosen.settings.flow.class, 1);
+  assert.equal(stepFrame(menu, 'escape').menu.id, 'main');
+});
+
 test('items that are not menus are returned to the page', () => {
-  assert.deepEqual(stepFrame(createMenu(), 'enter').chosen, { race: 1 });
   let menu = createMenu();
   for (let i = 0; i < 8; i++) menu = settle(stepFrame(menu, 'down').menu);
   assert.deepEqual(stepFrame(menu, 'enter').chosen, { pending: 'LEAVE GAME' });
@@ -93,7 +104,9 @@ test('characters map to the proven tiles and refuse the unproven ones', () => {
   assert.equal(tileOf(' '), 36);
   assert.equal(tileOf('-'), 39);
   assert.equal(tileOf('™'), 41);
-  assert.throws(() => tileOf('5'), /no proven tile/);
+  assert.equal(tileOf('0'), 26);
+  assert.equal(tileOf('9'), 35);
+  assert.throws(() => tileOf('!'), /no proven tile/);
   assert.throws(() => tileOf('a'), /no proven tile/);
 });
 

@@ -50,7 +50,7 @@ function drawMenu() {
   renderMenu(index, art, viewOf(state.menu)); blit(art.rgba);
   $('readout').innerHTML = `<dt>Menu</dt><dd>${state.menu.id}</dd><dt>Selected</dt><dd>${menuDef(state.menu.id).items[state.menu.cursor - 1]}</dd>`;
   $('badge').className = 'badge bad';
-  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. SINGLE PLAYER RACING goes straight into the race; the menus of GAME OPTIONS and COMM-BAT PLAY (as far as recorded) work, the other items say they are not ported yet.';
+  $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. SINGLE PLAYER RACING leads through the class, laps, engine and race type menus into the race (the vehicle screen, the cup board and the track preview are not ported: the track chosen on the page is used); the menus of GAME OPTIONS and COMM-BAT PLAY (as far as recorded) work, the other items say they are not ported yet.';
 }
 
 // One step of the menu per 8 counts of the 136 Hz clock, with the first key pressed since the last step.
@@ -66,7 +66,10 @@ function stepMenuClock(now) {
 
 // What the page does with an item that is not just another menu: the single player race starts, everything else says it is not ported.
 function chooseItem(action) {
-  if (action.race === 1) { state.screen = 'race'; startTrack(); setMessage(''); return; } // @math the first race item of the main menu, SINGLE PLAYER RACING
+  if (action.race === 1) { // @math the single player race: the last setup menu starts it; the engine chosen there (item 1 FAST 12 HP, item 2 SLOW 6 HP) is the page's
+    $('engine').value = String(action.settings.flow.engine);
+    state.screen = 'race'; startTrack(); setMessage(''); return;
+  }
   const what = action.race ? 'this race mode' : action.leave ? 'leaving the game (close the tab)' : action.pending ?? 'this item';
   setMessage(`${what} is not ported yet.`);
 }

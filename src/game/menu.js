@@ -87,7 +87,8 @@ export function stepFrame(menu, key) {
     if (action.choose) return { menu: leave({ ...menu, settings: { ...menu.settings, detail: { ...menu.settings.detail, [action.choose]: menu.cursor } } }), chosen: null };
     if ('switch' in action) return { menu: { ...advanceMenu(menu), settings: { ...menu.settings, switches: menu.settings.switches.map((v, i) => (i === action.switch ? 1 - v : v)) } }, chosen: null }; // @math a switch is 1 or 0
     if (action.back) return { menu: leave(menu), chosen: null };
-    return { menu: advanceMenu(menu), chosen: action };
+    if (action.goto) return { menu: enterMenu(action.goto, [{ id: 'main', cursor: KEYS().openedCursor }], { ...menu.settings, flow: menuDef(menu.id, menu.settings).flowStep ? { ...menu.settings.flow, [menu.id]: menu.cursor } : menu.settings.flow }), chosen: null };
+    return { menu: advanceMenu(menu), chosen: action.race ? { ...action, settings: { ...menu.settings, flow: { ...menu.settings.flow, [menu.id]: menu.cursor } } } : action };
   }
   if (key === 'escape') {
     if (menu.stack.length) return { menu: leave(menu), chosen: null };

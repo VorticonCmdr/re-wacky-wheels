@@ -20,6 +20,7 @@ export function tileOf(ch) {
   if (ch === ' ') return M.spaceTile;
   if (ch === '-') return M.hyphenTile;
   if (ch === '\u2122') return M.tradeMarkTile;
+  if (ch.length === 1 && ch >= '0' && ch <= '9') return M.spaceTile - 10 + Number(ch); // @math the ten digit tiles lie just below the space tile: 26 to 35 (text.menu-observed)
   const t = ch.charCodeAt(0) - M.letterBase;
   if (t < 0 || t >= M.spaceTile - 10 || ch.length !== 1) throw new Error(`no proven tile for the character ${JSON.stringify(ch)}`); // @math the letters A to Z are the tiles 0 to 25: the space tile less the ten digit tiles
   return t;

@@ -30,7 +30,7 @@ function tree(V) {
   for (const id of menuIds()) {
     const def = menuDef(id);
     assert.equal(def.actions.length, def.items.length, `${id}: an action for every item`);
-    if (id !== 'main' && !def.actions.some(a => a.choose)) assert.equal(def.items.at(-1), V.T.leave, `${id}: the last item of a submenu is the one that leaves it`);
+    if (id !== 'main' && !def.actions.some(a => a.choose || a.goto || a.race)) assert.equal(def.items.at(-1), V.T.leave, `${id}: the last item of a submenu is the one that leaves it`);
     for (const a of def.actions) if (a.open) assert.ok(menuIds().includes(a.open), `${id}: the menu ${a.open} it opens is in the table`);
   }
 }
