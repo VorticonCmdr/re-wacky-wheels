@@ -1,0 +1,170 @@
+{
+ "id": "start-3",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "Wacky Duck Shoot, zone 1 (track 16) of the plain archive, paused about 5 s after the start; the start tables, the racers' first words and the branch words (obj2+0x1ec74 is 1)",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "names": {
+  "track": "16"
+ },
+ "branchAt": 126068,
+ "branch": 1,
+ "gridFlagAt": 166882,
+ "gridFlag": 0,
+ "twoPlayerAt": 166876,
+ "twoPlayer": 0,
+ "countWord": 7,
+ "levelAt": 166788,
+ "level": 84,
+ "tables": {
+  "x": [
+   1248,
+   2848,
+   1248,
+   1312,
+   1248,
+   1312,
+   1248,
+   1312
+  ],
+  "y": [
+   2042,
+   2072,
+   1792,
+   1888,
+   1984,
+   2080,
+   2176,
+   2272
+  ]
+ },
+ "racers": [
+  [
+   1248,
+   2042,
+   7,
+   0,
+   0,
+   0,
+   2,
+   24,
+   14,
+   79,
+   15,
+   22
+  ],
+  [
+   1690,
+   2859,
+   6,
+   17,
+   0,
+   0,
+   2,
+   24,
+   14,
+   36,
+   25,
+   28
+  ],
+  [
+   1950,
+   2832,
+   6,
+   17,
+   0,
+   0,
+   2,
+   0,
+   14,
+   40,
+   35,
+   0
+  ],
+  [
+   2209,
+   2819,
+   6,
+   18,
+   0,
+   0,
+   2,
+   0,
+   14,
+   44,
+   45,
+   0
+  ],
+  [
+   2468,
+   2822,
+   6,
+   19,
+   0,
+   0,
+   2,
+   0,
+   14,
+   48,
+   55,
+   0
+  ],
+  [
+   2728,
+   2850,
+   6,
+   19,
+   0,
+   0,
+   2,
+   0,
+   14,
+   52,
+   65,
+   0
+  ],
+  [
+   2860,
+   2745,
+   4,
+   21,
+   0,
+   0,
+   2,
+   0,
+   14,
+   56,
+   75,
+   0
+  ],
+  [
+   2863,
+   2486,
+   4,
+   22,
+   0,
+   0,
+   2,
+   0,
+   14,
+   60,
+   85,
+   0
+  ]
+ ],
+ "routeCompass0": 7
+}
