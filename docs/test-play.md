@@ -19,3 +19,21 @@ Limits: it needs `TYPESAFE_API_KEY` and sends the state to an outside service, s
 | `stepped` (game paused during each jev call, 120 ms of game time between calls) | 40 s real time | 100 | 27 | 34 of 100 |
 
 So jev picks the right steering when it is given the time, but as a real-time driver it is too slow for this game: at about 3.7 decisions a second the car runs off the road in the first corners. It is not a replacement for a human's reflexes. Two uses remain: the stepped mode as a test player (the game waits, so latency costs only wall time, 265 ms per 120 ms of play), and a split in which a local reflex loop steers every frame while jev answers the slower questions (a racing line, whether to use an item, whether the race is won). One run of each policy, the car not reset between the first two (the runs above were repeated from fresh starts); this is a tool measurement, not evidence for any claim.
+
+## Controlled experiments in the countdown (2026-10-04)
+
+The race's countdown (the first ~34 ticks, timer mode word `obj2+0x28c44` = 1) holds every car still and ignores fire, which makes it the place for set-ups: the 8 cars stand at the grid positions of `racer.start-grid`, nothing moves, the position words can be written and the game then runs the experiment from the green light. `tools/dosbox/countdown-run.mjs` leaves the current race (Esc, Down, Enter), takes the two Enter presses of the main menu to a new race, pauses it in the countdown and records the `steps` scenario of `observe.mjs`:
+
+```sh
+node tools/dosbox/countdown-run.mjs --id shot-1 --extra --extra2 --ms 15,40 \
+  --poke '[[166666,1300],[166670,1376],[33830,3],[43774,30000],[43780,0]]' \
+  --moment "..." --phases '[[["KBD_leftctrl"],80]]'
+```
+
+- `--poke` writes 16-bit words to obj2 offsets (decimal): `obj2+0x28b0a` (166666) and `+0x28b0e` (166670) are the position words (the camera; the player's car stands 124 units ahead along the heading), `obj2+0x8426` (33830) the held item, `obj2+0x847a` (33914) the pickup counter, racer n's record is at `obj2+0xaa90 + 0x68 n` (racer 1: counter word `+6` = 43774, advance word `+0xc` = 43780: writing 30000 and 0 keeps racer 1 in state 0 without moving). Pokes are experiments on the run copy, never claims; claims are about what the game then does.
+- `steps` columns (`observe.mjs`): phase, tick, throttle, speed, x, y (the player's car words), angle, accelerate, brake, right and left steering amounts, the car words `+0x7c` and `+0x7e`, terrain; `--extra` adds the global collision word, the position words and racers 1 and 7 (x, y, words `+2` and `+4`, contact flag); `--extra2` adds the held item, the shot list summary (count and x, y, travel of the first three) and the hit words `+0x58` of racers 1 to 7.
+- Sampling: each sample resumes for 15 to 120 ms and pauses; the tick counter `obj2+0x1ec64` says how many ticks passed, and only pairs one tick apart are exact steps (two samples can also share a tick: the pause fell inside the call).
+- The input API's `/input/sequence` **replaces** the pending sequence and DOSBox keeps keys down across experiments: the tool releases every key with each call, otherwise Esc is ignored while Ctrl or Alt is still down.
+- Other `observe.mjs` additions of the same day: `screen --args` takes `tiles` (a tile font: for every position and tile the pixel count and CRC-32 of the screen under the tile's pixels; used for the menus with `WFONT1.SP`), `words` (extra obj2 words) and the `horizon` spec (camera words, heading vector, box words, racer positions and the draw list); the `font` scenario reads the text routine's glyph table.
+
+What the experiments established is in `docs/driving-model.md` (`car.step-observed`, `car.steer-step-observed`, `car.racer-hit-observed`, `item.racer-hit-observed`, `item.mine-types-observed`) and `docs/view.md`.
