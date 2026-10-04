@@ -20,3 +20,5 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 - [Wacky Wheels](https://moddingwiki.shikadi.net/wiki/Wacky_Wheels)
 
 Read on 2026-10-02. [Format index](README.md).
+
+- [PROVEN] (`obs-terreffects`, claim `terrain.effects-observed`, 27 records): with the whole map set to one surface value v (the loaded `.SIN` table written in a run), the car word +0x56 is v, +0x36 is the SDX record v's dword +0x120 and +0x3a its dword +0x124; the only other effects are the wall (3), the pit (10), the special state (6, 15) and one call of throttle 140 (12, 15).
