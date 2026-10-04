@@ -1,0 +1,2594 @@
+{
+ "id": "menupath-2",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-04",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "the switches menu then Esc, Space, Esc, Esc, Down, Space, Esc tapped 12 pauses apart; the CRC of each menu's block of bars, the switch words and the animation words",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "menu": "path",
+ "rectBoxes": [
+  [
+   55,
+   76,
+   214,
+   109
+  ],
+  [
+   49,
+   88,
+   225,
+   49
+  ],
+  [
+   82,
+   94,
+   159,
+   37
+  ],
+  [
+   55,
+   94,
+   214,
+   37
+  ],
+  [
+   71,
+   88,
+   181,
+   49
+  ]
+ ],
+ "keys": [
+  [
+   6,
+   "KBD_esc"
+  ],
+  [
+   18,
+   "KBD_space"
+  ],
+  [
+   30,
+   "KBD_esc"
+  ],
+  [
+   42,
+   "KBD_esc"
+  ],
+  [
+   54,
+   "KBD_down"
+  ],
+  [
+   66,
+   "KBD_space"
+  ],
+  [
+   78,
+   "KBD_esc"
+  ]
+ ],
+ "words": {
+  "cursor": 208780,
+  "idle": 208756,
+  "phase": 208800,
+  "pair": 208804,
+  "count": 208776,
+  "size": 208812,
+  "lionFrame": 208740,
+  "lionRow": 208744,
+  "busy": 208764,
+  "frameTime": 125552
+ },
+ "samples": [
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 826,
+   "frameCrc": "993edc4d",
+   "cursor": 2,
+   "idle": 69,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 1,
+   "pair": 3,
+   "count": 1,
+   "size": 9,
+   "t136": 827
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 850,
+   "frameCrc": "0ea3d792",
+   "cursor": 2,
+   "idle": 72,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 1,
+   "pair": 3,
+   "count": 4,
+   "size": 6,
+   "t136": 855
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 874,
+   "frameCrc": "c427430d",
+   "cursor": 2,
+   "idle": 75,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 1,
+   "pair": 3,
+   "count": 7,
+   "size": 3,
+   "t136": 881
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 898,
+   "frameCrc": "5cb4b81c",
+   "cursor": 2,
+   "idle": 78,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 0,
+   "size": 0,
+   "t136": 905
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 930,
+   "frameCrc": "68fc5c55",
+   "cursor": 2,
+   "idle": 82,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 4,
+   "size": 0,
+   "t136": 933
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "2c4883b6",
+    "acae6aea",
+    "cd20b6c6",
+    "29a603e1",
+    "84395a1e"
+   ],
+   "frameTime": 954,
+   "frameCrc": "e0c21541",
+   "cursor": 2,
+   "idle": 85,
+   "lionFrame": 0,
+   "lionRow": 93,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 7,
+   "size": 0,
+   "t136": 961
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 10,
+   "frameCrc": "34ee6837",
+   "cursor": 3,
+   "idle": 0,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 0,
+   "size": 9,
+   "t136": 17
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 42,
+   "frameCrc": "a520b3f0",
+   "cursor": 3,
+   "idle": 4,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 4,
+   "size": 5,
+   "t136": 45
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 66,
+   "frameCrc": "c5b25204",
+   "cursor": 3,
+   "idle": 7,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 7,
+   "size": 2,
+   "t136": 70
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 98,
+   "frameCrc": "5692ef7c",
+   "cursor": 3,
+   "idle": 11,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 2,
+   "size": 0,
+   "t136": 98
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 122,
+   "frameCrc": "deaca668",
+   "cursor": 3,
+   "idle": 14,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 5,
+   "size": 0,
+   "t136": 124
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 146,
+   "frameCrc": "fc2d183c",
+   "cursor": 3,
+   "idle": 17,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 8,
+   "size": 0,
+   "t136": 151
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 170,
+   "frameCrc": "653057cb",
+   "cursor": 3,
+   "idle": 20,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 11,
+   "size": 0,
+   "t136": 176
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 202,
+   "frameCrc": "1616e14b",
+   "cursor": 3,
+   "idle": 24,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 15,
+   "size": 0,
+   "t136": 202
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 226,
+   "frameCrc": "5692ef7c",
+   "cursor": 3,
+   "idle": 27,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 18,
+   "size": 0,
+   "t136": 227
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 250,
+   "frameCrc": "deaca668",
+   "cursor": 3,
+   "idle": 30,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 21,
+   "size": 0,
+   "t136": 250
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 274,
+   "frameCrc": "fc2d183c",
+   "cursor": 3,
+   "idle": 33,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 24,
+   "size": 0,
+   "t136": 276
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 298,
+   "frameCrc": "653057cb",
+   "cursor": 3,
+   "idle": 36,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 27,
+   "size": 0,
+   "t136": 300
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 11,
+   "frameCrc": "f74d52e4",
+   "cursor": 1,
+   "idle": 0,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 0,
+   "size": 9,
+   "t136": 17
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 35,
+   "frameCrc": "8f6728d8",
+   "cursor": 1,
+   "idle": 3,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 3,
+   "size": 6,
+   "t136": 42
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 67,
+   "frameCrc": "146a998e",
+   "cursor": 1,
+   "idle": 7,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 7,
+   "size": 2,
+   "t136": 69
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 91,
+   "frameCrc": "14514351",
+   "cursor": 1,
+   "idle": 10,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 1,
+   "size": 0,
+   "t136": 97
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 123,
+   "frameCrc": "92a66fdd",
+   "cursor": 1,
+   "idle": 14,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 5,
+   "size": 0,
+   "t136": 125
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 147,
+   "frameCrc": "a827ee0c",
+   "cursor": 1,
+   "idle": 17,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 8,
+   "size": 0,
+   "t136": 149
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 171,
+   "frameCrc": "dceb0472",
+   "cursor": 1,
+   "idle": 20,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 11,
+   "size": 0,
+   "t136": 178
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 203,
+   "frameCrc": "5b0c3046",
+   "cursor": 1,
+   "idle": 24,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 15,
+   "size": 0,
+   "t136": 205
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 227,
+   "frameCrc": "36d0fd05",
+   "cursor": 1,
+   "idle": 27,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 18,
+   "size": 0,
+   "t136": 231
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 251,
+   "frameCrc": "92a66fdd",
+   "cursor": 1,
+   "idle": 30,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 21,
+   "size": 0,
+   "t136": 258
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 283,
+   "frameCrc": "a827ee0c",
+   "cursor": 1,
+   "idle": 34,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 25,
+   "size": 0,
+   "t136": 286
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "bbe00c99",
+    "2b2d33be",
+    "cd20b6c6",
+    "cc9d11a1",
+    "84395a1e"
+   ],
+   "frameTime": 307,
+   "frameCrc": "9c6f0a45",
+   "cursor": 1,
+   "idle": 37,
+   "lionFrame": 0,
+   "lionRow": 81,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 28,
+   "size": 0,
+   "t136": 309
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 10,
+   "frameCrc": "d42f473f",
+   "cursor": 3,
+   "idle": 0,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 0,
+   "size": 9,
+   "t136": 17
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 34,
+   "frameCrc": "e20ae8f8",
+   "cursor": 3,
+   "idle": 3,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 3,
+   "size": 6,
+   "t136": 41
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 66,
+   "frameCrc": "f2d7cb17",
+   "cursor": 3,
+   "idle": 7,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 7,
+   "size": 2,
+   "t136": 67
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 90,
+   "frameCrc": "653057cb",
+   "cursor": 3,
+   "idle": 10,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 1,
+   "size": 0,
+   "t136": 95
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 114,
+   "frameCrc": "1616e14b",
+   "cursor": 3,
+   "idle": 13,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 4,
+   "size": 0,
+   "t136": 119
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 146,
+   "frameCrc": "91f1d57f",
+   "cursor": 3,
+   "idle": 17,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 8,
+   "size": 0,
+   "t136": 147
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 170,
+   "frameCrc": "deaca668",
+   "cursor": 3,
+   "idle": 20,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 11,
+   "size": 0,
+   "t136": 175
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 194,
+   "frameCrc": "585b8ae4",
+   "cursor": 3,
+   "idle": 23,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 14,
+   "size": 0,
+   "t136": 201
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 226,
+   "frameCrc": "62da0b35",
+   "cursor": 3,
+   "idle": 27,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 18,
+   "size": 0,
+   "t136": 228
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 250,
+   "frameCrc": "1616e14b",
+   "cursor": 3,
+   "idle": 30,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 21,
+   "size": 0,
+   "t136": 252
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 274,
+   "frameCrc": "91f1d57f",
+   "cursor": 3,
+   "idle": 33,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 24,
+   "size": 0,
+   "t136": 276
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 298,
+   "frameCrc": "deaca668",
+   "cursor": 3,
+   "idle": 36,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 27,
+   "size": 0,
+   "t136": 304
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 330,
+   "frameCrc": "585b8ae4",
+   "cursor": 3,
+   "idle": 40,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 0,
+   "size": 0,
+   "t136": 331
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 354,
+   "frameCrc": "aadc3d21",
+   "cursor": 3,
+   "idle": 43,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 3,
+   "size": 3,
+   "t136": 359
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 378,
+   "frameCrc": "459acde1",
+   "cursor": 3,
+   "idle": 46,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 6,
+   "size": 6,
+   "t136": 385
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 410,
+   "frameCrc": "289b3a94",
+   "cursor": 3,
+   "idle": 50,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 4,
+   "pair": 3,
+   "count": 0,
+   "size": 9,
+   "t136": 411
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 434,
+   "frameCrc": "224ee477",
+   "cursor": 3,
+   "idle": 53,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 1,
+   "pair": 7,
+   "count": 3,
+   "size": 7,
+   "t136": 439
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 458,
+   "frameCrc": "9029d0a8",
+   "cursor": 3,
+   "idle": 56,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 1,
+   "pair": 7,
+   "count": 6,
+   "size": 4,
+   "t136": 463
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 482,
+   "frameCrc": "7e433d17",
+   "cursor": 3,
+   "idle": 59,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 1,
+   "pair": 7,
+   "count": 9,
+   "size": 1,
+   "t136": 488
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 514,
+   "frameCrc": "a8d718f8",
+   "cursor": 3,
+   "idle": 63,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 3,
+   "size": 0,
+   "t136": 516
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 538,
+   "frameCrc": "1f3254d3",
+   "cursor": 3,
+   "idle": 66,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 6,
+   "size": 0,
+   "t136": 543
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 562,
+   "frameCrc": "7b20ce76",
+   "cursor": 3,
+   "idle": 69,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 9,
+   "size": 0,
+   "t136": 567
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 586,
+   "frameCrc": "5ed173d4",
+   "cursor": 3,
+   "idle": 72,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 12,
+   "size": 0,
+   "t136": 591
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 610,
+   "frameCrc": "1b0d2caf",
+   "cursor": 3,
+   "idle": 75,
+   "lionFrame": 0,
+   "lionRow": 105,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 15,
+   "size": 0,
+   "t136": 616
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 634,
+   "frameCrc": "a7ff6544",
+   "cursor": 4,
+   "idle": 0,
+   "lionFrame": 1,
+   "lionRow": 105,
+   "busy": 1,
+   "phase": 2,
+   "pair": 7,
+   "count": 18,
+   "size": 0,
+   "t136": 640
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 666,
+   "frameCrc": "010279f0",
+   "cursor": 4,
+   "idle": 1,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 22,
+   "size": 0,
+   "t136": 666
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 690,
+   "frameCrc": "6510e355",
+   "cursor": 4,
+   "idle": 4,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 25,
+   "size": 0,
+   "t136": 690
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 714,
+   "frameCrc": "40e15ef7",
+   "cursor": 4,
+   "idle": 7,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 2,
+   "pair": 7,
+   "count": 28,
+   "size": 0,
+   "t136": 718
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 746,
+   "frameCrc": "60731034",
+   "cursor": 4,
+   "idle": 11,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 3,
+   "pair": 7,
+   "count": 1,
+   "size": 1,
+   "t136": 746
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 770,
+   "frameCrc": "2fb3bd78",
+   "cursor": 4,
+   "idle": 14,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 3,
+   "pair": 7,
+   "count": 4,
+   "size": 4,
+   "t136": 771
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 794,
+   "frameCrc": "68c28b55",
+   "cursor": 4,
+   "idle": 17,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 3,
+   "pair": 7,
+   "count": 7,
+   "size": 7,
+   "t136": 800
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 818,
+   "frameCrc": "a9d81c90",
+   "cursor": 4,
+   "idle": 20,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 4,
+   "pair": 7,
+   "count": 0,
+   "size": 9,
+   "t136": 824
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 850,
+   "frameCrc": "2efd4998",
+   "cursor": 4,
+   "idle": 24,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 1,
+   "pair": 3,
+   "count": 4,
+   "size": 6,
+   "t136": 850
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 874,
+   "frameCrc": "e479dd07",
+   "cursor": 4,
+   "idle": 27,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 1,
+   "pair": 3,
+   "count": 7,
+   "size": 3,
+   "t136": 878
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 898,
+   "frameCrc": "7cea2616",
+   "cursor": 4,
+   "idle": 30,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 0,
+   "size": 0,
+   "t136": 904
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "9bd2f8fc",
+    "7c98ec2d",
+    "ac6c0ae5",
+    "fc4b91f3",
+    "3ce35be3"
+   ],
+   "frameTime": 922,
+   "frameCrc": "48a2c25f",
+   "cursor": 4,
+   "idle": 33,
+   "lionFrame": 0,
+   "lionRow": 117,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 3,
+   "size": 0,
+   "t136": 929
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 10,
+   "frameCrc": "e5e477ac",
+   "cursor": 6,
+   "idle": 0,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 0,
+   "size": 9,
+   "t136": 15
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 34,
+   "frameCrc": "2b2e3a9d",
+   "cursor": 6,
+   "idle": 3,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 3,
+   "size": 6,
+   "t136": 39
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 58,
+   "frameCrc": "56adc94b",
+   "cursor": 6,
+   "idle": 6,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 3342337,
+   "pair": 3,
+   "count": 6,
+   "size": 3,
+   "t136": 63
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 82,
+   "frameCrc": "9b034561",
+   "cursor": 6,
+   "idle": 9,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 0,
+   "size": 0,
+   "t136": 87
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 106,
+   "frameCrc": "90faee0c",
+   "cursor": 6,
+   "idle": 12,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 3,
+   "size": 0,
+   "t136": 113
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 138,
+   "frameCrc": "bb64ea14",
+   "cursor": 6,
+   "idle": 16,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 7,
+   "size": 0,
+   "t136": 138
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 162,
+   "frameCrc": "e5b522ca",
+   "cursor": 6,
+   "idle": 19,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 10,
+   "size": 0,
+   "t136": 164
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 186,
+   "frameCrc": "f0730e28",
+   "cursor": 6,
+   "idle": 22,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 13,
+   "size": 0,
+   "t136": 188
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 210,
+   "frameCrc": "9b034561",
+   "cursor": 6,
+   "idle": 25,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 16,
+   "size": 0,
+   "t136": 214
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 234,
+   "frameCrc": "90faee0c",
+   "cursor": 6,
+   "idle": 28,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 19,
+   "size": 0,
+   "t136": 238
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 258,
+   "frameCrc": "d73016c4",
+   "cursor": 6,
+   "idle": 31,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 22,
+   "size": 0,
+   "t136": 262
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 290,
+   "frameCrc": "e5b522ca",
+   "cursor": 6,
+   "idle": 35,
+   "lionFrame": 0,
+   "lionRow": 129,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 26,
+   "size": 0,
+   "t136": 291
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 316,
+   "frameCrc": "f5f994eb",
+   "cursor": 9,
+   "idle": 38,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 3,
+   "count": 29,
+   "size": 0,
+   "t136": 319
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 340,
+   "frameCrc": "5f010a8e",
+   "cursor": 9,
+   "idle": 41,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 1,
+   "size": 1,
+   "t136": 344
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 364,
+   "frameCrc": "1ba842a4",
+   "cursor": 9,
+   "idle": 44,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 4,
+   "size": 4,
+   "t136": 371
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 396,
+   "frameCrc": "d26a297a",
+   "cursor": 9,
+   "idle": 48,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 3,
+   "pair": 3,
+   "count": 8,
+   "size": 8,
+   "t136": 396
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 420,
+   "frameCrc": "ba8d159c",
+   "cursor": 9,
+   "idle": 51,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 1,
+   "pair": 5,
+   "count": 1,
+   "size": 9,
+   "t136": 424
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 444,
+   "frameCrc": "4dea8558",
+   "cursor": 9,
+   "idle": 54,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 1,
+   "pair": 5,
+   "count": 4,
+   "size": 6,
+   "t136": 450
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 468,
+   "frameCrc": "b91f4587",
+   "cursor": 9,
+   "idle": 57,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 1,
+   "pair": 5,
+   "count": 7,
+   "size": 3,
+   "t136": 475
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 500,
+   "frameCrc": "2382627f",
+   "cursor": 9,
+   "idle": 61,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 1,
+   "size": 0,
+   "t136": 504
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 524,
+   "frameCrc": "570b9969",
+   "cursor": 9,
+   "idle": 64,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 4,
+   "size": 0,
+   "t136": 530
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 556,
+   "frameCrc": "c3126d40",
+   "cursor": 9,
+   "idle": 68,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 8,
+   "size": 0,
+   "t136": 556
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 580,
+   "frameCrc": "583a3c0e",
+   "cursor": 9,
+   "idle": 71,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 11,
+   "size": 0,
+   "t136": 584
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 604,
+   "frameCrc": "6d9e1800",
+   "cursor": 9,
+   "idle": 74,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 14,
+   "size": 0,
+   "t136": 610
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 636,
+   "frameCrc": "2382627f",
+   "cursor": 9,
+   "idle": 78,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 18,
+   "size": 0,
+   "t136": 638
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 660,
+   "frameCrc": "da57fe7b",
+   "cursor": 9,
+   "idle": 81,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 21,
+   "size": 0,
+   "t136": 662
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 684,
+   "frameCrc": "c3126d40",
+   "cursor": 9,
+   "idle": 84,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 24,
+   "size": 0,
+   "t136": 687
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 708,
+   "frameCrc": "583a3c0e",
+   "cursor": 9,
+   "idle": 87,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 2,
+   "pair": 5,
+   "count": 27,
+   "size": 0,
+   "t136": 714
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 740,
+   "frameCrc": "ccaca693",
+   "cursor": 9,
+   "idle": 91,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 3,
+   "pair": 5,
+   "count": 0,
+   "size": 0,
+   "t136": 742
+  },
+  {
+   "extra": {
+    "95696": 0,
+    "95698": 0,
+    "95700": 1
+   },
+   "rects": [
+    "6b02d819",
+    "9038c69b",
+    "fb83e930",
+    "25f0413d",
+    "d0e75763"
+   ],
+   "frameTime": 764,
+   "frameCrc": "e0146140",
+   "cursor": 9,
+   "idle": 94,
+   "lionFrame": 0,
+   "lionRow": 165,
+   "busy": 0,
+   "phase": 3,
+   "pair": 5,
+   "count": 3,
+   "size": 3,
+   "t136": 766
+  }
+ ]
+}

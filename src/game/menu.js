@@ -2,7 +2,7 @@
 // the keys (menu.keys-observed) and the way from menu to menu (menu.tree-observed). The state the animations start in when a menu is entered is not
 // observed (UNKNOWN_MENU_START_STATE); the port starts them at the first step of the first phase.
 import { K } from '../evidence/k.js';
-import { menuDef } from './menus.js';
+import { menuDef, defaultSettings } from './menus.js';
 import { lionTopFor, carCount } from '../render/menu.js';
 
 const CURSOR = () => K({ base: 1, wrap: true, cursorWord: 0x32f8c }, 'menu.cursor-observed');
@@ -13,10 +13,10 @@ const KEYS = () => K({ selectKeys: ['KBD_space', 'KBD_enter'], escapeKey: 'KBD_e
 export const menuPeriod = () => ANIM().period;
 
 // The state of a menu just entered: the cursor on its first item, the icons settled there, the cars at the start of their cycle.
-// `stack` holds the menus above it, each with the cursor it was left on.
-export function enterMenu(id, stack = []) {
-  const def = menuDef(id), cursor = KEYS().openedCursor;
-  return { id, stack, cursor, lionTop: lionTopFor(def.kind, def.items, cursor), lionFrame: 0, busy: ANIM().lion.settled, phase: 1, count: ANIM().firstCount, pair: carCount(def.kind) - 1 }; // @math the pair starts at the number of cars less one: 1 in the main menu, 3 in a submenu
+// `stack` holds the menus above it, each with the cursor it was left on; `settings` are what the menus change.
+export function enterMenu(id, stack = [], settings = defaultSettings()) {
+  const def = menuDef(id, settings), cursor = KEYS().openedCursor;
+  return { id, stack, settings, cursor, lionTop: lionTopFor(def.kind, def.items, cursor), lionFrame: 0, busy: ANIM().lion.settled, phase: 1, count: ANIM().firstCount, pair: carCount(def.kind) - 1 }; // @math the pair starts at the number of cars less one: 1 in the main menu, 3 in a submenu
 }
 
 export const createMenu = () => enterMenu('main');
@@ -61,13 +61,13 @@ export function frameOf(phase, count) {
 
 // One step of the whole menu (8 counts of the 136 Hz clock): both animations advance.
 export function advanceMenu(s) {
-  const def = menuDef(s.id);
+  const def = menuDef(s.id, s.settings);
   return advanceLions(advanceAnimation(s, carCount(def.kind)), def);
 }
 
 // Back to the parent: its cursor where it was left, the icons settled at its row.
 function leave(menu) {
-  const parent = menu.stack.at(-1), back = enterMenu(parent.id, menu.stack.slice(0, -1)), def = menuDef(parent.id);
+  const parent = menu.stack.at(-1), back = enterMenu(parent.id, menu.stack.slice(0, -1), menu.settings), def = menuDef(parent.id, menu.settings);
   return { ...back, cursor: parent.cursor, lionTop: lionTopFor(def.kind, def.items, parent.cursor) };
 }
 
@@ -77,13 +77,14 @@ function leave(menu) {
 // returned as `chosen` for the page. Esc goes back (menu.keys-observed), in the main menu it puts the cursor on the last item at once.
 // Returns the new menu and the action chosen (or null).
 export function stepFrame(menu, key) {
-  const A = ANIM(), def = menuDef(menu.id), cars = carCount(def.kind), settled = menu.busy === A.lion.settled;
+  const A = ANIM(), def = menuDef(menu.id, menu.settings), cars = carCount(def.kind), settled = menu.busy === A.lion.settled;
   if ((key === 'up' || key === 'down') && settled) {
     return { menu: { ...advanceAnimation(menu, cars), cursor: moveCursor(menu.cursor, key, def.items.length), busy: key === 'down' ? A.lion.busyDown : A.lion.busyUp, lionFrame: 0 }, chosen: null };
   }
   if (key === 'enter' && settled) {
     const action = def.actions[menu.cursor - CURSOR().base];
-    if (action.open) return { menu: enterMenu(action.open, [...menu.stack, { id: menu.id, cursor: menu.cursor }]), chosen: null };
+    if (action.open) return { menu: enterMenu(action.open, [...menu.stack, { id: menu.id, cursor: menu.cursor }], menu.settings), chosen: null };
+    if ('switch' in action) return { menu: { ...advanceMenu(menu), settings: { ...menu.settings, switches: menu.settings.switches.map((v, i) => (i === action.switch ? 1 - v : v)) } }, chosen: null }; // @math a switch is 1 or 0
     if (action.back) return { menu: leave(menu), chosen: null };
     return { menu: advanceMenu(menu), chosen: action };
   }
@@ -97,6 +98,6 @@ export function stepFrame(menu, key) {
 
 // The state the renderer takes.
 export function viewOf(menu) {
-  const def = menuDef(menu.id);
+  const def = menuDef(menu.id, menu.settings);
   return { kind: def.kind, items: def.items, lionTop: menu.lionTop, lionFrame: menu.lionFrame, pair: menu.pair, size: sizeOf(menu.phase, menu.count), frame: frameOf(menu.phase, menu.count) };
 }

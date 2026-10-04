@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMenu, enterMenu, stepFrame, moveCursor, advanceAnimation, sizeOf, frameOf } from '../src/game/menu.js';
-import { menuDef, menuIds } from '../src/game/menus.js';
+import { menuDef, menuIds, defaultSettings } from '../src/game/menus.js';
 import { menuItems, tileOf, loadTiles, drawItem, layoutOf, lionTopFor, carCount } from '../src/render/menu.js';
 
 const settle = menu => { while (menu.busy) menu = stepFrame(menu, null).menu; return menu; };
@@ -104,4 +104,18 @@ test('an item draws a space tile first, then one tile per character, 11 columns 
   assert.equal(fb[76 * 320 + 50], 1);
   assert.equal(fb[76 * 320 + 61], 2);
   assert.throws(() => loadTiles(new Uint8Array(10)), /not 42 tiles/);
+});
+
+test('the switches menu flips a switch at once and its texts follow', () => {
+  const on = menuDef('toggles').items;
+  assert.deepEqual(on, ['OVERHEAD MAP  ON ', 'CLOCK DISPLAY ON ', 'SPEEDOMETER   ON ', 'LEAVE THIS MENU']);
+  let menu = enterMenu('toggles', [{ id: 'main', cursor: 6 }, { id: 'options', cursor: 3 }], defaultSettings());
+  menu = stepFrame(menu, 'enter').menu;
+  assert.deepEqual(menu.settings.switches, [0, 1, 1]);
+  assert.equal(menu.id, 'toggles');
+  assert.equal(menuDef('toggles', menu.settings).items[0], 'OVERHEAD MAP  OFF');
+  assert.equal(menu.busy, 0);
+  // the settings survive leaving
+  const back = stepFrame({ ...menu, cursor: 4 }, 'enter').menu;
+  assert.deepEqual([back.id, back.cursor, back.settings.switches], ['options', 3, [0, 1, 1]]);
 });
