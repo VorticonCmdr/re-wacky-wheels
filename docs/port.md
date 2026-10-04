@@ -13,11 +13,13 @@ The first playable slice: drive one car on one track, seen from the driver's sea
 
 Constants enter these modules only through `K(...)` (THE RULE); `npm run mutate` perturbs them and the replay checks must fail.
 
+## Clock and start (proven, 2026-10-04)
+
+- The logic runs one frame per 12 counts of a 136 Hz counter, 88.2 ms (`tick.rate`, `src/game/clock.js`); the HUD race timer is a separate 10 Hz counter. The start heading is 480 and the start camera is the player's position less 0x7c in y (`race.start-heading`).
+
 ## What is not ported or not known (shown on the page)
 
 - `UNKNOWN_HORIZON_SCROLL`: the horizon strip's offset (start and step); the page draws it at 0.
 - Sprites (cars, objects), the HUD, sound, laps, the AI, items and menus: not ported yet (see `docs/next-steps.md`).
 - `UNKNOWN_CAR_TURN_MOVE`: how the car moves in a tick with a steering key held. `src/game/car.js` makes the car stand still in such a tick unless the page passes a hypothesis; the page passes `turnMoveHypothesis` (the straight step of the old heading, `src/formats/hypotheses/turn-and-start.js`), which differs from the game by a few units a tick.
-- `UNKNOWN_START_HEADING`: the page takes the first route record's angle word (480 on every observed start).
-- `UNKNOWN_TICK_RATE`: the page runs 10 logic ticks a second; 88.5 ms a tick was measured in the attract demo.
 - Accelerate and brake together, and the slowdown off the road (observed in `car.speed-observed`, not ported yet).

@@ -393,6 +393,15 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), base: 0xa7d00, samples };
   },
+  async tickrate() {
+    // The game's counters against the clock, read while the game runs: `--args` {seconds}. At two moments about `seconds` apart (default 10): the frame counter obj2+0x1ec64, the 10 Hz timer +0x1e71c, the 136 Hz counter +0x1e720, the frame period words +0x1ed08 and +0x1ea5c, the PIT divisor +0x3fa4 and the mode word +0x28c0c, with the host clock in milliseconds.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
+    await fetch(`${API}/api/v1/debug/continue`, { method: 'POST' }); await sleep(500);
+    const i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0), i16 = async a => Buffer.from(await readMemory(b2 + a, 2)).readInt16LE(0);
+    const take = async () => { const at = Date.now(); const s = { frames: await i32(0x1ec64), tenths: await i32(0x1e71c), hundred36: await i32(0x1e720) }; return { ms: at, ...s }; };
+    const first = await take(); await sleep((spec.seconds ?? 10) * 1000); const second = await take(); // @math ten seconds by default
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), elapsedMs: second.ms - first.ms, delta: { frames: second.frames - first.frames, tenths: second.tenths - first.tenths, hundred36: second.hundred36 - first.hundred36 }, words: { period: await i32(0x1ed08), active: await i32(0x1ea5c), divisor: await i32(0x3fa4), mode: await i16(0x28c0c), raceMode: await i16(0x28c44) } };
+  },
   async devil() {
     // The driver reaction figure ("devil") of the race screen: `--args` {count, ms: [lo, hi], poke: [[offset, value32], ...]}. Per pause: the tick, the dwords obj2+0x84f4 (the driver, 0 = none), +0x8500, +0x8504 (the frame in its block)
     // and +0x8508 (the step of GIG.MOV), and for the entries step - 2, step - 1 and step of GIG.MOV (screen x 0xfa + the entry's x, row 0x78 + its y) the number and CRC-32 of the screen pixels under the non-zero

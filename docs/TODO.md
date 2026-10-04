@@ -75,10 +75,8 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 - [ ] `UNKNOWN_CAR_TURN_MOVE` [UNKNOWN] — how the car moves in a tick with a steering key held (the position drifts by 1 to 2 units at a stand-still; the straight step does not apply)
   - Next: fit `steps-3` against the old and the new heading; read the move routine for the order and the drift.
-- [ ] `UNKNOWN_START_HEADING` [UNKNOWN] — where the start heading comes from (480 in every observed start; the first route angle for 38 of 42 tracks)
-  - Next: a start frame on a track whose first route angle is not 480, and the writers of obj2+0xab48.
-- [ ] `UNKNOWN_TICK_RATE` [UNKNOWN] — the real-time rate of the logic tick (88.5 ms measured in the attract demo)
-  - Next: read the timer interrupt and measure both counters in a played race.
+- [x] `UNKNOWN_START_HEADING` resolved into `race.start-heading` (PROVEN, `exe-startheading`): the race routine stores the constant 480 in the heading dword right after the racer reset (and the camera at the player's x and y - 0x7c); other modes' starts are not observed
+- [x] `UNKNOWN_TICK_RATE` resolved into `tick.rate` (PROVEN, `exe-tickrate`, record `tick-1`): the race frame counter is a frame count, limited to one frame per 12 counts of a 136 Hz counter (88.2 ms) by default; the race timer counter runs at 10 Hz (tenths); a machine too slow for the limiter and the other period values are not observed
 - [ ] `UNKNOWN_HORIZON_SCROLL` [UNKNOWN] — the start value and the step of the horizon strip's offset while the car turns (observed 66, 28, 16)
   - Next: sample the pointer every tick while steering; read obj1+0x14832.
 

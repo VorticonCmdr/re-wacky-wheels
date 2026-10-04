@@ -7,8 +7,9 @@ import { withSteps } from './evidence/k.js';
 import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
 import { createCar, stepCar, cameraOf } from './game/car.js';
 import { renderFloor } from './render/floor.js';
+import { frameMs } from './game/clock.js';
 import { renderSky, renderHorizon } from './render/sky.js';
-import { turnMoveHypothesis, startHeadingHypothesis, horizonOffsetHypothesis } from './formats/hypotheses/turn-and-start.js';
+import { turnMoveHypothesis, horizonOffsetHypothesis } from './formats/hypotheses/turn-and-start.js';
 
 const $ = id => document.getElementById(id);
 const TICK_MS = 100; // UNKNOWN_TICK_RATE: the HUD reads a tick as a tenth of a second; 88.5 ms was measured in DOSBox
@@ -21,8 +22,7 @@ function setMessage(text, bad = false) { const m = $('message'); m.textContent =
 function startTrack() {
   const name = $('track').value, engine = Number($('engine').value);
   state.world = loadTrack(state.dat, name, engine);
-  const heading = startHeadingHypothesis(state.world);
-  state.car = createCar({ ...state.world.start, heading });
+  state.car = createCar(state.world.start);
   state.tick = 0; state.accumulator = 0; state.unproven = new Set();
   rgba = rgbaPalette(state.world.palette);
 }
@@ -46,7 +46,7 @@ function draw() {
   ctx.fillStyle = '#f2b134'; ctx.font = '10px monospace'; ctx.fillText('HUD, sprites and sound are not ported yet', 6, 15);
   const c = state.car, row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Position', `${c.x}, ${c.y}`) + row('Heading', c.heading);
-  const hyp = ['UNKNOWN_START_HEADING', 'UNKNOWN_CAR_TURN_MOVE', 'UNKNOWN_TICK_RATE', 'UNKNOWN_HORIZON_SCROLL'];
+  const hyp = ['UNKNOWN_CAR_TURN_MOVE', 'UNKNOWN_HORIZON_SCROLL'];
   $('badge').className = 'badge bad';
   $('badge').textContent = `Not proven yet and approximated here: ${hyp.join(', ')}${state.unproven.size ? `; this run also used: ${[...state.unproven].join(', ')}` : ''}.`;
 }
@@ -54,7 +54,8 @@ function draw() {
 function frame(now) {
   if (!state.dat) return;
   state.accumulator += Math.min(now - state.last, 250); state.last = now; // @math at most a quarter second at a time after a pause
-  while (state.accumulator >= TICK_MS) { tickOnce(); state.accumulator -= TICK_MS; }
+  const frame_ms = frameMs();
+  while (state.accumulator >= frame_ms) { tickOnce(); state.accumulator -= frame_ms; }
   draw(); requestAnimationFrame(frame);
 }
 

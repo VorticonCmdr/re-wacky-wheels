@@ -10,6 +10,8 @@ import { decodePcxMember, splitTiles } from '../formats/pcx.js';
 const MODEL = () => K({ columns: 320, steps: 70, angleBias: 160, wrap: 1920, bottomRow: 199, trigEntryBytes: 8, fixedBits: 16, groupDwords: 70, ndistDwordBytes: 4, mapRows: 64, mapColumns: 64, mapOrigin: 32, tileShift: 5, tileMask: 31, tileBytes: 1024, sheetCount: 54, sheetSize: 32, sheetColumns: 10, columnSteps: [1, 2, 4], resetTo: 0, gamPrefix: 'A_', width: 320, height: 200 }, 'floor.model');
 const CAR = () => K({ accelStep: 10, coastStep: 4, brakeStep: 8, cap: 100, rounding: 32768, fixedBits: 16, steerStep: 40, spinStep: 120, turn: 1920, velEntryBytes: 2, trigEntryBytes: 8, cameraBehind: 124, startBias: 992 }, 'car.model');
 
+const START = () => K({ headingAt: 120276, heading: 480, startSites: [132008, 132479], finishSite: 132994, finishHeading: 960, secondAt: 120284, secondHeading: 1440, secondSite: 132517, cameraXAt: 132385, cameraYAt: 132461, cameraSubAt: 132476, cameraYStoreAt: 132489, carWords: [43686, 43688], cameraWords: [166666, 166670], cameraBehind: 124 }, 'race.start-heading');
+
 const upper = new Map();
 
 export function archiveMembers(dat) {
@@ -38,7 +40,7 @@ export function loadTrack(dat, name, engine = 1) {
     sky: decodePcxMember(member(members, gam.sky)).indices, par: member(members, `${name}.PAR`),
     trig: asView(member(members, 'TRIG.DAT')), ndist: asView(member(members, 'NDIST')), speeds,
     // the car's start position: the first start pair plus the bias (gam.read, racer.start-grid)
-    start: { x: gam.starts[0].x + C.startBias, y: gam.starts[0].y + C.startBias },
+    start: { x: gam.starts[0].x + C.startBias, y: gam.starts[0].y + C.startBias, heading: START().heading },
   };
 }
 
