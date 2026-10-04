@@ -386,7 +386,11 @@ const scenarios = {
     const rd = async (a, n) => { for (let k = 0; k < 20; k++) { try { return await readMemory(a, n); } catch { await sleep(25); } } throw new Error(`read failed at ${a}`); }; // @math retry a read that fails while the pause takes effect
     const u32 = async a => Buffer.from(await rd(a, 4)).readUInt32LE(0), i16 = async a => Buffer.from(await rd(a, 2)).readInt16LE(0), u8 = async a => (await rd(a, 1))[0];
     const [lo, hi] = spec.ms ?? [40, 80], samples = [];
+    // With `--args` steer: the key table's high bytes (obj2+0x1b6d8 + 1 for the left key, + 3 for the right key, the state bytes of input.key-state) are written between the pauses: left, right or none for a random run of pauses.
+    const put = async (a, v) => { for (let k = 0; k < 20; k++) { const r = await fetch(`${API}/api/v1/memory/${a}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: Buffer.from([v]) }); if (r.ok) return; await sleep(25); } }; // @math retry while the pause takes effect
+    let command = 'none', left = 0;
     for (let i = 0; i < (spec.count ?? 300); i++) {
+      if (spec.steer && left-- <= 0) { command = ['left', 'right', 'none'][Math.floor(Math.random() * 3)]; left = 3 + Math.floor(Math.random() * 12); await put(b2 + 0x1b6d8 + 1, command === 'left' ? 1 : 0); await put(b2 + 0x1b6d8 + 3, command === 'right' ? 1 : 0); } // @math runs of 3 to 14 pauses
       await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(70);
       const car = await u32(b2 + 0x1d5b0);
       samples.push({ tick: await u32(b2 + 0x1ec64), pointer: await u32(b2 + 0x1d860), heading: await u32(b2 + 0x1d5d4), w52: await i16(car + 0x52), w54: await i16(car + 0x54), left: await u8(b2 + 0x28cd5), right: await u8(b2 + 0x28cdd), leftAmount: await i16(b2 + 0x28b92), rightAmount: await i16(b2 + 0x28b90), mode: await i16(b2 + 0x28c42) });

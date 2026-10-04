@@ -1,15 +1,13 @@
-// The playtest page: the proven floor renderer and straight-road car step of src/render and src/game, with the hypotheses of
-// src/formats/hypotheses plugged in where the evidence stops (they are named on the page). Everything is decoded in the browser
+// The playtest page: the proven renderers and car step of src/render and src/game. Everything is decoded in the browser
 // from the player's own WACKY.DAT; nothing is uploaded or stored.
 import { openDevGame } from './vfs/dev.js';
 import { openPicked } from './vfs/picker.js';
 import { withSteps } from './evidence/k.js';
 import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
-import { createCar, stepCar, cameraOf } from './game/car.js';
+import { createCar, stepCar } from './game/car.js';
 import { renderFloor } from './render/floor.js';
 import { frameMs } from './game/clock.js';
 import { renderSky, renderHorizon } from './render/sky.js';
-import { turnMoveHypothesis, horizonOffsetHypothesis } from './formats/hypotheses/turn-and-start.js';
 
 const $ = id => document.getElementById(id);
 const TICK_MS = 100; // UNKNOWN_TICK_RATE: the HUD reads a tick as a tenth of a second; 88.5 ms was measured in DOSBox
@@ -22,33 +20,32 @@ function setMessage(text, bad = false) { const m = $('message'); m.textContent =
 function startTrack() {
   const name = $('track').value, engine = Number($('engine').value);
   state.world = loadTrack(state.dat, name, engine);
-  state.car = createCar(state.world.start);
+  state.car = createCar(state.world.start, state.world);
   state.tick = 0; state.accumulator = 0; state.unproven = new Set();
   rgba = rgbaPalette(state.world.palette);
 }
 
 function tickOnce() {
   const input = { accelerate: state.keys.has('ArrowUp') || state.keys.has('KeyA'), brake: state.keys.has('ArrowDown') || state.keys.has('KeyZ'), left: state.keys.has('ArrowLeft'), right: state.keys.has('ArrowRight'), spin: state.keys.has('Space') };
-  const { result, steps } = withSteps(() => stepCar(state.car, input, state.world, { turnMove: turnMoveHypothesis }));
+  const { result, steps } = withSteps(() => stepCar(state.car, input, state.world));
   state.car = result.car; state.tick++; state.steps = steps;
   for (const u of result.unproven) state.unproven.add(u);
 }
 
 function draw() {
-  const mode = Number($('detail').value), camera = cameraOf(state.car, state.world);
+  const mode = Number($('detail').value), camera = { x: state.car.cx, y: state.car.cy, heading: state.car.heading };
   index.fill(0);
   renderSky(state.world.sky, index);
-  renderHorizon(state.world.par, horizonOffsetHypothesis(), index);
+  renderHorizon(state.world.par, state.car.horizon, index);
   renderFloor(state.world, camera, mode, index);
   for (let i = 0; i < index.length; i++) { const p = index[i] * 4; image.data[i * 4] = rgba[p]; image.data[i * 4 + 1] = rgba[p + 1]; image.data[i * 4 + 2] = rgba[p + 2]; image.data[i * 4 + 3] = 255; } // @math RGBA
   ctx.putImageData(image, 0, 0);
   ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, screen.width, 24);
   ctx.fillStyle = '#f2b134'; ctx.font = '10px monospace'; ctx.fillText('HUD, sprites and sound are not ported yet', 6, 15);
   const c = state.car, row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
-  $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Position', `${c.x}, ${c.y}`) + row('Heading', c.heading);
-  const hyp = ['UNKNOWN_CAR_TURN_MOVE', 'UNKNOWN_HORIZON_SCROLL'];
-  $('badge').className = 'badge bad';
-  $('badge').textContent = `Not proven yet and approximated here: ${hyp.join(', ')}${state.unproven.size ? `; this run also used: ${[...state.unproven].join(', ')}` : ''}.`;
+  $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Camera', `${c.cx}, ${c.cy}`) + row('Heading', c.heading);
+  $('badge').className = state.unproven.size ? 'badge bad' : 'badge';
+  $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor and the straight road); sprites, HUD, laps, the AI and sound are not ported yet.';
 }
 
 function frame(now) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { loadTrack } from '../../game/track-data.js';
-import { createCar, stepCar, cameraOf } from '../../game/car.js';
+import { createCar, stepCar, cameraOf, carPosition } from '../../game/car.js';
 import { assertArchive } from '../obs-helpers.js';
 import { expected } from '../expect.js';
 
@@ -16,11 +16,12 @@ function model(V) {
   }, 'car.model equals its sources, leaf by leaf');
 }
 
-// The port's own stepCar replays every observed pair of samples exactly one tick apart on the road: the straight-road pairs (same keys,
-// no steering) must reproduce throttle, speed and position, the steering pairs the heading.
-function replay(dat, records, V, { skipVel = false } = {}) {
-  const world = loadTrack(dat, '1'), counts = { straight: 0, steer: 0, still: 0 };
+// The port's own stepCar replays every pair of samples exactly one tick apart on the road: the throttle, the speed, the heading and the car record's position
+// must come out as the game's (pairs with a collision word, a wall probe's extra turn or a cleared throttle are other claims').
+function replay(dat, records, V, { skipVel = false, noPivot = false } = {}) {
+  const world = loadTrack(dat, '1'), counts = { straight: 0, turned: 0, standing: 0, skipped: 0 };
   assert.equal(world.speeds.length * V.car.velEntryBytes, 400, 'VEL.TAB is 400 bytes'); // @math the member's size, small.read
+  const use = skipVel ? { ...world, speeds: world.speeds.map(() => 0) } : noPivot ? { ...world, ndist: new DataView(new ArrayBuffer(world.ndist.byteLength)) } : world;
   for (const r of records) {
     assertArchive(r, dat);
     const c = Object.fromEntries(r.columns.map((n, i) => [n, i]));
@@ -31,16 +32,13 @@ function replay(dat, records, V, { skipVel = false } = {}) {
       if (a[c.accelerate] !== b[c.accelerate] || a[c.brake] !== b[c.brake]) continue;
       const input = { accelerate: b[c.accelerate] !== 0, brake: b[c.brake] !== 0, left: b[c.leftAmount] !== 0, right: b[c.rightAmount] !== 0, spin: b[c.leftAmount] === V.car.spinStep };
       if (input.accelerate && input.brake) continue;
-      const before = { ...createCar({ x: a[c.x], y: a[c.y], heading: a[c.angle] }), throttle: a[c.throttle], speed: a[c.speed] };
-      const { car, unproven } = stepCar(before, input, skipVel ? { ...world, speeds: world.speeds.map(() => 0) } : world);
-      const turned = b[c.angle] !== a[c.angle];
-      if (b[c.throttle] === 0 && a[c.throttle] > V.car.brakeStep + V.car.coastStep + V.car.cap) continue; // a cleared throttle: a crash, not this model
+      const before = createCar({ x: a[c.x], y: a[c.y], heading: a[c.angle], throttle: a[c.throttle], speed: a[c.speed] }, world);
+      const { car } = stepCar(before, input, use), at = carPosition(car, use);
+      if (car.heading !== b[c.angle] || car.throttle !== b[c.throttle]) { counts.skipped++; continue; } // a wall probe's extra turn, a crash that cleared the throttle
       assert.equal(car.throttle, b[c.throttle], `${r.id} ${i}: throttle`);
-      assert.equal(car.heading, b[c.angle], `${r.id} ${i}: heading`);
       if (b[c.throttle] !== 0) assert.equal(car.speed, b[c.speed], `${r.id} ${i}: speed`);
-      if (!turned) { assert.deepEqual([car.x, car.y], [b[c.x], b[c.y]], `${r.id} ${i}: position`); counts.straight++; }
-      else { assert.ok(unproven.includes('UNKNOWN_CAR_TURN_MOVE') || car.speed === 0, 'a steering tick with speed is reported as unproven'); counts.steer++; }
-      if (!turned && !input.left && !input.right && car.speed === 0) counts.still++;
+      assert.deepEqual([at.x, at.y], [b[c.x], b[c.y]], `${r.id} ${i}: the car record's position`);
+      if (b[c.angle] !== a[c.angle]) counts.turned++; else if (car.speed === 0) counts.standing++; else counts.straight++;
     }
   }
   return counts;
@@ -55,7 +53,7 @@ function camera(dat, records, V) {
     const h = r.horizon, cam = h.camera, trig = loadTrack(dat, h.track).trig, car = cam.racers[0];
     const heading = [...Array(V.floor.wrap).keys()].find(a => trig.getInt32(a * V.car.trigEntryBytes, true) === cam.a && trig.getInt32(a * V.car.trigEntryBytes + half, true) === cam.b);
     assert.ok(heading !== undefined, `${r.id}: the heading vector words are a TRIG entry`);
-    const got = cameraOf(createCar({ x: car[0], y: car[1], heading }), loadTrack(dat, h.track));
+    const got = cameraOf({ x: car[0], y: car[1], heading }, loadTrack(dat, h.track));
     assert.deepEqual([got.x, got.y], [cam.x, cam.y], `${r.id}: the camera is the car less the step of 0x7c`);
     seen++;
   }
@@ -64,20 +62,21 @@ function camera(dat, records, V) {
 
 export default {
   id: 'port-carmodel',
-  claims: ['car.model'],
+  claims: ['car.model', 'car.turn-move'],
   obs: [...IDS, ...CAMERA],
   reviewed: { by: 'main-session', date: '2026-10-04' },
   async run(ctx) {
     const V = values(), dat = await ctx.open('WACKY.DAT');
     model(V);
     const counts = replay(dat, IDS.map(id => ctx.obs(id)), V);
-    assert.ok(counts.straight >= V.step.moves && counts.steer > 0, `the replay covers the straight pairs and the steering pairs (${JSON.stringify(counts)})`);
+    assert.ok(counts.straight >= V.step.movesMoving && counts.straight + counts.standing + counts.turned >= V.step.moves + 19 && counts.turned >= 19 && counts.skipped === 0, `the replay covers the straight pairs and the steering pairs (${JSON.stringify(counts)})`); // @math the frames hold 40 moving, 13 standing and 19 turning pairs on the road
     camera(dat, CAMERA.map(id => ctx.obs(id)), V);
   },
   async discriminate(ctx) {
     const V = values(), dat = await ctx.open('WACKY.DAT'), recs = IDS.map(id => ctx.obs(id));
     return [
       { label: 'a speed table of zeros', fn: () => replay(dat, recs, V, { skipVel: true }) },
+      { label: 'no pivot turn', fn: () => replay(dat, recs, V, { noPivot: true }) },
       { label: 'another accelerate step', fn: () => model({ ...V, car: { ...V.car, accelStep: V.car.accelStep + 1 } }) },
       { label: 'another camera distance', fn: () => model({ ...V, car: { ...V.car, cameraBehind: V.car.cameraBehind + 1 } }) },
     ];

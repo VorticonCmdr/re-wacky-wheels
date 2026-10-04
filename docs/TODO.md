@@ -73,16 +73,10 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 
 ### Port (`src/game`, `src/render`)
 
-- [ ] `UNKNOWN_CAR_TURN_MOVE` [UNKNOWN] — how the car moves in a tick with a steering key held (the position drifts by 1 to 2 units at a stand-still; the straight step does not apply)
-  - Next: fit `steps-3` against the old and the new heading; read the move routine for the order and the drift.
+- [x] `UNKNOWN_CAR_TURN_MOVE` resolved into `car.turn-move` (PROVEN, `exe-turnmove` + the replay in `port-carmodel`): the camera swings about the point NDIST[0] units ahead (old pivot offset less the new one) while the straight move uses the old heading; every ordinary one-tick pair of steps-1 to steps-3 is reproduced exactly (the hop and slide states and walls are other claims)
 - [x] `UNKNOWN_START_HEADING` resolved into `race.start-heading` (PROVEN, `exe-startheading`): the race routine stores the constant 480 in the heading dword right after the racer reset (and the camera at the player's x and y - 0x7c); other modes' starts are not observed
 - [x] `UNKNOWN_TICK_RATE` resolved into `tick.rate` (PROVEN, `exe-tickrate`, record `tick-1`): the race frame counter is a frame count, limited to one frame per 12 counts of a 136 Hz counter (88.2 ms) by default; the race timer counter runs at 10 Hz (tenths); a machine too slow for the limiter and the other period values are not observed
-- [ ] `UNKNOWN_HORIZON_SCROLL` [UNKNOWN] — the start value and the step of the horizon strip's offset while the car turns (observed 66, 28, 16)
-  - Next: sample the pointer every tick while steering; read obj1+0x14832.
-
-### Sprites (`SPRITE.ATR`, `.SP`)
-
-  - Seen 2026-10-04: `GIG.MOV` is the path of the driver reaction figure (`devil.draw-observed`); the other five tables are still without a use seen in play.
+- [x] `UNKNOWN_HORIZON_SCROLL` resolved into `horizon.scroll` (PROVEN, `exe-horizon` + `port-horizon`, record `hscroll-1`): the offset moves by the steering ramp of the side that steers, wraps once at an end bound and is held there; starts at 80 and is a global; the modes 1 and 2 of the mode word and the hop state are not observed
 - [x] `atr.kind-use` PROVEN (`exe-atrkind`, 2026-10-04): the type-to-sprite-to-kind chain and the branches on the kind (0 or less, 1, 2, other) are checked byte for byte; not observed at run time, and what each kind does is `atr.kind-effects`
 - [ ] `atr.kind-effects` [STATIC] — kind 0 obstacle (wrecks a fast car), 1 one-off pickup, 2 counter pickup (+4, cap 99), 3 to 7 held item; `.SPW` word +2 set to 0xffff on pickup
   - Gap: read in full, not run. Next: a run that drives the car into a pickup (or force the zone words at a breakpoint) and compare the car words +0x6a/+0x16 and the `.SPW` word +2.

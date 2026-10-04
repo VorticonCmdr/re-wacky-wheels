@@ -1,7 +1,7 @@
 // The sky and the horizon strip above the floor (sky.model): the sky is a fixed picture, the strip a window of the track's .PAR file.
 import { K } from '../evidence/k.js';
 
-const MODEL = () => K({ width: 320, skyRows: 110, horizonRow: 110, horizonRows: 20, parRowPixels: 1280, pixelsPerByte: 4, parBytes: 25600, offsetMax: 160, observedFrom: 52 }, 'sky.model');
+const MODEL = () => K({ width: 320, skyRows: 110, horizonRow: 110, horizonRows: 20, parRowPixels: 1280, pixelsPerByte: 4, parBytes: 25600, offsetMax: 240, observedFrom: 52 }, 'sky.model');
 
 // Rows 0 to 109 of the 320 x 200 picture `sky` (palette indexes) go to the same rows of fb.
 export function renderSky(sky, fb) {

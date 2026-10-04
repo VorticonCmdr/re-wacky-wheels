@@ -12,7 +12,7 @@ function model(V) {
   const H = V.hz;
   assert.deepEqual(V.m, {
     width: V.sky.width, skyRows: V.hz.firstRow, horizonRow: H.firstRow, horizonRows: H.rows, parRowPixels: H.rowPixels, pixelsPerByte: H.pixelsPerByte, parBytes: V.par.bytes,
-    offsetMax: H.bounds.at(-1) - H.bounds[0] - V.floor.width / H.pixelsPerByte, observedFrom: V.sky.rect[0],
+    offsetMax: H.bounds.at(-1) - H.bounds[0], observedFrom: V.sky.rect[0],
   }, 'sky.model equals its sources, leaf by leaf');
   assert.equal(V.m.skyRows, V.sky.rect[1] + 1, 'the sky rows end where the observed rows end'); // @math the rows above the strip: the last observed row plus one
   assert.equal(V.m.width, V.floor.width, 'as wide as the picture');
