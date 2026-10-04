@@ -30,6 +30,8 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 
 - [PROVEN] `car.steer-step-observed`: per tick the heading changes by the steering amount words, 40 left or right (also standing still), 120 in the hand brake turn, 0 without a key, modulo 1920 (record steps-3, 37 one-tick pairs); the movement while turning is not the straight step of `car.step-observed`.
 
+- [PROVEN] `car.racer-hit-observed`: with the car put on a stationary racer in the countdown, the collision word obj2+0x28bae is 3 while another racer is closer than 14 (Manhattan; hit at 13, none at 14), the heading rises by 18 and the position word y by 1 per call, the throttle is kept (records steps-4 to steps-8).
+
 ## One frame
 
 - [STATIC] `race.frame-calls`: the race frame routine (`obj1+0x1fd8c`) draws the floor, then the objects and the cars, with the terrain lookup, progress and the AI after. Order of the calls, not a trace.
@@ -54,7 +56,7 @@ All offsets are `obj2+0x…` data words unless written `obj1+0x…` (code). The 
 - [STATIC] `race.class-setup`: the heading changes by 40, 36 or 32 of 1920 per call while a steering key is held (by the full-screen detail level high, medium or low, `setup.race-options`; 36 in some modes), half of that in the hop state; the input routine (`FUN_000224ec`) applies these amounts, hop and drift states are not described here.
 
 - [STATIC] `car.move-step`: steering subtracts the word `obj2+0x28b92` from, or adds `obj2+0x28b90` to, the heading (mod 1920); the car moves `speed` units along the heading vector, `(vector × distance + 0x8000) >> 16`, as a line walk from the old to the new position.
-- [STATIC] `car.collision-test`: at each step of the walk, terrain 3 is a wall (code 1), terrain 10 a pit the car falls into (code 4), a static object within a Manhattan distance of 14 is code 2 (the object's `.SPW` word `+2` becomes 1) and another racer within 14 is code 3. When a move is blocked the car is thrown back 0x20 units, its throttle is cleared, and it is turned 0x12 of 1920 away from whichever side probe (heading ± 0x12, 0x7c ahead) sees terrain 3.
+- [STATIC] `car.collision-test`: at each step of the walk, terrain 3 is a wall (code 1), terrain 10 a pit the car falls into (code 4), a static object within a Manhattan distance of 14 is code 2 (the object's `.SPW` word `+2` becomes 1) and another racer closer than 14 (Manhattan, `car.racer-hit-observed`) is code 3, which turns the car by 18 a call without clearing the throttle. When a move is blocked the car is thrown back 0x20 units, its throttle is cleared, and it is turned 0x12 of 1920 away from whichever side probe (heading ± 0x12, 0x7c ahead) sees terrain 3.
 - [STATIC] `car.move-step`: terrain 6 and 0xf start a special car state; the car record keeps the surface value at `+0x56` and the `WACKY.SDX` record's fields at `+0x36`/`+0x3a`.
 - [PROVEN] `terrain.sdx-index`: the terrain value selects the `WACKY.SDX` record (0x12e bytes) whose dword `+0x120` is copied to the car record's `+0x36`.
 - [STATIC] `ai.surface-slowdown`: the computer racers' speeds are lowered by that dword as a 16.16 fraction.

@@ -34,7 +34,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { ms: { type: 'string' }, phases: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { ms: { type: 'string' }, phases: { type: 'string' }, extra: { type: 'boolean' }, poke: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -345,6 +345,7 @@ const scenarios = {
     const post = (path, body) => fetch(`${API}/api/v1${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
     const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), u16 = async a => Buffer.from(await readMemory(a, 2)).readUInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
     const phases = JSON.parse(values.phases ?? '[]'), [lo, hi] = (values.ms ?? '60,120').split(',').map(Number), samples = []; // @math a random run of 60 to 120 ms by default
+    if (values.poke) for (const [off, v] of JSON.parse(values.poke)) { const b = Buffer.alloc(2); b.writeInt16LE(v); await fetch(`${API}/api/v1/memory/${b2 + off}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: b }); } // --poke '[[offset, value], ...]': 16-bit writes to obj2 words before the first phase (an experiment on the run copy)
     let down = [];
     await post('/debug/pause');
     for (const [keys, n] of phases) {
@@ -353,11 +354,11 @@ const scenarios = {
         if (events.length) await post('/input/sequence', { events });
         await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(30); // @math a short settle after the pause
         const car = await i32(b2 + 0x1d5b0);
-        samples.push([phases.findIndex(p => p[0] === keys && p[1] === n), await i32(b2 + 0x1ec64), await i16(car + 0x42), await i16(car + 0x26), await u16(b2 + 0xaaa6), await u16(b2 + 0xaaa8), await i32(b2 + 0x1d5d4), await u16(b2 + 0x28b40), await u16(b2 + 0x28b44), await u16(b2 + 0x28b90), await u16(b2 + 0x28b92), await i16(car + 0x7c), await i16(car + 0x7e), await i32(b2 + 0x1e568)]);
+        samples.push([phases.findIndex(p => p[0] === keys && p[1] === n), await i32(b2 + 0x1ec64), await i16(car + 0x42), await i16(car + 0x26), await u16(b2 + 0xaaa6), await u16(b2 + 0xaaa8), await i32(b2 + 0x1d5d4), await u16(b2 + 0x28b40), await u16(b2 + 0x28b44), await u16(b2 + 0x28b90), await u16(b2 + 0x28b92), await i16(car + 0x7c), await i16(car + 0x7e), await i32(b2 + 0x1e568), ...(values.extra ? [await i16(b2 + 0x28bae), await i16(b2 + 0x28b0a), await i16(b2 + 0x28b0e), ...(await (async () => { const out = []; for (const n of [1, 7]) out.push(await i16(b2 + 0xaaa6 + 0x68 * n), await i16(b2 + 0xaaa8 + 0x68 * n), await i16(b2 + 0xaa90 + 0x68 * n + 2), await i16(b2 + 0xaa90 + 0x68 * n + 4), await i16(b2 + 0x848c + 0x104 * n)); return out; })())] : [])]); // @math --extra: the global collision word, the position words and, for the racers 1 and 7, x, y, word +2, state +4 and the contact flag
       }
       down = keys;
     }
-    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'tick', 'throttle', 'speed', 'x', 'y', 'angle', 'accelerate', 'brake', 'rightAmount', 'leftAmount', 'collisionA', 'collisionB', 'terrain'], samples };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'tick', 'throttle', 'speed', 'x', 'y', 'angle', 'accelerate', 'brake', 'rightAmount', 'leftAmount', 'collisionA', 'collisionB', 'terrain', ...(values.extra ? ['collisionWord', 'cameraX', 'cameraY', 'r1x', 'r1y', 'r1w2', 'r1state', 'r1flag', 'r7x', 'r7y', 'r7w2', 'r7state', 'r7flag'] : [])], samples };
   },
   async boost() {
     // The boost of the player's car (tools/dosbox/boost-run.mjs passes --args {build, forced, samples}): the run archive is the user's with one tile of track 1 given the terrain value in
