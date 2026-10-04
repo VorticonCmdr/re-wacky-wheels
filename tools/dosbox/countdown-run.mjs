@@ -8,7 +8,7 @@
 import { parseArgs } from 'node:util';
 import { spawnSync } from 'node:child_process';
 import { readMemory } from './live.mjs';
-const { values } = parseArgs({ options: { id: { type: 'string' }, moment: { type: 'string' }, phases: { type: 'string' }, poke: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, ms: { type: 'string' }, 'no-restart': { type: 'boolean' }, 'screen-args': { type: 'string' } } });
+const { values } = parseArgs({ options: { id: { type: 'string' }, moment: { type: 'string' }, phases: { type: 'string' }, poke: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, extra5: { type: 'boolean' }, ms: { type: 'string' }, 'no-restart': { type: 'boolean' }, 'screen-args': { type: 'string' } } });
 if (!values.id || !values.moment || !(values.phases || values['screen-args'])) { console.error('usage: countdown-run --id <id> --moment "<text>" --phases \'[[[keys], samples], ...]\' [--poke ...] [--extra] [--extra2] [--ms lo,hi] [--no-restart]'); process.exit(1); }
 const API = 'http://127.0.0.1:8386/api/v1', BASE = 0x239000; // @math obj2's live base in this build
 const post = (path, body) => fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) });
@@ -28,6 +28,6 @@ if (!values['no-restart']) {
   for (let i = 0; i < 60 && !ok; i++) { await sleep(250); await post('/debug/pause'); const now = await r32(0x1ec64), mode = await r16(0x28c44); if (now >= 2 && now <= 30 && mode === 1) ok = true; else await post('/debug/continue'); } // @math the countdown: tick 2 to 30, timer mode 1
   if (!ok) { console.error('missed the countdown'); process.exit(2); }
 }
-const args = values['screen-args'] ? ['run', '-s', 'observe', '--', 'screen', '--id', values.id, '--moment', values.moment, '--args', values['screen-args']] : ['run', '-s', 'observe', '--', 'steps', '--id', values.id, '--moment', values.moment, '--phases', values.phases, ...(values.poke ? ['--poke', values.poke] : []), ...(values.extra ? ['--extra'] : []), ...(values.extra2 ? ['--extra2'] : []), ...(values.extra3 ? ['--extra3'] : []), ...(values.extra4 ? ['--extra4'] : []), ...(values.ms ? ['--ms', values.ms] : [])];
+const args = values['screen-args'] ? ['run', '-s', 'observe', '--', 'screen', '--id', values.id, '--moment', values.moment, '--args', values['screen-args']] : ['run', '-s', 'observe', '--', 'steps', '--id', values.id, '--moment', values.moment, '--phases', values.phases, ...(values.poke ? ['--poke', values.poke] : []), ...(values.extra ? ['--extra'] : []), ...(values.extra2 ? ['--extra2'] : []), ...(values.extra3 ? ['--extra3'] : []), ...(values.extra4 ? ['--extra4'] : []), ...(values.extra5 ? ['--extra5'] : []), ...(values.ms ? ['--ms', values.ms] : [])];
 const out = spawnSync('npm', args, { encoding: 'utf8' });
 console.log(out.stdout.trim().split('\n').pop(), out.stderr.trim());
