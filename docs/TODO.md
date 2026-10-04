@@ -75,7 +75,7 @@ How this file works (`test/evidence.test.js` enforces the first two rules):
 ### Sprites (`SPRITE.ATR`, `.SP`)
 
   - Seen 2026-10-04: `GIG.MOV` is the path of the driver reaction figure (`devil.draw-observed`); the other five tables are still without a use seen in play.
-- [ ] `atr.kind-use` [STATIC] — the catalogue word +0 is an object kind that a routine at obj1+0x13227 branches on (the branches are `atr.kind-effects`)
+- [x] `atr.kind-use` PROVEN (`exe-atrkind`, 2026-10-04): the type-to-sprite-to-kind chain and the branches on the kind (0 or less, 1, 2, other) are checked byte for byte; not observed at run time, and what each kind does is `atr.kind-effects`
 - [ ] `atr.kind-effects` [STATIC] — kind 0 obstacle (wrecks a fast car), 1 one-off pickup, 2 counter pickup (+4, cap 99), 3 to 7 held item; `.SPW` word +2 set to 0xffff on pickup
   - Gap: read in full, not run. Next: a run that drives the car into a pickup (or force the zone words at a breakpoint) and compare the car words +0x6a/+0x16 and the `.SPW` word +2.
 - [ ] `sp.draw` [STATIC] — the blitter `FUN_00036fd0` consumes a frame column by column (word +4 columns of word +6 bytes), index 0 transparent

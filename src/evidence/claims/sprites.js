@@ -24,10 +24,10 @@ export default [
     leads: ['docs/atr.md', 'docs/sp.md', 'docs/spw.md (object id = sprite-catalogue index)'],
   },
   {
-    id: 'atr.kind-use', tag: 'STATIC',
-    statement: 'Besides the sprite loader (sp.read, which compares word +0 with 2), the code at obj1+0x13227 to obj1+0x13261 reads the catalogue word +0 of each object\'s sprite (the table at obj2+0x12998, 0x28 bytes a record, indexed by the object\'s sprite id) and branches on it: a value of 0 or less goes to separate code (obj1+0x1334d) that tests several state words before doing anything, 1 goes to its own code (obj1+0x132d6), 2 sets a flag that makes the general path run (obj1+0x13261) and every other value takes the general path. So word +0 is an object kind that selects different handling in this routine, and the .SPW sprite id selects it. What the routine does with each kind is atr.kind-effects. Not observed at run time.',
-    value: { tableOffset: 0x12998, recordBytes: 0x28, kindWord: 0x00, lowBranchAtOrBelow: 0x00, kindOne: 0x01, kindTwo: 0x02 },
-    evidence: { at: ['WW.EXE:obj1+0x13227 fp=c9bff52c', 'WW.EXE:obj1+0x1322d fp=db62448c', 'WW.EXE:obj1+0x13243 fp=90d0b5e9', 'WW.EXE:obj1+0x13261 fp=59cf3270'] },
+    id: 'atr.kind-use', tag: 'PROVEN',
+    statement: 'Besides the sprite loader (sp.read, which compares word +0 with 2), the code at obj1+0x13219 to obj1+0x1326c (read byte for byte from WW.EXE by the check) takes the object\'s type word (+0x22 of the object record) times 12 into the table at obj2+0x13938, reads the sprite id word at the start of that 12-byte record, indexes the sprite catalogue (obj2+0x12998, 0x28 bytes a record) with it and reads the catalogue word +0 (the kind), keeping the record pointer in obj2+0x1d7f4. It then branches on the kind: 0 or less goes to separate code (obj1+0x1334d), 1 to its own code (obj1+0x132d6); for any other kind it skips the object when the object\'s word +0x6a is 0x63 or more (obj1+0x13441), and sets a flag register to 1 when the object\'s word +0x16 is 0 or the kind is 2, which the general path tests next (obj1+0x1327a). What each kind then does is atr.kind-effects. Not observed at run time.',
+    value: { tableOffset: 0x12998, recordBytes: 0x28, kindWord: 0x00, kindOne: 0x01, kindTwo: 0x02, start: 0x13219, typeWord: 0x22, typeRecordBytes: 0x0c, typeTableAt: 0x13938, recordPointerAt: 0x1d7f4, lowCode: 0x1334d, oneCode: 0x132d6, skipCode: 0x13441, limitWord: 0x6a, limit: 0x63, flagWord: 0x16 },
+    evidence: { checks: ['exe-atrkind'], at: ['WW.EXE:obj1+0x13227 fp=c9bff52c', 'WW.EXE:obj1+0x1322d fp=db62448c', 'WW.EXE:obj1+0x13243 fp=90d0b5e9', 'WW.EXE:obj1+0x13261 fp=59cf3270'] },
     leads: ['docs/atr.md'],
   },
   {
