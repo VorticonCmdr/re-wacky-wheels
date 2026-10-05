@@ -1,7 +1,7 @@
 // AUDIOHED.FX + AUDIOT.FX, the sound-effect bank, parsed strictly with the layout the archive proves
 // (claim audio.bank-layout). The legacy parseAudioT in src/archive.js is untraced and stays until the
-// viewer moves here. What the header bytes after each chunk's length dword mean is not established
-// (UNKNOWN_AUDIO_CHUNK_FIELDS), so header and trailer bytes are returned raw. The bank names are positional, not claims:
+// viewer moves here. What the header bytes after each chunk's length dword hold is audio.chunk-fields (a zero word, then in
+// the second bank 16 instrument bytes and a block byte; the trailer text is a name), so header and trailer bytes are returned raw. The bank names are positional, not claims:
 // `first` is slots 0 to 25, `second` slots 26 to 51.
 import { bytes, view, need } from '../binary.js';
 import { K } from '../evidence/k.js';

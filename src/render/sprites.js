@@ -54,3 +54,16 @@ export function blitRecord(fb, rec) {
   }
   return fb;
 }
+
+// The plain transparent blit (obj1+0x26fd0, sp.draw): `d.bytes` column-major, `d.width` columns of `d.height` rows at (x, y), the index 0 skipped.
+export function blitFlat(fb, d) {
+  const S = MODEL();
+  for (let i = 0; i < d.width; i++) {
+    const x = d.x + i;
+    for (let j = 0; j < d.height; j++) {
+      const y = d.y + j, pixel = d.bytes[i * d.height + j];
+      if (pixel !== 0 && x >= 0 && x < S.width && y >= 0 && y <= S.maxRow) fb[y * S.width + x] = pixel;
+    }
+  }
+  return fb;
+}

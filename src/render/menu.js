@@ -15,6 +15,16 @@ export function loadTiles(data) {
   return Array.from({ length: M.tiles }, (_, t) => data.subarray(t * tileBytes, (t + 1) * tileBytes));
 }
 
+const TILEMAP = () => K({ routine: 0x46d4, dispatch: 0x4758, tableAt: 0xa888, advance: 11, letterBase: 0x41, letterLast: 0x5a, digitFirst: 0x30, digitLast: 0x39, digitBase: 0x16, space: 0x24, punctuation: { 0x20: 0x24, 0x2e: 0x25, 0x3c: 0x26, 0x23: 0x27, 0x3e: 0x27, 0x21: 0x28, 0x3f: 0x29, 0x7e: 0x29 } }, 'text.tile-map');
+
+// The tile of any character as the large text routine picks it (text.tile-map): the characters it has no tile for are drawn as the space.
+export function bigTileOf(ch) {
+  const T = TILEMAP(), code = ch.charCodeAt(0);
+  if (code >= T.letterBase && code <= T.letterLast) return code - T.letterBase;
+  if (code >= T.digitFirst && code <= T.digitLast) return code - T.digitBase;
+  return T.punctuation[code] ?? T.space;
+}
+
 export function tileOf(ch) {
   const M = MAIN();
   if (ch === ' ') return M.spaceTile;
@@ -38,15 +48,18 @@ const SCREEN_MODEL = () => K({ background: 'CHECK.PCX', screenWidth: 320, items:
 
 // Where a menu's bars and icons go (menu.screen-model): the bars are centred across the screen by their text width, the block of rows about a centre row
 // that depends on the variant (the main menu 130, the submenus 112). `items` are the item texts; the bars are all as long as the longest item.
-export function layoutOf(kind, items) {
+export function layoutOf(kind, items, centre = null) {
   const S = SCREEN_MODEL(), M = MAIN(), max = Math.max(...items.map(t => [...t].length)), chars = max + S.items.lead + S.items.trail;
-  return { max, x0: Math.floor((S.screenWidth - chars * M.step) / 2), y0: S.cars.layouts[kind].centre - (M.lineStep * items.length) / 2, width: chars * M.step + (M.tile[0] - M.step) }; // @math the tiles overlap by their width less the step
+  return { max, x0: Math.floor((S.screenWidth - chars * M.step) / 2), y0: (centre ?? S.cars.layouts[kind].centre) - (M.lineStep * items.length) / 2, width: chars * M.step + (M.tile[0] - M.step) }; // @math the tiles overlap by their width less the step
 }
 
+// The row just below the last bar of a menu.
+export const menuBottom = (kind, items, centre = null) => layoutOf(kind, items, centre).y0 + MAIN().lineStep * items.length;
+
 // The row the selection icons rest at for a cursor (1-based).
-export function lionTopFor(kind, items, cursor) {
+export function lionTopFor(kind, items, cursor, centre = null) {
   const S = SCREEN_MODEL(), M = MAIN();
-  return layoutOf(kind, items).y0 - S.lions.above + M.lineStep * (cursor - 1); // @math the cursor counts from 1
+  return layoutOf(kind, items, centre).y0 - S.lions.above + M.lineStep * (cursor - 1); // @math the cursor counts from 1
 }
 
 // An item as the game draws it: a space tile in front, the text, then spaces up to the longest item and one more behind, so the bars are all one length.
@@ -81,3 +94,13 @@ export function renderMenu(fb, art, state) {
 
 // How many corner cars a menu variant shows.
 export const carCount = kind => SCREEN_MODEL().cars.layouts[kind].cars.length;
+
+// The bars and the selection icons of a menu drawn over the picture that is already in `fb` (the in-race menu, race.pause-menu): `state` is { items, centre, lionTop, lionFrame }.
+export function renderMenuOverlay(fb, art, state) {
+  const S = SCREEN_MODEL(), M = MAIN(), L = layoutOf(null, state.items, state.centre);
+  state.items.forEach((text, m) => drawItem(fb, art.tiles, text, L.x0, L.y0 + M.lineStep * m, L.max));
+  [L.x0 - S.lions.left, L.x0 + L.width - S.lions.rightBack].forEach((x, side) => {
+    const f = S.lions.frames[side] + state.lionFrame, top = state.lionTop, [w, h] = S.lions.size;
+    for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) { const v = art.handle[f * S.lions.frameBytes + i * h + j]; if (v !== 0) fb[(top + j) * SCREEN.width + x + i] = v; }
+  });
+}

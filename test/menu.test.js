@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMenu, enterMenu, stepFrame, moveCursor, advanceAnimation, sizeOf, frameOf } from '../src/game/menu.js';
+import { createMenu, enterMenu, enterSetup, stepFrame, moveCursor, advanceAnimation, sizeOf, frameOf } from '../src/game/menu.js';
 import { menuDef, menuIds, defaultSettings } from '../src/game/menus.js';
 import { menuItems, tileOf, loadTiles, drawItem, layoutOf, lionTopFor, carCount } from '../src/render/menu.js';
 
@@ -53,8 +53,10 @@ test('Esc in the main menu puts the cursor on the last item at once, icons settl
   assert.equal(stepFrame(menu, 'escape').menu.cursor, 9);
 });
 
-test('SINGLE PLAYER RACING leads through the setup menus and the last one starts the race', () => {
-  let menu = stepFrame(createMenu(), 'enter').menu;
+test('SINGLE PLAYER RACING shows the vehicle screen, then leads through the setup menus and the last one starts the race', () => {
+  const opened = stepFrame(createMenu(), 'enter');
+  assert.equal(opened.chosen.vehicle, 'class'); // the vehicle screen comes first (menu.vehicle-screen)
+  let menu = enterSetup(opened.menu, opened.chosen.vehicle);
   assert.deepEqual([menu.id, menu.stack.length], ['class', 1]);
   for (const id of ['laps', 'engine', 'races']) { menu = stepFrame(menu, 'enter').menu; assert.equal(menu.id, id); }
   menu = settle(stepFrame(menu, 'down').menu);
@@ -68,11 +70,24 @@ test('SINGLE PLAYER RACING leads through the setup menus and the last one starts
 test('items that are not menus are returned to the page', () => {
   let menu = createMenu();
   for (let i = 0; i < 8; i++) menu = settle(stepFrame(menu, 'down').menu);
-  assert.deepEqual(stepFrame(menu, 'enter').chosen, { pending: 'LEAVE GAME' });
+  assert.deepEqual(stepFrame(menu, 'enter').chosen, { leave: true }); // LEAVE GAME ends the game on its text screen
 });
 
-test('every menu a choice opens is in the table', () => {
-  for (const id of menuIds()) for (const a of menuDef(id).actions) if (a.open) assert.ok(menuIds().includes(a.open));
+test('every menu a choice opens is in the table', async () => {
+  const { famousIds } = await import('../src/game/menus.js'), all = [...menuIds(), ...famousIds()];
+  for (const id of all) for (const a of menuDef(id).actions) if (a.open) assert.ok(all.includes(a.open), `${id} opens ${a.open}`);
+});
+
+test('the Info menu leads to the famous drivers menus and their halls', async () => {
+  const { famousIds } = await import('../src/game/menus.js'), flow = (races) => ({ ...defaultSettings(), flow: { ...defaultSettings().flow, races } });
+  assert.deepEqual(menuDef('info').actions[2], { pending: 'FAMOUS DRIVERS' }); assert.deepEqual(menuDef('info', defaultSettings(1, true)).actions[2], { open: 'drivers' });
+  assert.deepEqual(menuDef('drivers').actions.map(a => a.open ?? (a.back ? 'back' : null)), ['cups1', 'cups2', 'cups3', 'trials', 'back']);
+  assert.deepEqual(menuDef('cups2').items, ['BRONZE RACE', 'SILVER RACE', 'GOLD RACE', 'LEAVE THIS MENU']); assert.deepEqual(menuDef('cups2').actions[1], { famous: { cls: 2, cup: 2 } });
+  assert.deepEqual(menuDef('cups1', flow(2)).items, ['BONUS BRONZE RACE', 'BONUS SILVER RACE', 'BONUS GOLD RACE', 'LEAVE THIS MENU']);
+  assert.deepEqual(menuDef('trials').actions.map(a => a.open ?? (a.back ? 'back' : null)), ['tracks1', 'tracks2', 'tracks3', 'back']);
+  assert.deepEqual(menuDef('tracks2').items, ['SILVER TRACK 1', 'SILVER TRACK 2', 'SILVER TRACK 3', 'SILVER TRACK 4', 'SILVER TRACK 5', 'LEAVE THIS MENU']); assert.deepEqual(menuDef('tracks2').actions[2], { hall: { cup: 2, race: 3 } });
+  assert.equal(famousIds().length, 9);
+  assert.deepEqual(menuDef('restore', defaultSettings(1, true)).items, ['RESTORE SAVED GAME', 'START NEW GAME']); assert.deepEqual(menuDef('restore').actions, [{ restore: true }, { newGame: true }]);
 });
 
 test('menus are laid out centred, with 4 cars in a submenu', () => {
@@ -149,4 +164,11 @@ test('a detail list opens on the current level and choosing sets the level and g
   menu = stepFrame(menu, 'enter').menu;
   assert.deepEqual([menu.id, menu.cursor], ['split', 3]);
   assert.deepEqual(menuDef('single').items, ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL']);
+});
+
+test('the class item skips the setup menus its class forces: the time trial the laps, the kid mode the laps and the engine', async () => {
+  const { menuDef } = await import('../src/game/menus.js'), { forcedOf } = await import('../src/game/classes.js');
+  const actions = menuDef('class').actions.map(a => a.goto ?? a.race);
+  assert.deepEqual(actions, ['laps', 'laps', 'laps', 'engine', 'races']);
+  assert.deepEqual([forcedOf(1), forcedOf(4), forcedOf(5)], [{ skip: [], laps: null, engine: null }, { skip: ['laps'], laps: 6, engine: null }, { skip: ['laps', 'engine'], laps: 3, engine: 2 }]);
 });

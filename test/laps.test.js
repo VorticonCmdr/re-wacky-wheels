@@ -19,9 +19,9 @@ test('the grid value is the cell at row and column of the offset from 0x400 shif
 test('a lap is counted when the value goes from the trailer to 1', () => {
   let laps = { lap: 0, prev: 20, flag: 0, shown: false };
   for (const v of [24, 27]) laps = stepLaps(laps, v, 27, 6).laps;
-  assert.deepEqual(laps, { lap: 0, prev: 27, flag: 0, shown: false });
+  assert.deepEqual(laps, { lap: 0, prev: 27, flag: 0, shown: false, key1: 27, key2: 27 });
   laps = stepLaps(laps, 1, 27, 6).laps;
-  assert.deepEqual(laps, { lap: 1, prev: 1, flag: 0, shown: true });
+  assert.deepEqual(laps, { lap: 1, prev: 1, flag: 0, shown: true, key1: 1025, key2: 28 }); // lap x trailer + value
   laps = stepLaps(laps, 2, 27, 6).laps;
   assert.equal(laps.lap, 1);
 });
@@ -36,10 +36,10 @@ test('the value 0 changes nothing and is listed as unproven', () => {
 test('crossing the line backwards sets the flag and the next forward crossing is cancelled', () => {
   let laps = { lap: 2, prev: 1, flag: 0, shown: true };
   const back = stepLaps(laps, 27, 27, 6);
-  assert.deepEqual(back.laps, { lap: 2, prev: 27, flag: 1, shown: true });
+  assert.deepEqual(back.laps, { lap: 2, prev: 27, flag: 1, shown: true, key1: 1051, key2: 54 }); // the lap less 1 while the flag is set
   assert.ok(back.unproven.length > 0);
   const forward = stepLaps(back.laps, 1, 27, 6);
-  assert.deepEqual(forward.laps, { lap: 2, prev: 1, flag: 0, shown: true });
+  assert.deepEqual(forward.laps, { lap: 2, prev: 1, flag: 0, shown: true, key1: 2049, key2: 55 });
   laps = stepLaps(forward.laps, 27, 27, 6).laps;
   assert.equal(stepLaps(stepLaps(laps, 1, 27, 6).laps, 2, 27, 6).laps.lap, 2);
 });

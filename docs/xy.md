@@ -10,7 +10,7 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 
 - [PROVEN] (`static-tables`, claim `static.layout`): `MAP.XY` is exactly 0x1000 bytes.
 - [PROVEN] (observed, `static.read`): the loader reads it as two 0x800-byte blocks, to obj2+0x202cc and obj2+0x1faca, and both equal the file's halves (CRC-32 equal) at run time.
-- [UNKNOWN] what the table means (the wiki's minimap lookup; zero values reportedly place all markers at (0, 60)): `UNKNOWN_STATIC_TABLE_MEANING`.
+- [PROVEN] (`mapxy.use`, `hud.minimap-draw`, resolves `UNKNOWN_STATIC_TABLE_MEANING`): the table is the minimap's world to picture lookup: the first byte table gives a racer's x, the second its y, and the dots are drawn from them at the picture's origin (the port draws the minimap with it).
 
 ## Sources
 

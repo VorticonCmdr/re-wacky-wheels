@@ -8,7 +8,7 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 
 - [PROVEN] (`static-tables`): `GIG.MOV` is a 2-byte little-endian count (80) followed by count x 4 bytes plus 4 more bytes, 326 bytes in total: the wiki's N+1 four-byte records.
 - [PROVEN] (observed, `static.read`): the loader reads the count into a word (kept as read: 80) and the count*4+4 bytes to obj2+0x1b548, and they equal the file's at run time.
-- [UNKNOWN] what the entries mean (the wiki's relative devil motion): `UNKNOWN_STATIC_TABLE_MEANING`.
+- [STATIC] (`static.table-meanings`, `mov.use`, `figure.rules`): the entries are the per-call screen offsets (x and y words) of the player's reaction figure at the right of the race screen, played with the frames of `GIGGLES.SP`; the wiki's "devil motion" is the same figure (resolves `UNKNOWN_STATIC_TABLE_MEANING`).
 - [STATIC] (`mov.use`): two drawing routines (around obj1+0x1a857 and +0x1abfe) read the entries as `(x, y)` word pairs by index: screen x is a constant (0xfa or 0x8d) plus the first word, screen y gets the second word added, then the sprite blitter draws. So the entries are relative screen offsets for one drawn sprite, as the wiki says; which sprite and what steps the index are unread. Not observed running.
 
 ## Sources

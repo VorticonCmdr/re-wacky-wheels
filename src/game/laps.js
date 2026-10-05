@@ -14,8 +14,9 @@ export function gridValue(pos, x, y) {
 }
 
 // The laps state of the player at a position: the lap word 0 (observed at the start), the previous value the grid gives there, the backward-crossing flag
-// and the word that lets the lap text be drawn (obj2+0x84b4, 0 until the first counted lap).
-export const createLaps = (pos, x, y) => ({ lap: 0, prev: gridValue(pos, x, y), flag: 0, shown: false });
+// the word that lets the lap text be drawn (obj2+0x84b4, 0 until the first counted lap) and the ranking key obj2+0x843e (lap x trailer + value, the lap less 1
+// while the flag is set), which the catch-up helper of the computer racers reads (lap.rules, ai.rules).
+export const createLaps = (pos, x, y) => ({ lap: 0, prev: gridValue(pos, x, y), flag: 0, shown: false, key1: gridValue(pos, x, y), key2: gridValue(pos, x, y) });
 
 // One frame of the human racer's update for the grid value `value` and the laps word `total` (lap.rules). Returns the next state, whether the reaction figure
 // starts (the lap word reaches the laps word) and what this frame relied on without proof.
@@ -32,7 +33,8 @@ export function stepLaps(laps, value, trailer, total) {
   } else if (value === trailer && prev === R.firstStep) {
     flag = 1; unproven.push('the line crossed backwards (the flag)');
   }
-  return { laps: { lap, prev: value, flag, shown }, started, unproven };
+  const ranked = flag === 0 ? lap : lap - 1; // the keys use the lap less 1 while the backward-crossing flag is set
+  return { laps: { lap, prev: value, flag, shown, key1: ranked * (1 << LIVE().lapShift) + value, key2: ranked * trailer + value }, started, unproven };
 }
 
 // The laps of a race from the laps menu's choice (1 to 3), and whether a lap word is the finish.
@@ -41,3 +43,15 @@ export const isFinished = (lap, total) => lap === total + RULES().finishExtraLap
 
 // The driver of the reaction figure that starts when the lap word reaches the laps word.
 export const figureDriver = () => RULES().figureDriver;
+
+// The frame routine's finish (lap.rules, obj1+0x21609; car.finish-observed): at the start of the call after the lap word reaches the laps word plus 1 it sets the finish flag, and from
+// then on the player's keys are ignored (the key sampler zeroes the button words while the flag is set, obj1+0x1d7c6): the throttle coasts down and the car stops. `fresh` is the call
+// that sets the flag (the call that stores the tick word as the final time).
+export function stepFinish(finished, lap, total) {
+  if (finished) return { finished: true, fresh: false };
+  const now = isFinished(lap, total);
+  return { finished: now, fresh: now };
+}
+
+// No key down.
+export const NO_KEYS = Object.freeze({ accelerate: false, brake: false, left: false, right: false, spin: false, fire: false });

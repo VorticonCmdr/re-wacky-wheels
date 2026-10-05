@@ -13,7 +13,7 @@ Tags as in [evidence.md](evidence.md); the loader is `FUN_00028180` (obj1+0x1818
 - [STATIC] (`car.move-step`): the player's per-frame move stores the terrain value in car word +0x56 and the SDX dword +0x120 and word +0x124 in +0x36 and +0x3a; the values 6 and 0xf start a special car state that copies SDX dwords +0x126 and +0x12a; 3 is the wall the collision probes look for and 2 is a boost strip (`car.speed-model`). Read, not run.
 - [STATIC] (`car.collision-test`): terrain value 10 is a pit the car falls into (collision code 4) and 3 the wall (code 1); static objects within 14 units give code 2 and other racers code 3.
 - [STATIC] (`car.steer-states`): the word `+0x124` is how many calls a steering key must be held at full throttle before the car slides (0 hops at once) and the dword `+0x120` slows the player's speed every call; both are copied into the car record when it enters the surface. Read, not run.
-- [UNKNOWN] what the records mean: `UNKNOWN_STATIC_TABLE_MEANING`.
+- [STATIC] (`static.table-meanings`, `terrain.sdx-index`, `effects.ground-dust`, resolves `UNKNOWN_STATIC_TABLE_MEANING`): one record per surface value. The dword +0x120 is the fraction of the speed the surface takes away, +0x124 the number of steering calls before a slide, the flag bytes at +0 and +0x80 (a byte a track) say whether the track has the surface's first and second wheel picture, the dwords +0x100 and +0x104 are the offsets of those pictures in `EFFECTS.SP` with their strides, sizes and frame counts from +0x108, and the last 8 bytes (+0x126, +0x12a) are rewritten by the effects loader with the buffer addresses of the pictures it loaded for the track. The wiki's "particle data" is the wheel dust and splash pictures.
 
 ## Sources
 

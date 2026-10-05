@@ -66,16 +66,9 @@ export default [
   },
   {
     id: 'dat.sentinel-bytes', tag: 'PROVEN',
-    statement: 'In the user\'s WACKY.DAT the 22-byte stretch after the directory (file offset 2 + 22 x count, the gap before the first member) is an entry whose first byte is 0, whose name field from its second byte on repeats the last directory entry\'s name field from its second byte (the last entry is "WWREG.BIN", the sentinel holds a 0 byte and then "WREG.BIN"), and whose length and offset fields are zero. So it is the end-marker entry the lookup would stop on, with the name tail of the previous entry left behind; the game does not load it (dat.directory-read).',
+    statement: 'In the user\'s WACKY.DAT the 22-byte stretch after the directory (file offset 2 + 22 x count, the gap before the first member) is an entry whose first byte is 0, whose name field from its second byte on repeats the last directory entry\'s name field from its second byte (the last entry is "WWREG.BIN", the sentinel holds a 0 byte and then "WREG.BIN"), and whose length and offset fields are zero. So it is the end-marker entry the lookup would stop on, with the name tail of the previous entry left behind; the game does not load it (dat.directory-read: it reads only count x 0x16 bytes, so the lookup\'s zero-first-byte end marker ends on zeroed memory), and nothing of the port depends on it (patchArchive keeps the bytes). Why the packer leaves the tail (an entry buffer reused with its first byte and numeric fields cleared is the reading that fits) cannot be answered from the files: the packer is not available, and the question is closed (2026-10-05) rather than left as an open claim.',
     value: { endMarker: 0x00, nameBytes: 0x0e, tailFrom: 0x01 },
     evidence: { checks: ['dat-sentinel'] },
     leads: ['docs/dat.md'],
-  },
-  {
-    id: 'UNKNOWN_DAT_SENTINEL_ENTRY', tag: 'UNKNOWN',
-    statement: 'Why the packer leaves the previous entry\'s name tail in the 22-byte sentinel (dat.sentinel-bytes) is not established; it looks like an entry buffer reused with its first byte and numeric fields cleared, but the packer is not available. The running game does not load the sentinel (dat.directory-read: the 22 bytes after its table are zero, because it reads only count*0x16 bytes); the lookup\'s zero-first-byte end marker therefore ends on zeroed memory.',
-    evidence: {},
-    leads: ['dat.entry-lookup (end marker at obj1+0x41a9)'],
-    todo: 'Nothing in the game reads the file sentinel; decide whether it matters for rewriting archives (src/track-model.js patchArchive keeps it byte-for-byte).',
   },
 ];

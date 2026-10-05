@@ -5,6 +5,7 @@ import { openDevGame } from './vfs/dev.js';
 import { openPicked } from './vfs/picker.js';
 import { vgaQuantize } from './formats/pcx.js';
 import { parseAtr, rawFrame, spriteLayout } from './sprites.js';
+import { spriteSheet, spriteSheetLayout } from './sprite-sheet.js';
 import { parseGam, parseRoute, parseSpawns, composeTrack } from './tracks.js';
 import { decodeVoc, decodePcSpeaker, encodeWav } from './audio.js';
 import { numericValues, inspectData, b800Cells } from './data-formats.js';
@@ -37,6 +38,7 @@ function cleanup() {
   document.querySelectorAll('audio').forEach(a => { a.pause(); a.removeAttribute('src'); a.load(); });
   state.urls.forEach(u => URL.revokeObjectURL(u)); state.urls = [];
   state.canvas = null; $('export-png').hidden = true;
+  $('export-sheet').hidden = true; $('export-sheet').onclick = null;
 }
 function download(data, name, type = 'application/octet-stream') {
   const url = URL.createObjectURL(new Blob([data], { type })), a = el('a'); a.href = url; a.download = name;
@@ -105,11 +107,22 @@ function previewRaw(entry) {
   const c = canvas(w, h); controls();
   const frameSlider = el('input'); frameSlider.type = 'range'; frameSlider.min = 0; frameSlider.step = 1;
   const frameLabel = el('span', undefined, 'frame-label');
+  let sheetColumns = 0;
+  const sheetInfo = el('span', undefined, 'frame-label');
+  function updateSheetInfo() {
+    if (horizon) return;
+    try {
+      const sheet = spriteSheetLayout(entry.data.length, w, h, offset, sheetColumns);
+      sheetInfo.textContent = `${sheet.frames} frames · ${sheet.columns} columns × ${sheet.rows} rows · ${sheet.width} × ${sheet.height} px${sheet.partialFrame ? ' · last frame padded (current layout)' : ''}`;
+      $('export-sheet').disabled = false;
+    } catch (error) { sheetInfo.textContent = error.message; $('export-sheet').disabled = true; }
+  }
   function count() { return Math.max(1, Math.ceil((entry.data.length - offset) / (w * h))); }
   function draw() {
     frame = Math.min(frame, count() - 1); frameSlider.max = count() - 1; frameSlider.value = frame;
     paint(c, rawFrame(entry.data, w, h, frame, offset, column), palette(key), transparent ? 0 : -1);
     frameLabel.textContent = `${frame + 1} / ${count()} frames`;
+    updateSheetInfo();
     if (zoom.value !== 'fit') c.style.width = w * Number(zoom.value) + 'px';
   }
   const zoom = selectControl('Zoom', [['fit', 'Fit'], [1, '1×'], [2, '2×'], [4, '4×'], [8, '8×']], horizon ? 1 : 8, v => { c.style.width = v === 'fit' ? '' : w * Number(v) + 'px'; c.style.maxWidth = v === 'fit' ? '100%' : 'none'; });
@@ -122,6 +135,26 @@ function previewRaw(entry) {
   checkControl('Column-major', column, v => { column = v; draw(); }); checkControl('Transparent index 0', transparent, v => { transparent = v; draw(); });
   field('Frame', frameSlider); $('controls').append(frameLabel); frameSlider.oninput = () => { frame = Number(frameSlider.value); draw(); };
   checkControl('Animate · 8 fps', false, v => { animate = v; });
+  if (!horizon) {
+    selectControl('Sprite sheet columns', [[0, 'Auto'], [1, '1 · vertical strip'], [4, '4'], [8, '8'], [16, '16']], 0, value => { sheetColumns = Number(value); updateSheetInfo(); });
+    field('Sprite sheet', sheetInfo);
+    $('export-sheet').hidden = false;
+    $('export-sheet').onclick = () => {
+      const token = state.renderId, name = entry.name.replace(/\.sp$/i, '') + '-sheet.png';
+      try {
+        const sheet = spriteSheet(entry.data, w, h, displayPalette(palette(key)), { offset, columns: sheetColumns, columnMajor: column, transparent: transparent ? 0 : -1 });
+        const output = el('canvas'); output.width = sheet.width; output.height = sheet.height;
+        const context = output.getContext('2d');
+        if (!context) throw new Error('Could not allocate the sprite sheet canvas.');
+        context.putImageData(new ImageData(sheet.rgba, sheet.width, sheet.height), 0, 0);
+        output.toBlob(blob => {
+          if (blob) { download(blob, name, 'image/png'); if (token === state.renderId) status(`Exported ${sheet.frames} frames to ${name}, left to right then top to bottom.`); }
+          else if (token === state.renderId) status('Could not encode the sprite sheet PNG.', true);
+        }, 'image/png');
+      } catch (error) { status(error.message, true); }
+    };
+    detail('Sprite sheet export includes all frames from the current byte offset, in order from left to right then top to bottom. It uses the current dimensions, pixel order, palette and transparency; preview zoom does not scale the export.');
+  }
   function tick(time) { if (animate && time - last >= 125) { frame = (frame + 1) % count(); draw(); last = time; } state.raf = requestAnimationFrame(tick); }
   draw(); state.raf = requestAnimationFrame(tick);
   detail(layout.certainty + '. Raw files have no embedded palette. Select the palette for the screen or track they belong to.');

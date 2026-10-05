@@ -14,3 +14,6 @@ export function timerPeriodMs() { return 1000 / CLOCK().counters[1].hz; } // @ma
 
 // The race timer counts at the registered rate of its counter (tenths of a second): `ticks` counts to seconds.
 export function timerSeconds(ticks) { return ticks / CLOCK().counters[1].hz; }
+
+// Counts of the 136 Hz counter in one race frame.
+export const framePeriod = () => CLOCK().period;

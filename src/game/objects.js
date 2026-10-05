@@ -6,20 +6,26 @@ const MODEL = () => K({ fixedBits: 16, tan: 37837, center: 160, maxColumn: 319, 
 const ANIMATION = () => K({ offset: 20, step: 1, counter: 0, lag: 1 }, 'object.animation');
 const CONSUMED = 0xffff; // @math the consumed marker of atr.kind-effects
 
-// One draw record of a static object, or null: the picture of its shape and size class, clipped to the screen as the routine does.
-export function objectRecord(world, view, camera, index, object) {
+// The part of a picture that lies on the screen (the clipping of the object pass): the visible width and height, the left and top, the columns and rows skipped; null when nothing shows.
+export function clipPicture(hit, picture) {
   const V = MODEL();
-  if (object.consumed === CONSUMED || object.consumed === -1) return null; // @math the word is read as 0xffff or -1
-  const hit = projectPoint(world, view, camera, object.x, object.y, world.rows);
-  if (!hit) return null;
-  const sprite = world.sprites[object.id], picture = world.shapes.get(sprite.shape)[hit.sizeClass];
   let width = picture.w, height = picture.h, left = hit.column - (picture.w >> 1), top = hit.bottom - picture.h, skipRows = 0, firstColumn = 0; // @math half the width, rounded down
   if (top > V.maxRow) return null;
   if (left < 0) { firstColumn = -left; width -= firstColumn; if (width <= 0) return null; left = 0; }
   else if (left + picture.w - 1 > V.maxColumn) { width -= left + picture.w - 1 - V.maxColumn; if (width <= 0) return null; }
   if (top + picture.h - 1 > V.maxRow) { const cut = top + picture.h - 1 - V.maxRow; height -= cut; if (height <= 0) return null; skipRows = cut; }
+  return { width, height, left, top, firstColumn, skipRows };
+}
+
+// One draw record of a static object, or null: the picture of its shape and size class, clipped to the screen as the routine does.
+export function objectRecord(world, view, camera, index, object) {
+  if (object.consumed === CONSUMED || object.consumed === -1) return null; // @math the word is read as 0xffff or -1
+  const hit = projectPoint(world, view, camera, object.x, object.y, world.rows);
+  if (!hit) return null;
+  const sprite = world.sprites[object.id], picture = world.shapes.get(sprite.shape)[hit.sizeClass], clip = clipPicture(hit, picture);
+  if (!clip) return null;
   const frameBytes = sprite.width * sprite.height;
-  return { width, height, left, top, picture, firstColumn, skipRows, frame: sprite.data.subarray(object.frame * frameBytes, (object.frame + 1) * frameBytes), distance: hit.distance, sizeClass: hit.sizeClass, type: -1, racer: -1, object: index };
+  return { ...clip, picture, frame: sprite.data.subarray(object.frame * frameBytes, (object.frame + 1) * frameBytes), distance: hit.distance, sizeClass: hit.sizeClass, type: -1, racer: -1, object: index };
 }
 
 // The records of all objects, in the order of the table.
@@ -30,7 +36,7 @@ export function objectRecords(world, view, camera, objects = world.objects) {
 }
 
 // The frame an object shows after `ticks` frames of the race (object.animation): every object advances one frame a tick through the frames of its sprite, from the common phase 20.
-export function objectFrame(world, id, ticks) {
+export function objectFrame(world, id, ticks, offset = null) { // `offset` replaces the common phase 20 of a race that starts with the camera's fly-by (the shoot-out has none: versus.shootout-rules)
   const A = ANIMATION(), frames = world.sprites[id].frames;
-  return (ticks * A.step + A.offset) % frames;
+  return (ticks * A.step + (offset ?? A.offset)) % frames;
 }

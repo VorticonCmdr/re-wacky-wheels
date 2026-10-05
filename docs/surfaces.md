@@ -11,7 +11,7 @@ Values computed from the user's `WACKY.DAT` with the SDX and `.SIN` parsers (a s
 | 2 (0x2) | 0 | 0.000 | 20 | 19 | boost strip: sets the throttle to 160 for 16 calls (`car.speed-model`) |
 | 3 (0x3) | 0 | 0.000 | 0 | 42 | wall: the collision probes look for it (`car.collision-test`, `car.move-step`); used in every track |
 | 4 (0x4) | 0 | 0.000 | 14 | 6 | not read |
-| 5 (0x5) | 6553 | 0.100 | 60 | 13 | a stopped car is drawn 4 lines shorter (`UNKNOWN_SIN_KEPT_FIELDS`) |
+| 5 (0x5) | 6553 | 0.100 | 60 | 13 | a stopped car is drawn 4 lines shorter (`terrain.special-values`) |
 | 6 (0x6) | 45875 | 0.700 | 18 | 12 | starts a special car state (`car.move-step`) |
 | 7 (0x7) | 19660 | 0.300 | 16 | 6 | not read |
 | 8 (0x8) | 10485 | 0.160 | 10 | 4 | not read |

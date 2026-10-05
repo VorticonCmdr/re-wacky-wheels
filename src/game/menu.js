@@ -1,6 +1,6 @@
 // The state of the menus: the cursor (menu.cursor-observed), the selection icons' animation and the corner cars' animation (menu.animation-observed),
-// the keys (menu.keys-observed) and the way from menu to menu (menu.tree-observed). The state the animations start in when a menu is entered is not
-// observed (UNKNOWN_MENU_START_STATE); the port starts them at the first step of the first phase.
+// the keys (menu.keys-observed) and the way from menu to menu (menu.tree-observed). The state the animations start in when a menu is entered is read from the
+// code (menu.start-state: the first phase, the icons settled); the keys are sampled once a pass with the icons settled (menu.input-sampling).
 import { K } from '../evidence/k.js';
 import { menuDef, defaultSettings } from './menus.js';
 import { lionTopFor, carCount } from '../render/menu.js';
@@ -50,7 +50,7 @@ export function advanceLions(s, def) {
   const A = ANIM();
   if (s.busy === A.lion.settled) return s;
   if (s.lionFrame < A.lion.frames - 1) return { ...s, lionFrame: s.lionFrame + 1 }; // @math the frames run 0 to count - 1
-  return { ...s, busy: A.lion.settled, lionFrame: 0, lionTop: lionTopFor(def.kind, def.items, s.cursor) };
+  return { ...s, busy: A.lion.settled, lionFrame: 0, lionTop: lionTopFor(def.kind, def.items, s.cursor, def.centre) };
 }
 
 // The cars' frame in their cycle (menu.animation-observed): half the position in the 51-step cycle, modulo 8.
@@ -74,8 +74,11 @@ function leave(menu) {
 // One step of the menu's frame (8 counts of the 136 Hz clock) with the key the game reads in it ('up', 'down', 'enter', 'escape' or none).
 // A cursor key, when the icons are not busy, moves the cursor at once and starts their animation in this step (the cars advance as always, the icons stay
 // at frame 0 at their old row); a key while they are busy is dropped. Enter chooses the item: a menu it opens is entered, a back leaves, anything else is
-// returned as `chosen` for the page. Esc goes back (menu.keys-observed), in the main menu it puts the cursor on the last item at once.
+// returned as `chosen` for the page. Esc goes back (menu.keys-observed) and, like the other keys, is read only with the icons settled; in the main menu it puts the cursor on the last item.
 // Returns the new menu and the action chosen (or null).
+// Whether the icons have settled, so that the next step reads the keys (menu.input-sampling).
+export const isSettled = menu => menu.busy === ANIM().lion.settled;
+
 export function stepFrame(menu, key) {
   const A = ANIM(), def = menuDef(menu.id, menu.settings), cars = carCount(def.kind), settled = menu.busy === A.lion.settled;
   if ((key === 'up' || key === 'down') && settled) {
@@ -87,16 +90,19 @@ export function stepFrame(menu, key) {
     if (action.choose) return { menu: leave({ ...menu, settings: { ...menu.settings, detail: { ...menu.settings.detail, [action.choose]: menu.cursor } } }), chosen: null };
     if ('switch' in action) return { menu: { ...advanceMenu(menu), settings: { ...menu.settings, switches: menu.settings.switches.map((v, i) => (i === action.switch ? 1 - v : v)) } }, chosen: null }; // @math a switch is 1 or 0
     if (action.back) return { menu: leave(menu), chosen: null };
-    if (action.goto) return { menu: enterMenu(action.goto, [{ id: 'main', cursor: KEYS().openedCursor }], { ...menu.settings, flow: menuDef(menu.id, menu.settings).flowStep ? { ...menu.settings.flow, [menu.id]: menu.cursor } : menu.settings.flow }), chosen: null };
+    if (action.goto) return { notice: action.notice ?? null, menu: enterMenu(action.goto, [{ id: 'main', cursor: KEYS().openedCursor }], { ...menu.settings, flow: menuDef(menu.id, menu.settings).flowStep ? { ...menu.settings.flow, [menu.id]: menu.cursor } : menu.settings.flow }), chosen: null };
     return { menu: advanceMenu(menu), chosen: action.race ? { ...action, settings: { ...menu.settings, flow: { ...menu.settings.flow, [menu.id]: menu.cursor } } } : action };
   }
-  if (key === 'escape') {
+  if (key === 'escape' && settled) { // the routine reads Esc only in a pass with the icons settled (menu.input-sampling)
     if (menu.stack.length) return { menu: leave(menu), chosen: null };
     const last = KEYS().escapeTo; // the last item of the main menu
     return { menu: { ...advanceAnimation(menu, cars), cursor: last, lionTop: lionTopFor(def.kind, def.items, last), lionFrame: 0, busy: A.lion.settled }, chosen: null };
   }
   return { menu: advanceMenu(menu), chosen: null };
 }
+
+// After the vehicle screen: the first menu of the single player setup, with the main menu as its parent (the cursor where it was opened).
+export const enterSetup = (menu, first) => enterMenu(first, [{ id: 'main', cursor: KEYS().openedCursor }], menu.settings);
 
 // The state the renderer takes.
 export function viewOf(menu) {

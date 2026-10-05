@@ -22,7 +22,7 @@ export function parseRoute(data) {
   return parseRouteStrict(data).map(record => Object.fromEntries(ROUTE_WORDS.map((name, i) => [name, record[i]])));
 }
 export function parseSpawns(data) {
-  // Word +0x0a is read as signed here; the loader copies it unchanged (UNKNOWN_SPW_FIELDS).
+  // Word +0x0a is read as signed here; the loader copies it unchanged (spw.frame).
   return parseSpwStrict(data).map(r => ({ id: r[0], x: r[2], y: r[3], unknown1: r[1], unknown2: r[4], unknown3: (r[5] << 16) >> 16 }));
 }
 // The 2048x2048 track surface: the map's tile ids index the 108 tiles of the two sheets in order (first sheet's 54, then the

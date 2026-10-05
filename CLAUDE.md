@@ -26,6 +26,9 @@ npm run dev              # Vite dev server at 127.0.0.1, serves game/ via /__gam
 npm test                 # node --test test/*.test.js — synthetic fixtures, no game files needed
 npm run check:assets     # decodes every member of a local WACKY.DAT + AudioT + synthesizes all songs
 npm run check:tracks     # verifies all local tracks: roundtrip, edit/undo, draft restore, archive export
+npm run check:race       # runs the page's race frames headless on every local track (src/game/race.js): countdown, drive, finish; a smoke test, not evidence
+npm run check:duck       # runs the duck game's race frames headless on the twelve zone tracks of a local WACKY.DAT (smoke test; scripts/check-duck.js)
+npm run check:versus     # runs the two player shoot-out headless on the twelve zone tracks of a local WACKY.DAT (smoke test; scripts/check-versus.js)
 npm run lint             # THE RULE: constants lint over src/ (acorn)
 npm run verify           # re-executes every check against local game files, re-hashes citations
 npm run mutate           # perturbs every PROVEN value via K(); any surviving mutation fails

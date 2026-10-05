@@ -22,7 +22,10 @@
     "ghidra:verify": "sh tools/ghidra/verify.sh",
     "observe": "node tools/dosbox/observe.mjs",
     "disasm": "node tools/disasm.mjs",
-    "make-test-archive": "node tools/dosbox/make-test-archive.mjs"
+    "make-test-archive": "node tools/dosbox/make-test-archive.mjs",
+    "check:race": "node scripts/check-race.js",
+    "check:duck": "node scripts/check-duck.js",
+    "check:versus": "node scripts/check-versus.js"
   },
   "devDependencies": {
     "acorn": "^8.18.0",

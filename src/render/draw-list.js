@@ -1,5 +1,5 @@
 // The draw list of a frame: the records sorted farthest first by the game's own selection sort (view.draw-order) and blitted in that order.
-import { blitRecord } from './sprites.js';
+import { blitRecord, blitFlat } from './sprites.js';
 
 // obj1+0x15430: for each record i from the second and each later record j, swap them when the distance of i is smaller than that of j.
 export function sortDrawList(records) {
@@ -9,6 +9,6 @@ export function sortDrawList(records) {
 }
 
 export function drawList(fb, records) {
-  for (const r of sortDrawList(records)) blitRecord(fb, r);
+  for (const r of sortDrawList(records)) { if (!r.skip) blitRecord(fb, r); if (r.after) for (const d of r.after) blitFlat(fb, d); } // the player's record carries the blits that follow the car (effects.js)
   return fb;
 }

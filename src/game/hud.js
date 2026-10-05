@@ -31,7 +31,7 @@ export function stepHud(hud, car, racing = true, finalTicks = null) {
   const R = RULES(), { shown, word } = stepSpeed(hud.word, car.speed, racing), unproven = [];
   if (racing && hud.word > R.cap) unproven.push('the speedometer limit of 99');
   if (racing && shown < R.radix) unproven.push('the speedometer under 10 (the tens digit a zero)');
-  return { hud: { ...hud, word, shown, timerShown: racing ? (finalTicks ?? hud.ticks) : 0 }, unproven };
+  return { hud: { ...hud, word, shown, now: racing ? Math.min(word, R.cap) : 0, timerShown: racing ? (finalTicks ?? hud.ticks) : 0 }, unproven }; // `now`: the number the next draw shows, the word as the call left it (a played two player race shows it one pass after `shown`)
 }
 
 // The 10 Hz race counter advances with the wall clock, whatever the frame rate.

@@ -21,7 +21,7 @@ Alternatively, use **Open files**, **Open folder**, or drop `WACKY.DAT` onto the
 
 - Search and filter the complete DAT directory, loose originals, and nested PC-speaker/AdLib effects; inspect bytes and download unchanged files.
 - Decode PCX images with their indexed palettes; change palettes, switch to the game's 6-bit VGA palette (what the game's palette routine keeps), and export PNGs.
-- Animate catalogued SP sprites, with frame scrubbing, transparency, zoom, and editable dimensions/offsets for other raw sheets. PAR horizon images are also supported.
+- Animate catalogued SP sprites, with frame scrubbing, transparency, zoom, and editable dimensions/offsets for other raw sheets. Export all sprite frames as one PNG sheet, with automatic or fixed-column layouts and the current palette, pixel order and transparency. PAR horizon images are also supported.
 - Reconstruct track surfaces using their GAM-selected tilesets. Toggle AI routes, object markers, tile grids, and view POS progress heatmaps.
 - Play VOC PCM sound effects and their original loop markers; synthesize PC-speaker and AdLib effects.
 - Render KLM with its original instruments through an OPL emulator. Render MIDI notes with an approximate synthesizer. Render in a cancellable worker; preview 30 seconds, 2 minutes, or the full song, and export WAV.

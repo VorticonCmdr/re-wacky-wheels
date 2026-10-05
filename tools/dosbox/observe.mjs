@@ -22,7 +22,11 @@
 //   midi  (game paused, a MIDI song playing through the General MIDI sequencer) the sequencer's track records
 //   image  (WWHELP.EXE running, --segment N --bytes N) page CRC-32s of the program image in memory
 //   player  (a played race, paused; --script '[[frame,"KBD_x",true],...]' --stops N) consecutive stops at the player control routine's entry with the throttle and speed at each
+//   duck  (a duck game running; --stops N --ms a,b [--poke all|1,2,.. --from F]) samples of the ducks' words, the score, the round and the clock
 //   drive  (a played race, paused; --phases '[[["KBD_leftalt"],10],...]') random-time samples of the player's car and the input words while key groups are held
+//   finish  (a race restarted into its countdown with the lap word written to the laps word, accelerate held, paused; --stops N --ms a,b) one row for every race frame: counter, mode, finish flag, lap, tick word, final time, car words and the player's position
+//   startseq  (a race restarted into its countdown, paused; --stops N --ms a,b) one row for every race frame: tick, mode, timer, the starter's frame, its draw record and every racer's mode, state, offset, position and drawn frame
+//   dacstart  (--args {track, count}) waits for the next demo race on that track and reads the cycled DAC entries (148, 161 to 164, 168 to 175) at every pause from the first intro pass: counter, mode word and the 6-bit triples
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -34,7 +38,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { ms: { type: 'string' }, phases: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, extra5: { type: 'boolean' }, poke: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { from: { type: 'string' }, poke: { type: 'string' }, ms: { type: 'string' }, phases: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, extra5: { type: 'boolean' }, poke: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -70,6 +74,52 @@ const scenarios = {
       samples.push([await i32(b2 + 0x1d7a8), await i32(b2 + 0x1d7a4), await u32(b2 + 0x1e568)]); // row, column, result
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, inputsObject: 2, rowOffset: 0x1d7a8, columnOffset: 0x1d7a4, resultOffset: 0x1e568, samples };
+  },
+  async startseq() {
+    // A race restarted into its countdown (tools/dosbox/start-run.mjs), paused: resumed for a short time and paused again `samples` times; one row for every new value of the race frame counter:
+    // the tick, the mode word, the 10 Hz counter, the starter's frame word and active word, the draw list's starter record (left, top, size class, distance, the frame's offset in GENEF.SP, the CRC-32 of its pixels, width, height)
+    // and for every racer the mode word +0, the state word +4, the sideways offset +0x14, x, y and the frame its draw record points at (its distance from the CARS.SP buffer in frames, -1 for none).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), i16 = async a => Buffer.from(await readMemory(b2 + a, 2)).readInt16LE(0), i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0), u32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readUInt32LE(0);
+    const [from, to] = (values.ms ?? '15,15').split(',').map(Number), samples = Number(values.stops ?? 150), carsBuffer = await u32(0x1d708), geneF = await u32(0x1eb50), rows = [], seen = new Set();
+    const slots = []; for (let n = 0; n < 8; n++) slots.push(await i16(0xaa90 + 0x68 * n + 0x26));
+    await post('/debug/pause');
+    for (let k = 0; k < samples; k++) {
+      const tick = await i32(0x1ec64);
+      if (!seen.has(tick)) {
+        seen.add(tick);
+        const count = await i16(0x28b78), list = Buffer.from(await readMemory(b2 + 0x19a50, 0x28 * (count + 1))), frameOf = {}; let starter = null;
+        for (let r = 0; r < count; r++) {
+          const o = r * 0x28, type = list.readInt16LE(o + 0x24), racer = list.readInt16LE(o + 0x18), frame = list.readUInt32LE(o + 12);
+          if (type === -1) { const w = list.readInt16LE(o), h = list.readInt16LE(o + 2); starter = [list.readInt16LE(o + 4), list.readInt16LE(o + 6), list.readInt16LE(o + 0x1a), list.readInt32LE(o + 0x10), frame - geneF, crc32(Buffer.from(await readMemory(frame, w * h))), w, h]; }
+          else if (racer >= 0) frameOf[racer] = (frame - carsBuffer) / 1064; // @math the frames of CARS.SP are 38 x 28 = 1064 bytes
+        }
+        const racers = []; for (let n = 0; n < 8; n++) { const base = 0xaa90 + 0x68 * n, raw = Buffer.from(await readMemory(b2 + base + 0x50, 16)); racers.push([await i16(base), await i16(base + 4), await i16(base + 0x14), await i16(base + 0x16), await i16(base + 0x18), frameOf[n] ?? -1, ...Array.from({ length: 8 }, (_, k) => raw.readInt16LE(k * 2))]); } // @math the eight words +0x50 to +0x5e of the record
+        rows.push([tick, await i16(0x28c44), await i32(0x1e71c), await i16(0x28c5e), await i16(0x28c38), starter, racers, [await i16(0x28b0a), await i16(0x28b0e), await i32(0x1d5d4), await i16(0x28c42), await i16(0x28c3c), await i32(0x1e720)]]);
+      }
+      await post('/debug/continue'); await sleep(from + Math.random() * (to - from)); await post('/debug/pause'); await sleep(10);
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await (async () => { const b = await readMemory(b2 + 0x1d770, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); })() }, carsBuffer, geneF, slots, columns: ['tick', 'mode', 'timer', 'lionFrame', 'starterActive', 'starter', 'racers (mode, state, offset, x, y, drawn frame, then the words +0x50 to +0x5e)', 'camera x, camera y, heading, camera state, finish flag, 136 Hz counter'], rows };
+  },
+  async finish() {
+    // A race restarted into its countdown with the player's lap word written to the laps word (tools/dosbox/finish-run.mjs) and the accelerate key held: paused and resumed for a short time `stops` times;
+    // one row for every new value of the race frame counter: the counter, the mode word, the finish flag obj2+0x28c3c, the lap word obj2+0x84c2, the tick word obj2+0x1e71c, the final time obj2+0x1eccc,
+    // the car's throttle +0x42, speed +0x26, crash word +0x7e, the accelerate word obj2+0x28b40 and the player's world position words obj2+0xaaa6 and +0xaaa8.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], post = p => fetch(`${API}/api/v1${p}`, { method: 'POST' });
+    const sleep = ms => new Promise(r => setTimeout(r, ms)), i16 = async a => Buffer.from(await readMemory(b2 + a, 2)).readInt16LE(0), i32 = async a => Buffer.from(await readMemory(b2 + a, 4)).readInt32LE(0), at = async (a, n) => Buffer.from(await readMemory(a, n));
+    const [from, to] = (values.ms ?? '35,55').split(',').map(Number), stops = Number(values.stops ?? 600), rows = [], seen = new Set();
+    await post('/debug/pause');
+    for (let k = 0; k < stops; k++) {
+      const tick = await i32(0x1ec64);
+      if (!seen.has(tick)) {
+        seen.add(tick);
+        const car = await i32(0x1d5b0), rec = await at(car, 0x90);
+        rows.push([tick, await i16(0x28c44), await i16(0x28c3c), await i16(0x84c2), await i32(0x1e71c), await i32(0x1eccc), rec.readInt16LE(0x42), rec.readInt16LE(0x26), rec.readInt16LE(0x7e), await i16(0x28b40), await i16(0xaaa6), await i16(0xaaa8)]);
+      }
+      await post('/debug/continue'); await sleep(from + Math.random() * (to - from)); await post('/debug/pause'); await sleep(15);
+    }
+    const cstr = async a => { const b = await readMemory(a, 40); const z = b.indexOf(0); return Buffer.from(b.subarray(0, z < 0 ? b.length : z)).toString('latin1'); };
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), names: { track: await cstr(b2 + 0x1d770) }, lapsWord: await i16(0x28b9c), columns: ['tick', 'mode', 'finish', 'lap', 'timer', 'final', 'throttle', 'speed', 'crash', 'accelerate', 'x', 'y'], rows };
   },
   async audio() {
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], at = off => b2 + off;
@@ -337,6 +387,59 @@ const scenarios = {
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), phases: phases.map(([keys, n]) => [keys.length, n]), columns: ['phase', 'throttle', 'speed', 'tableEntry', 'accelerate', 'brake', 'terrain', 'boostActive', 'boostTimer', 'leftByte', 'rightByte', 'leftWord', 'rightWord', 'rightAmount', 'leftAmount', 'rate', 'demoWord', 'engineWord', 'fraction', 'surface', 'angle', 'keyLeft', 'keyRight', 'keyAlt', 'keyCtrl', 'keyDown', 'keySpace'], samples };
   },
+  async demo() {
+    // (a demo race running: the ORDERING pages or the attract mode) --stops N samples of the human's car, each taken by resuming for a random --ms lo,hi (default 60,140) milliseconds and pausing
+    // again: the mode word, the track word, the driver word, the demo file's index and the frames left of its record, the race frame counter, the camera words, the heading, the throttle, the
+    // speed word, the collision word, the car's jiggle flag, its step word and its special word.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0), i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0);
+    const [lo, hi] = (values.ms ?? '60,140').split(',').map(Number), count = Number(values.stops ?? 200), samples = [];
+    for (let k = 0; k < count; k++) {
+      await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(80);
+      const car = await i32(b2 + 0x1d5b0);
+      samples.push([await i32(b2 + 0x1d998), await i32(b2 + 0x1e728), await i16(b2 + 0x28b96), await i32(b2 + 0x1d994), await i32(b2 + 0x1e564), await i32(b2 + 0x1ec64), await i16(b2 + 0x28b0a), await i16(b2 + 0x28b0e), await i32(b2 + 0x1d5d4), await i16(car + 0x42), await i16(car + 0x26), await i16(b2 + 0x28bae), await i16(car + 0x68), await i16(car + 0x44)]);
+    }
+    await post('/debug/continue');
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), columns: ['mode', 'track', 'driver', 'bmcIndex', 'bmcCounter', 'frame', 'cameraX', 'cameraY', 'heading', 'throttle', 'speed', 'collision', 'jiggle', 'special'], samples };
+  },
+  async duck() {
+    // (a duck game running: WACKY DUCK SHOOT, any zone) --stops N samples of the ducks and the score, each taken by resuming for a random --ms lo,hi (default 50,130) milliseconds and pausing again.
+    // With --poke all (or 1,2,..) the hit state of those ducks is written first, as the shot test writes it (the state word 1, the picture word and the frame counter), so that what the game does
+    // with a stunned duck can be seen without aiming a hog. --from F waits for the race to reach the frame F (default 2, the first frames). The words: the race frame counter, the 10 Hz tick word,
+    // the score word, the round word, the racer count, the camera words and the heading, and for each racer 1 to 7 its x and y, the route entry (+0x1c), the points left (+0x10), the state word
+    // +2, the slot +0x26, the frame word +0x38, the crash picture +0x56, the hit state +0x58, the hit points +0x64, the flicker word +0x66 and the hit stamp +0x4c.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const put = (addr, bytes) => fetch(`${API}/api/v1/memory/${addr}`, { method: 'PUT', headers: { 'content-type': 'application/octet-stream' }, body: bytes });
+    const i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), w16 = v => { const b = Buffer.alloc(2); b.writeInt16LE(v); return b; }, w32 = v => { const b = Buffer.alloc(4); b.writeInt32LE(v); return b; };
+    const [lo, hi] = (values.ms ?? '50,130').split(',').map(Number), count = Number(values.stops ?? 300), from = Number(values.from ?? 2), RACERS = 7, RECORD = 0x68;
+    for (;;) { const duck = await i32(b2 + 0x1ec74), f = await i32(b2 + 0x1ec64), t = await i32(b2 + 0x1e71c); if (duck === 1 && f >= from && f < from + 400 && t < 600) break; await sleep(10); }
+    const pokes = [];
+    if (values.poke) {
+      await post('/debug/pause'); await sleep(100);
+      const frame = await i32(b2 + 0x1ec64), block = Buffer.from(await readMemory(b2 + 0xaa90, RECORD * (RACERS + 1)));
+      for (const n of values.poke === 'all' ? [1, 2, 3, 4, 5, 6, 7] : values.poke.split(',').map(Number)) { // @math the racers 1 to 7
+        const at = b2 + 0xaa90 + RECORD * n, rec = block.subarray(RECORD * n, RECORD * (n + 1));
+        if (rec.readInt16LE(0x58) !== 0 || rec.readInt16LE(2) === 2) continue;
+        await put(at + 0x58, w16(1)); await put(at + 0x5a, w16(rec.readInt16LE(0x38))); await put(at + 0x4c, w32(frame));
+        pokes.push({ racer: n, frame, frameWord: rec.readInt16LE(0x38), slot: rec.readInt16LE(0x26), hitPoints: rec.readInt16LE(0x64) });
+      }
+    }
+    const per = ['x', 'y', 'entry', 'left', 'state', 'slot', 'frameWord', 'crash', 'hit', 'hitPoints', 'flicker', 'stamp'], samples = [];
+    for (let k = 0; k < count; k++) {
+      await post('/debug/continue'); await sleep(lo + Math.floor(Math.random() * (hi - lo))); await post('/debug/pause'); await sleep(40);
+      const g = await i32(b2 + 0x1ec64), tick = await i32(b2 + 0x1e71c), score = await i32(b2 + 0x1edb4), round = await i32(b2 + 0x1eca4), total = Buffer.from(await readMemory(b2 + 0x28c40, 2)).readInt16LE(0);
+      const cam = Buffer.from(await readMemory(b2 + 0x28b0a, 6)), head = await i32(b2 + 0x1d5d4), block = Buffer.from(await readMemory(b2 + 0xaa90, RECORD * (RACERS + 1))), row = [g, tick, score, round, total, cam.readInt16LE(0), cam.readInt16LE(4), head];
+      for (let n = 1; n <= RACERS; n++) { const o = RECORD * n; row.push(block.readInt16LE(o + 0x16), block.readInt16LE(o + 0x18), block.readInt16LE(o + 0x1c), block.readInt16LE(o + 0x10), block.readInt16LE(o + 2), block.readInt16LE(o + 0x26), block.readInt16LE(o + 0x38), block.readInt16LE(o + 0x56), block.readInt16LE(o + 0x58), block.readInt16LE(o + 0x64), block.readInt16LE(o + 0x66), block.readInt32LE(o + 0x4c)); }
+      samples.push(row);
+    }
+    await post('/debug/continue');
+    const names = ['frame', 'tick', 'score', 'round', 'count', 'cameraX', 'cameraY', 'heading'];
+    for (let n = 1; n <= RACERS; n++) for (const w of per) names.push(`${w}${n}`);
+    const driver = Buffer.from(await readMemory(b2 + 0x28b96, 2)).readInt16LE(0), track = await i32(b2 + 0x1e728);
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), words: { track, driver }, pokes, columns: names, samples };
+  },
   async dac() {
     // The VGA palette over time in a running race: `--args` {count, ms: [lo, hi], from, to}. Per pause the tick counter obj2+0x1ec64 and the 6-bit DAC triples of the entries from..to (the read index written to port 0x3c7, then 3 reads of 0x3c9 an entry).
     const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -351,6 +454,25 @@ const scenarios = {
       samples.push({ tick, demo, dac });
     }
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), from, to, samples };
+  },
+  async dacstart() {
+    // The palette cycling from the start of a race with an intro: `--args` {track, count}. Waits (polling) until the demo race of the track is at its first passes, then per pause (the game run 35 ms between pauses)
+    // the counter obj2+0x1ec64, the race mode word obj2+0x28c44 and the DAC entries of the two cycled groups (the read index written to port 0x3c7, then 3 reads of 0x3c9 an entry).
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    const dword = async at => Buffer.from(await readMemory(b2 + at, 4)).readInt32LE(0), word = async at => Buffer.from(await readMemory(b2 + at, 2)).readInt16LE(0);
+    const track = spec.track ?? 2, count = spec.count ?? 150, ranges = [[148, 148], [161, 164], [168, 175]], entries = ranges.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, i) => a + i)), samples = []; // @math the cycled entries as the cycler's two uploads write them
+    for (;;) { const demo = await dword(0x1d998), c = await dword(0x1ec64), t = await dword(0x1e728), m = await word(0x28c44); if (demo === 3 && t === track && c < 3 && m < 2) break; await sleep(25); } // @math the attract mode, the track, the first passes
+    for (let n = 0; n < count * 4 && samples.length < count; n++) { // @math at most four pauses a wanted sample
+      await post('/debug/pause'); await sleep(40);
+      const tick = await dword(0x1ec64), mode = await word(0x28c44), dac = [];
+      for (const [a, b] of ranges) { await io(0x3c7, a, 1); for (let e = a; e <= b; e++) dac.push([await inPort(0x3c9), await inPort(0x3c9), await inPort(0x3c9)]); }
+      samples.push({ tick, mode, dac }); await post('/debug/continue'); await sleep(35);
+    }
+    await post('/debug/continue');
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), track, entries, samples };
   },
   async exit() {
     // The text screen the game leaves when it exits (after `LEAVE GAME`): the CRC-32 of the 4000 bytes at B800:0000 (80 x 25 cells of a character and an attribute), of the following 4000 bytes, the CRTC start address and the text mode check.
