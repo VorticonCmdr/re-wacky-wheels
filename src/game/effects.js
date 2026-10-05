@@ -5,6 +5,7 @@ import { K } from '../evidence/k.js';
 
 const GROUND = () => K({ routine: 0x14bcc, ground: 0x14e5f, table: 0x10660, entries: [1, 2, 3, 5, 6, 7], shifts: [17, 10, 0, 18, 8, 1], flagFirst: 0, flagSecond: 0x80, loaded: 1, kept: 3, idStart: 0xff, record: { first: { offset: 0x100, stride: 0x108, width: 0x10a, height: 0x10c, frames: 0x112 }, second: { offset: 0x104, stride: 0x114, width: 0x116, height: 0x118, frames: 0x11e } }, firstDown: 0x10, tall: { rows: 0x18, sound: 0x10, lefts: [1, 0x19], down: 4 }, puffs: { lefts: [0, 0x1c], down: 0x14 }, racing: 2, jiggle: 1, member: 'EFFECTS.SP' }, 'effects.ground-dust');
 const REAR = () => K({ routine: 0x14afc, call: 0x15042, member: 'HOGMIS.SP', blocks: { idle: 2574, start: 3510, fast: 4446 }, frameBytes: 0xea, width: 0x12, height: 0xd, lefts: [5, 0x10], down: 0xb, idleSpeed: 10, fastSpeed: 0x64, startStage: 1, startSound: 0x18, wrapAbove: 3, clearAbove: 2 }, 'effects.car-rear');
+const SWITCH = () => K({ holdIdle: true }, 'effects.rear-switch'); // the step that switches to the race leaves an idle word of the rear pictures where it is
 const SPARKS = () => K({ site: 0x152f2, member: 'SPARK.SP', frameBytes: 90, width: 10, height: 9, down: 0x10, shifts: { 3: 0, 4: 0x1e }, frames: 4 }, 'effects.sparks');
 const TYRES = () => K({ trigger: 0x132d6, machine: 0x1f7aa, states: { picked: 0xffff, down: 1, up: 2, done: 3 }, member: 'GENEF.SP', pictures: { full: 13269, cut: 12961 }, width: 0x1c, height: 0xb, gap: 0xb, left: 5, carDown: 0xc, down: { steps: [0x1e, 0x14, 0xa], floors: [0x72, 0x80, 0x8e] }, up: { steps: [0xa, 0x14, 0x1e], caps: [0xc7, 0xc7, 0xb1] }, sound: 0x16 }, 'effects.tyres');
 const CRASH = () => K({ routine: 0x16a3c, states: { flight: 1, hold: 2, fall: 3, gone: 4 }, flightFrames: 8, flightStep: 6, flightStop: 0x72, hold: 0xb, fallStep: 4, fallMax: 0xc7, gone: 0xd, crack: { member: 'CRACK.SP', left: 0x76, top: 0x5a, width: 0x54, height: 0x3e, color: 0x14, sound: 0xb, from: 2, lines: [[0x77, 0x16, 0x5f, 0x29], [0xa8, 0xb9, 0x5a, 0x35], [0xc6, 0xf7, 0x5d, 0x2b], [0xf7, 0x128, 0x2b, 0x38], [0xc3, 0xf1, 0x91, 0xb2], [0xf1, 0xd7, 0xb2, 0xc2], [0x78, 0x2c, 0x86, 0xa9]] } }, 'effects.crash');
@@ -159,8 +160,8 @@ export function stepEffects(car0, ctx) {
     } else if (state === T.states.done) state = 0;
     car.tyreState = state; car.tyreWords = words;
   }
-  // the racer words of the rear pictures advance for every racer (obj1+0x162d2)
-  advanceFlame(car);
+  // the racer words of the rear pictures advance for every racer (obj1+0x162d2); the draw of the step that switches to the race (the counter reaches the start count) leaves an idle word where it is (effects.rear-switch)
+  if (!(SWITCH().holdIdle && ctx.switching && car.flameStage === 0)) advanceFlame(car);
   return { car, sounds, up, hidden, pit, after, unproven, crash, cracked, lifeLost, entry };
 }
 

@@ -1,0 +1,100 @@
+{
+ "id": "calls2-7",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 7; the same breakpoints as calls2-0 armed before they ran; easter egg, two player taunt and duck game played from the title",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "cfg": {
+  "offset": 1926,
+  "sha1": "1cbb6bcadcd08e0df0f07be24c6b37436ce18fc1"
+ },
+ "words": {
+  "mode": [
+   95236,
+   7
+  ],
+  "flag": [
+   126200,
+   0
+  ],
+  "engine": [
+   125712,
+   0
+  ],
+  "horn": [
+   125664,
+   0
+  ],
+  "quack": [
+   125676,
+   0
+  ]
+ },
+ "sites": [
+  14265,
+  14790,
+  14852,
+  7204,
+  7215,
+  7224,
+  120657,
+  120715,
+  120360
+ ],
+ "columns": [
+  "stop",
+  "site",
+  "eax",
+  "edx",
+  "ebx",
+  "return"
+ ],
+ "rows": [
+  [
+   1,
+   14790,
+   126,
+   0,
+   2442536,
+   -2015232
+  ],
+  [
+   2,
+   120657,
+   2364432,
+   0,
+   0,
+   -2015232
+  ],
+  [
+   3,
+   7204,
+   7,
+   0,
+   2444320,
+   -2015136
+  ],
+  [
+   4,
+   7215,
+   7,
+   4294967295,
+   2444320,
+   -2015136
+  ]
+ ]
+}

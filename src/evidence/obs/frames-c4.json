@@ -1,0 +1,341 @@
+{
+ "id": "frames-c4",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "the attract demo of track 4 with the clock switch on, from the countdown: the CRC-32 of the displayed screen at every pause (the screens were also saved for looking at)",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "track": 4,
+ "driver": 2,
+ "horizon": 152,
+ "slots": [
+  2,
+  0,
+  3,
+  1,
+  4,
+  5,
+  6,
+  7
+ ],
+ "switches": [
+  1,
+  1,
+  1
+ ],
+ "samples": [
+  {
+   "tick": 16,
+   "mode": 1,
+   "crc": 2282888558
+  },
+  {
+   "tick": 17,
+   "mode": 1,
+   "crc": 3892903162
+  },
+  {
+   "tick": 18,
+   "mode": 1,
+   "crc": 1445601320
+  },
+  {
+   "tick": 18,
+   "mode": 1,
+   "crc": 1445601320
+  },
+  {
+   "tick": 19,
+   "mode": 1,
+   "crc": 1194084187
+  },
+  {
+   "tick": 19,
+   "mode": 1,
+   "crc": 1194084187
+  },
+  {
+   "tick": 20,
+   "mode": 1,
+   "crc": 3919330740
+  },
+  {
+   "tick": 21,
+   "mode": 1,
+   "crc": 3126771657
+  },
+  {
+   "tick": 21,
+   "mode": 1,
+   "crc": 3126771657
+  },
+  {
+   "tick": 22,
+   "mode": 1,
+   "crc": 75260699
+  },
+  {
+   "tick": 23,
+   "mode": 1,
+   "crc": 3712505769
+  },
+  {
+   "tick": 23,
+   "mode": 1,
+   "crc": 3712505769
+  },
+  {
+   "tick": 24,
+   "mode": 1,
+   "crc": 733544063
+  },
+  {
+   "tick": 25,
+   "mode": 1,
+   "crc": 3126771657
+  },
+  {
+   "tick": 25,
+   "mode": 1,
+   "crc": 3126771657
+  },
+  {
+   "tick": 26,
+   "mode": 1,
+   "crc": 75260699
+  },
+  {
+   "tick": 27,
+   "mode": 1,
+   "crc": 75260699
+  },
+  {
+   "tick": 27,
+   "mode": 1,
+   "crc": 1194084187
+  },
+  {
+   "tick": 28,
+   "mode": 1,
+   "crc": 3919330740
+  },
+  {
+   "tick": 29,
+   "mode": 1,
+   "crc": 3919330740
+  },
+  {
+   "tick": 29,
+   "mode": 1,
+   "crc": 3892903162
+  },
+  {
+   "tick": 30,
+   "mode": 1,
+   "crc": 1445601320
+  },
+  {
+   "tick": 30,
+   "mode": 1,
+   "crc": 1445601320
+  },
+  {
+   "tick": 31,
+   "mode": 1,
+   "crc": 1194084187
+  },
+  {
+   "tick": 32,
+   "mode": 1,
+   "crc": 416035693
+  },
+  {
+   "tick": 32,
+   "mode": 1,
+   "crc": 416035693
+  },
+  {
+   "tick": 33,
+   "mode": 1,
+   "crc": 1120963453
+  },
+  {
+   "tick": 34,
+   "mode": 2,
+   "crc": 724576459
+  },
+  {
+   "tick": 34,
+   "mode": 2,
+   "crc": 724576459
+  },
+  {
+   "tick": 35,
+   "mode": 2,
+   "crc": 25745656
+  },
+  {
+   "tick": 36,
+   "mode": 2,
+   "crc": 25745656
+  },
+  {
+   "tick": 36,
+   "mode": 2,
+   "crc": 1129385246
+  },
+  {
+   "tick": 37,
+   "mode": 2,
+   "crc": 3564145840
+  },
+  {
+   "tick": 38,
+   "mode": 2,
+   "crc": 3564145840
+  },
+  {
+   "tick": 38,
+   "mode": 2,
+   "crc": 554069005
+  },
+  {
+   "tick": 39,
+   "mode": 2,
+   "crc": 61862726
+  },
+  {
+   "tick": 39,
+   "mode": 2,
+   "crc": 61862726
+  },
+  {
+   "tick": 40,
+   "mode": 2,
+   "crc": 4088308992
+  },
+  {
+   "tick": 41,
+   "mode": 2,
+   "crc": 4242199234
+  },
+  {
+   "tick": 41,
+   "mode": 2,
+   "crc": 4242199234
+  },
+  {
+   "tick": 42,
+   "mode": 2,
+   "crc": 1501762112
+  },
+  {
+   "tick": 43,
+   "mode": 2,
+   "crc": 1501762112
+  },
+  {
+   "tick": 43,
+   "mode": 2,
+   "crc": 2322803380
+  },
+  {
+   "tick": 44,
+   "mode": 2,
+   "crc": 1448371457
+  },
+  {
+   "tick": 45,
+   "mode": 2,
+   "crc": 1448371457
+  },
+  {
+   "tick": 45,
+   "mode": 2,
+   "crc": 3940854894
+  },
+  {
+   "tick": 46,
+   "mode": 2,
+   "crc": 2752470939
+  },
+  {
+   "tick": 46,
+   "mode": 2,
+   "crc": 2752470939
+  },
+  {
+   "tick": 47,
+   "mode": 2,
+   "crc": 1107522377
+  },
+  {
+   "tick": 48,
+   "mode": 2,
+   "crc": 3974368737
+  },
+  {
+   "tick": 48,
+   "mode": 2,
+   "crc": 3974368737
+  },
+  {
+   "tick": 49,
+   "mode": 2,
+   "crc": 2799197562
+  },
+  {
+   "tick": 50,
+   "mode": 2,
+   "crc": 157138584
+  },
+  {
+   "tick": 50,
+   "mode": 2,
+   "crc": 157138584
+  },
+  {
+   "tick": 51,
+   "mode": 2,
+   "crc": 2980456500
+  },
+  {
+   "tick": 52,
+   "mode": 2,
+   "crc": 2980456500
+  },
+  {
+   "tick": 52,
+   "mode": 2,
+   "crc": 289709138
+  },
+  {
+   "tick": 53,
+   "mode": 2,
+   "crc": 3648651777
+  },
+  {
+   "tick": 54,
+   "mode": 2,
+   "crc": 3648651777
+  },
+  {
+   "tick": 54,
+   "mode": 2,
+   "crc": 2583009845
+  }
+ ]
+}

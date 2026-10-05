@@ -175,9 +175,9 @@ function drawSparks(state) {
 
 // The draw of the player's car for the state the last call left (effects.js): the jiggle, the pit picture, the dust, the rear pictures and the sparks, one call a frame. The race mode is
 // the one the call left, as the draw that follows it reads it.
-function drawEffects(state, sparksLater = false, headOn = false, passAfter = false) {
+function drawEffects(state, sparksLater = false, headOn = false, passAfter = false, switching = false) {
   const slot = state.humanSlot ?? PLAYER_SLOT, ref = playerRef(state.car, idleRef(state, slot), slot);
-  const ctx = { sparksLater, world: state.world, track: Number(state.world.name), entryNumber: refEntry(ref, slot), racing: state.racingBefore, racingNow: state.start.mode === MODE_RACING, finished: state.finished, pending: state.player.pending || headOn, tick: state.tick, fallFrames: fallFrames(slot), geometry: playerGeometry(state.world) };
+  const ctx = { sparksLater, switching, world: state.world, track: Number(state.world.name), entryNumber: refEntry(ref, slot), racing: state.racingBefore, racingNow: state.start.mode === MODE_RACING, finished: state.finished, pending: state.player.pending || headOn, tick: state.tick, fallFrames: fallFrames(slot), geometry: playerGeometry(state.world) };
   if (passAfter && state.ai) { const dry = stepEffects(state.car, ctx), pass = runPass(state, dry.car, dry, state.car); ctx.glanceNow = pass.out.car.glance !== 0 && dry.car.glance === 0; } // the pass of the draw comes first: a glance that starts in it has changed the entry's frame before the dust compares it (racer.blink)
   const out = stepEffects(state.car, ctx);
   state.player = { ...state.player, car: out.car }; state.car = out.car; state.fx = out; state.sounds.push(...out.sounds);
@@ -257,7 +257,7 @@ function stepFrame(state, keys) {
     const idle = stepPlayer(state.player, input, state.world, { racing: false, racers, ...env });
     state.player = idle.player; state.car = state.player.car; state.sounds.push(...idle.sounds);
     fire(state, input, false);
-    const wait = stepHud(state.hud, state.car, false); state.hud = { ...wait.hud, ticks: 0, counter: state.car.counter }; drawEffects(state, false, false, !state.duck);
+    const wait = stepHud(state.hud, state.car, false); state.hud = { ...wait.hud, ticks: 0, counter: state.car.counter }; drawEffects(state, false, false, !state.duck, state.start.mode === MODE_RACING); // the call that switches the mode word to the race is the last of the countdown's branch
     if (!state.duck) blinkPass(state); // the racers glance in the countdown too (the waiting pictures)
     return;
   }

@@ -1,0 +1,106 @@
+{
+ "id": "calls-0",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 0 (Sound Blaster), the same breakpoints armed before they ran; played from the title to a race",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "cfg": {
+  "offset": 1926,
+  "sha1": "844711fbd32935e4ed815a4d3b3dc1acbb662ae2"
+ },
+ "words": {
+  "mode": [
+   95236,
+   0
+  ],
+  "flag": [
+   126200,
+   1
+  ],
+  "engine": [
+   125712,
+   2543844
+  ],
+  "horn": [
+   125664,
+   2555496
+  ],
+  "quack": [
+   125676,
+   2551848
+  ]
+ },
+ "sites": [
+  3332,
+  3423,
+  3448,
+  3216,
+  3231,
+  3302,
+  203720
+ ],
+ "columns": [
+  "stop",
+  "site",
+  "eax",
+  "edx",
+  "ebx",
+  "return"
+ ],
+ "rows": [
+  [
+   1,
+   203720,
+   2652723,
+   0,
+   240,
+   7293
+  ],
+  [
+   2,
+   3332,
+   520,
+   2442540,
+   2442536,
+   135162
+  ],
+  [
+   3,
+   3448,
+   8,
+   2347960,
+   2347956,
+   -2015120
+  ],
+  [
+   4,
+   3216,
+   7,
+   2374496,
+   2364432,
+   77846
+  ],
+  [
+   5,
+   3231,
+   7,
+   2374496,
+   2364432,
+   -2015042
+  ]
+ ]
+}

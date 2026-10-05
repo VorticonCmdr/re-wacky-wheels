@@ -1,0 +1,140 @@
+{
+ "id": "calls2-0",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "sound mode 0 (Sound Blaster); breakpoints at the belch loader and scene, the quack path, the taunt key routine and voice, armed in the running game; easter egg, two player taunt and duck game played",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "cfg": {
+  "offset": 1926,
+  "sha1": "c28db0387a935afc77d5b3526da8c9f76f8618f3"
+ },
+ "words": {
+  "mode": [
+   95236,
+   0
+  ],
+  "flag": [
+   126200,
+   1
+  ],
+  "engine": [
+   125712,
+   2543844
+  ],
+  "horn": [
+   125664,
+   2555496
+  ],
+  "quack": [
+   125676,
+   2551848
+  ]
+ },
+ "sites": [
+  14265,
+  14790,
+  14852,
+  7204,
+  7215,
+  7224,
+  120657,
+  120715,
+  120360
+ ],
+ "columns": [
+  "stop",
+  "site",
+  "eax",
+  "edx",
+  "ebx",
+  "return"
+ ],
+ "rows": [
+  [
+   1,
+   14265,
+   1,
+   0,
+   119,
+   349200
+  ],
+  [
+   2,
+   14790,
+   98,
+   0,
+   2442536,
+   -2015232
+  ],
+  [
+   3,
+   14852,
+   149,
+   0,
+   2442536,
+   -2015232
+  ],
+  [
+   4,
+   120657,
+   2364432,
+   0,
+   0,
+   -2015232
+  ],
+  [
+   5,
+   120715,
+   2364432,
+   1,
+   0,
+   -2015232
+  ],
+  [
+   6,
+   120360,
+   0,
+   1,
+   0,
+   120762
+  ],
+  [
+   7,
+   7204,
+   7,
+   0,
+   2444320,
+   -2015136
+  ],
+  [
+   8,
+   7215,
+   7,
+   4294967295,
+   2444320,
+   -2015136
+  ],
+  [
+   9,
+   7224,
+   7,
+   4294967295,
+   2444320,
+   -2015136
+  ]
+ ]
+}

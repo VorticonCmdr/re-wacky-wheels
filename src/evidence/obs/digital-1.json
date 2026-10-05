@@ -1,0 +1,135 @@
+{
+ "id": "digital-1",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "start-up (title screen) with the WACKY.CFG sound-mode dword at 0x786 set to 7 in the run copy",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "cfg": {
+  "offset": 1926,
+  "sha1": "1cbb6bcadcd08e0df0f07be24c6b37436ce18fc1"
+ },
+ "words": {
+  "mode": [
+   95236,
+   7
+  ],
+  "flag": [
+   126200,
+   0
+  ],
+  "engine": [
+   125712,
+   0
+  ],
+  "horn": [
+   125664,
+   0
+  ],
+  "quack": [
+   125676,
+   0
+  ],
+  "device": [
+   16360,
+   7
+  ],
+  "divisor": [
+   16292,
+   4257
+  ],
+  "accumulator": [
+   16296,
+   8599
+  ],
+  "sound": [
+   126542,
+   1
+  ]
+ },
+ "voicesAt": 42128,
+ "voices": [
+  0,
+  0,
+  0,
+  0,
+  0
+ ],
+ "noAt": 109624,
+ "no": [
+  3172044,
+  31,
+  0,
+  9,
+  -1,
+  0
+ ],
+ "pufAt": 109432,
+ "puf": [
+  3172044,
+  31,
+  0,
+  9,
+  -1,
+  0
+ ],
+ "bufferPointer": 3171048,
+ "listAt": 167168,
+ "handlerColumns": [
+  "handlerFromObject1",
+  "parameter",
+  "period",
+  "accumulator",
+  "enabled"
+ ],
+ "handlers": [
+  [
+   3048,
+   2455328,
+   8764,
+   4172,
+   1
+  ],
+  [
+   3048,
+   2455324,
+   119203,
+   1233,
+   1
+  ],
+  [
+   3048,
+   2456180,
+   1192030,
+   239639,
+   1
+  ],
+  [
+   238756,
+   0,
+   4257,
+   0,
+   1
+  ],
+  [
+   225696,
+   0,
+   8514,
+   0,
+   1
+  ]
+ ]
+}

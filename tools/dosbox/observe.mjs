@@ -16,6 +16,9 @@
 //   start  (as soon as a race has loaded) the start tables, every racer's first position, heading and route index, and the branch words of racer.init
 //   aistate  (game paused in a race) 30 pauses of every racer's AI words (state, counters, speeds, route index)
 //   gamslot  (--edit 4="back2.pcx ") the stored sky-name line and the sky picture the game loaded for it
+//   taunts  (--ms N, two player race with taunt keys pressed meanwhile) the distinct values of both players' taunt, voice handle and flag words
+//   calls  (--rows from tools/dosbox/call-run.mjs) the stops of execute breakpoints at the engine start, horn and library play routines, and the flag words
+//   digital  (sound mode 7 start-up, --cfg the run copy's WACKY.CFG) the digital sound flag, the loader's pointers and the timer service's handler list
 //   voices  (game paused, sound mode 0 with a Sound Blaster, sounds playing) the rates, time constants and data CRCs of the library's voices
 //   klm  (game paused, a KLM song playing through the AdLib driver) the driver's position in the song and its shadow tables
 //   keys  (--held 75,56) (game paused after those scancodes were held) the keyboard handler's key table words, last code and fixed flag bytes
@@ -27,6 +30,9 @@
 //   finish  (a race restarted into its countdown with the lap word written to the laps word, accelerate held, paused; --stops N --ms a,b) one row for every race frame: counter, mode, finish flag, lap, tick word, final time, car words and the player's position
 //   startseq  (a race restarted into its countdown, paused; --stops N --ms a,b) one row for every race frame: tick, mode, timer, the starter's frame, its draw record and every racer's mode, state, offset, position and drawn frame
 //   dacstart  (--args {track, count}) waits for the next demo race on that track and reads the cycled DAC entries (148, 161 to 164, 168 to 175) at every pause from the first intro pass: counter, mode word and the 6-bit triples
+//   flameword  (--args {track, count}) the human racer's rear flame frame and stage words, the counter, the mode and the throttle at every pause of a demo race from its countdown
+//   startframes  (--args {track, count}; --dump DIR also writes every screen's 64000 bytes, for looking at a difference by hand, never committed) waits for the next demo race on that track and reads the screen at every pause from its countdown on: counter, race mode word and the CRC-32 of the 64000 bytes of the displayed
+//            page, with the driver, the slots, the horizon word and the race screen switches the race was run with
 //   terrain  60 samples of the terrain lookup's inputs and result, taken by resuming the paused race
 //            for a short random time and pausing again (leaves the game paused)
 import { writeFile, mkdir, readFile } from 'node:fs/promises';
@@ -38,7 +44,7 @@ import { parseDatDirectory } from '../../src/formats/dat.js';
 import { crc32, hex8 } from '../../src/evidence/crc32.js';
 import { status, readMemory, sha1, locateObjects, maskedCrc, PAGE, API } from './live.mjs';
 
-const { values, positionals } = parseArgs({ allowPositionals: true, options: { from: { type: 'string' }, poke: { type: 'string' }, ms: { type: 'string' }, phases: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, extra5: { type: 'boolean' }, poke: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
+const { values, positionals } = parseArgs({ allowPositionals: true, options: { rows: { type: 'string' }, dump: { type: 'string' }, from: { type: 'string' }, poke: { type: 'string' }, ms: { type: 'string' }, phases: { type: 'string' }, extra: { type: 'boolean' }, extra2: { type: 'boolean' }, extra3: { type: 'boolean' }, extra4: { type: 'boolean' }, extra5: { type: 'boolean' }, poke: { type: 'string' }, armed: { type: 'boolean' }, script: { type: 'string' }, stops: { type: 'string' }, segment: { type: 'string' }, bytes: { type: 'string' }, held: { type: 'string' }, patch: { type: 'string' }, id: { type: 'string' }, moment: { type: 'string' }, game: { type: 'string' }, window: { type: 'string', default: '1048576,4194304' }, cfg: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.CFG' }, edit: { type: 'string', multiple: true, default: [] }, member: { type: 'string', default: '2.GAM' }, run: { type: 'string', default: 'analysis/dosbox/WACKY/WACKY.DAT' }, args: { type: 'string', default: '' } } });
 const [scenario] = positionals;
 if (!scenario || !values.id || !values.moment) { console.error('usage: observe <scenario> --id <id> --moment "<text>"'); process.exit(1); }
 
@@ -255,6 +261,44 @@ const scenarios = {
     const words = {};
     for (const [name, off] of Object.entries({ device: 0x3fe8, error: 0x3fec, volume: 0x4330, handle: 0x4338, callback: 0x432c, byteMode: 0x290d0, priority: 0x290cc, remaining: 0x290c8, pointer: 0x4328, mode: 0x17404 })) words[name] = [off, await i32(at(off))];
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), cfg: { offset: 0x786, sha1: sha1(await readFile(resolve(values.cfg))) }, words, tableOffset: 0x28ec4, tableBytes: table.length, tableCrc: hex8(crc32(table)) };
+  },
+  async digital() {
+    // The digital sound flag and what the sound loader left, and the timer service's handler records, read at the title screen with sound mode 7 (the CFG dword at 0x786 set to 7 in the run copy):
+    // the words of audio.digital-flag, the five GIG pointers, the records of the sounds NO and PUF, the bank buffer's pointer, and the timer service's divisor and handler list (record: next +0, handler +8, parameter +0xc, period +0x10, accumulator +0x14, enabled +0x1c).
+    const found = locateObjects(le, exeBytes, window, wStart), b1 = found.bases[0], b2 = found.bases[1], at = off => b2 + off;
+    const i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), i16 = async a => Buffer.from(await readMemory(a, 2)).readInt16LE(0);
+    const words = {};
+    for (const [name, off] of Object.entries({ mode: 0x17404, flag: 0x1ecf8, engine: 0x1eb10, horn: 0x1eae0, quack: 0x1eaec, device: 0x3fe8, divisor: 0x3fa4, accumulator: 0x3fa8 })) words[name] = [off, await i32(at(off))];
+    words.sound = [0x1ee4e, await i16(at(0x1ee4e))];
+    const voices = []; for (let k = 0; k < 5; k++) voices.push(await i32(at(0xa490 + 4 * k))); // @math the five GIG pointers
+    const no = [], puf = []; for (let k = 0; k < 6; k++) { no.push(await i32(at(0x1ac38 + 4 * k))); puf.push(await i32(at(0x1ab78 + 4 * k))); } // @math the six dwords of the records of the sound NO (26) and PUF (18)
+    const handlers = []; let record = await i32(at(0x28d00));
+    for (let n = 0; record && n < 16; n++) { // @math at most sixteen records
+      const r = Buffer.from(await readMemory(record, 0x20)); // @math the record's 0x20 bytes
+      handlers.push([r.readInt32LE(0x8) - b1, r.readInt32LE(0xc), r.readInt32LE(0x10), r.readInt32LE(0x14), r.readInt32LE(0x1c)]);
+      record = r.readInt32LE(0);
+    }
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), cfg: { offset: 0x786, sha1: sha1(await readFile(resolve(values.cfg))) }, words, voicesAt: 0xa490, voices, noAt: 0x1ac38, no, pufAt: 0x1ab78, puf, bufferPointer: await i32(at(0x1eb14)), listAt: 0x28d00, handlerColumns: ['handlerFromObject1', 'parameter', 'period', 'accumulator', 'enabled'], handlers };
+  },
+  async calls() {
+    // The stops of execute breakpoints at the engine start, horn and library play routines (tools/dosbox/call-run.mjs writes --rows: stop number, site from obj1, eax, edx, ebx and the return address from obj1), and the flag words of audio.digital-flag read after them.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), rows = JSON.parse(await readFile(resolve(values.rows)));
+    const i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), words = {};
+    for (const [name, off] of Object.entries({ mode: 0x17404, flag: 0x1ecf8, engine: 0x1eb10, horn: 0x1eae0, quack: 0x1eaec })) words[name] = [off, await i32(b2 + off)];
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), cfg: { offset: 0x786, sha1: sha1(await readFile(resolve(values.cfg))) }, words, sites: spec.sites, columns: ['stop', 'site', 'eax', 'edx', 'ebx', 'return'], rows };
+  },
+  async taunts() {
+    // The words of the two players' taunt state (the car record at obj2+0x8410 + 0x104 p: counter +0xbc, taunt word +0xc0, voice handle +0xd8, voice flag +0xdc) read every 25 ms for `--ms` milliseconds while the taunt keys are pressed, with the distinct
+    // values each word took (at most sixteen), and the digital flag and the sound mode.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], sleep = ms => new Promise(r => setTimeout(r, ms)), ms = Number(values.ms ?? 12000); // @math twelve seconds
+    const i32 = async a => Buffer.from(await readMemory(a, 4)).readInt32LE(0), seen = {}, base = 0x8410, stride = 0x104; // @math the first car record and the record size
+    const fields = { counter: 0xbc, taunt: 0xc0, handle: 0xd8, voice: 0xdc }, words = [];
+    for (const p of [0, 1]) for (const [name, off] of Object.entries(fields)) words.push([`${name}${p + 1}`, base + p * stride + off]); // @math the two players
+    for (const [name, off] of words) seen[name] = [off, []];
+    const start = Date.now();
+    while (Date.now() - start < ms) { for (const [name, off] of words) { const v = await i32(b2 + off); if (!seen[name][1].includes(v) && seen[name][1].length < 16) seen[name][1].push(v); } await sleep(25); } // @math sixteen values, 25 ms
+    const flags = {}; for (const [name, off] of Object.entries({ mode: 0x17404, flag: 0x1ecf8 })) flags[name] = [off, await i32(b2 + off)];
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), words: flags, seen };
   },
   async gate() {
     // Execute breakpoints at the sound-library check, its error stub, the init, its error stub, the bank-load routine and the bank loader, armed in protected mode (tools/dosbox/gate-run.mjs); read at the final stop.
@@ -473,6 +517,47 @@ const scenarios = {
     }
     await post('/debug/continue');
     return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), track, entries, samples };
+  },
+  async startframes() {
+    // The screen of a demo race from its countdown: `--args` {track, count}. Waits until the demo race of the track is in its countdown (counter 3 to 11), then per pause (the game run 35 ms between pauses) the counter obj2+0x1ec64, the
+    // race mode word obj2+0x28c44 and the CRC-32 of the displayed page, read plane by plane from the CRTC start address (320 x 200, the planes interleaved); the words the race was started with are read once at the start.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const io = (port, value, width) => fetch(`${API}/api/v1/io/port`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ port, value, width }) });
+    const inPort = async port => (await (await fetch(`${API}/api/v1/io/port?port=${port}`)).json()).value;
+    const rd = async (at, n) => { for (let k = 0; k < 20; k++) { try { return Buffer.from(await readMemory(at, n)); } catch { await sleep(25); } } throw new Error('read'); }; // @math twenty tries
+    const dword = async at => (await rd(b2 + at, 4)).readInt32LE(0), word = async at => (await rd(b2 + at, 2)).readInt16LE(0);
+    const track = spec.track ?? 2, count = spec.count ?? 110, W = 320, H = 200, planes = 4, rowBytes = 80, samples = []; // @math the 320 x 200 chained mode: four planes of 80 bytes a row
+    for (;;) { const demo = await dword(0x1d998), c = await dword(0x1ec64), t = await dword(0x1e728), m = await word(0x28c44); if (demo === 3 && t === track && m === 1 && c >= 3 && c < 12) break; await sleep(25); } // @math the attract mode, the countdown
+    const words = { driver: await word(0x28b96), horizon: (await dword(0x1d860)) - 0xa7d00, slots: await Promise.all(Array.from({ length: 8 }, (_, n) => rd(b2 + 0xaa90 + 0x68 * n + 0x26, 2).then(b => b.readInt16LE(0)))), switches: [await word(0x175d0), await word(0x175d2), await word(0x175d4)] }; // @math eight racers, the three switches
+    for (let n = 0; n < count * 4 && samples.length < count; n++) { // @math at most four pauses a wanted sample
+      await post('/debug/pause'); await sleep(40);
+      const tick = await dword(0x1ec64), mode = await word(0x28c44);
+      await io(0x3d4, 0x0c, 1); const hi = await inPort(0x3d5); await io(0x3d4, 0x0d, 1); const lo = await inPort(0x3d5), start = hi * 256 + lo; // @math the high and low bytes of the start address
+      const pl = []; for (let p = 0; p < planes; p++) { await io(0x3ce, (p << 8) | 4, 2); pl.push(await rd(0xa0000 + start, 16000)); } // @math the read map select register 4 and a plane's 16000 bytes
+      const img = Buffer.alloc(W * H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) img[y * W + x] = pl[x % planes][y * rowBytes + Math.floor(x / planes)];
+      samples.push({ tick, mode, crc: crc32(img) }); if (values.dump) { await mkdir(values.dump, { recursive: true }); await writeFile(`${values.dump}/s${String(samples.length - 1).padStart(3, '0')}_${tick}_${mode}.idx`, img); } await post('/debug/continue'); await sleep(35);
+    }
+    await post('/debug/continue');
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), track, ...words, samples };
+  },
+  async flameword() {
+    // The human racer's rear flame words and the counter at every pause of a demo race from its countdown (`--args` {track, count}; the game run 35 ms between pauses): the race counter obj2+0x1ec64, the mode word obj2+0x28c44,
+    // the racer's frame word +0x54 (obj2+0xaae4), its stage word +0x62 (obj2+0xaaf2) and the car's throttle word +0x42 (the car record the dword obj2+0x1d5b0 points to), to see how the frame word advances across the start.
+    const found = locateObjects(le, exeBytes, window, wStart), b2 = found.bases[1], spec = JSON.parse(values.args || '{}'), sleep = ms => new Promise(r => setTimeout(r, ms));
+    const post = path => fetch(`${API}/api/v1${path}`, { method: 'POST' });
+    const rd = async (at, n) => { for (let k = 0; k < 20; k++) { try { return Buffer.from(await readMemory(at, n)); } catch { await sleep(25); } } throw new Error('read'); }; // @math twenty tries
+    const dword = async at => (await rd(b2 + at, 4)).readInt32LE(0), word = async at => (await rd(b2 + at, 2)).readInt16LE(0);
+    const track = spec.track ?? 5, count = spec.count ?? 120, samples = []; // @math the default track and number of pauses
+    for (;;) { const demo = await dword(0x1d998), c = await dword(0x1ec64), t = await dword(0x1e728), m = await word(0x28c44); if (demo === 3 && t === track && m === 1 && c >= 3 && c < 12) break; await sleep(25); } // @math the countdown's first counters
+    for (let n = 0; n < count * 4 && samples.length < count; n++) { // @math at most four pauses a wanted sample
+      await post('/debug/pause'); await sleep(40);
+      const car = await dword(0x1d5b0), throttle = (await rd(car, 0x48)).readInt16LE(0x42);
+      samples.push({ counter: await dword(0x1ec64), mode: await word(0x28c44), frame: await word(0xaae4), stage: await word(0xaaf2), throttle });
+      await post('/debug/continue'); await sleep(35);
+    }
+    await post('/debug/continue');
+    return { ...header, bases: Object.fromEntries(found.bases.map((b, i) => [i + 1, b])), track, frameAt: 0xaae4, stageAt: 0xaaf2, samples };
   },
   async exit() {
     // The text screen the game leaves when it exits (after `LEAVE GAME`): the CRC-32 of the 4000 bytes at B800:0000 (80 x 25 cells of a character and an attribute), of the following 4000 bytes, the CRTC start address and the text mode check.

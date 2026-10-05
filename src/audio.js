@@ -3,17 +3,7 @@ import { parseMidiEvents } from './formats/midi.js';
 
 export { decodeVocAudio as decodeVoc } from './formats/voc-audio.js';
 
-export function decodePcSpeaker(data, sampleRate = 22050) {
-  const b = bytes(data), v = view(b); need(b, 0, 6, 'PC speaker');
-  const n = v.getUint32(0, true); need(b, 6, n, 'PC-speaker tones');
-  if (n > 140 * 120) throw new Error('PC-speaker sound is too long');
-  const samples = new Float32Array(Math.ceil(n / 140 * sampleRate)); let phase = 0;
-  for (let i = 0; i < samples.length; i++) {
-    const tone = b[6 + Math.floor(i * 140 / sampleRate)] ?? 0;
-    if (tone) { phase = (phase + 1193181 / (tone * 60) / sampleRate) % 1; samples[i] = phase < 0.5 ? 0.2 : -0.2; }
-  }
-  return { samples, sampleRate, channels: 1, loop: false, description: 'PC speaker · square-wave synthesis at 140 ticks/s' };
-}
+export { decodePcSpeaker } from './formats/pc-speaker.js';
 
 export { parseKlmSong as parseKlm } from './formats/klm.js';
 

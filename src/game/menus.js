@@ -8,12 +8,13 @@ import { restoreItems } from './save.js';
 import { zonesMenuItems } from './duckflow.js';
 import { FLOW as VERSUS_FLOW, RACE as VERSUS_RACE } from './versus-rules.js';
 import { defaultKeys, namesOf, SLOT_LABELS } from './keys.js';
+import { SOUND_MENU, defaultDevices, deviceList } from './sound-devices.js';
 
 const TREE = () => K({ menus: { options: { items: ['GRAPHIC DETAIL LEVELS', 'VOLUME LEVELS', 'RACE SCREEN OPTIONS', 'LEAVE THIS MENU'] }, comm: { items: ['MODEM', 'SERIAL CABLE', 'LEAVE THIS MENU'] }, detail: { items: ['SINGLE SCREEN DETAIL', 'SPLIT SCREEN DETAIL', 'LEAVE THIS MENU'] }, toggles: { items: ['OVERHEAD MAP', 'CLOCK DISPLAY', 'SPEEDOMETER', 'LEAVE THIS MENU'], width: 17, on: 'ON ', off: 'OFF', words: [0x175d0, 0x175d2, 0x175d4] }, single: { items: ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL'], word: 0x1ee58 }, split: { items: ['HIGH   DETAIL', 'MEDIUM DETAIL', 'LOW    DETAIL'], word: 0x174de }, info: { items: ['ORDERING', 'INSTRUCTIONS', 'FAMOUS DRIVERS', 'CREDITS', 'LEAVE THIS MENU'] }, class: { items: ['AMATEUR  CLASS', 'PRO      CLASS', 'CHAMPION CLASS', 'TIME TRIAL', 'KID MODE'] }, laps: { items: ['SIX LAP RACE', 'EIGHT LAP RACE', 'TEN LAP RACE'] }, engine: { items: ['FAST 12 HP ENGINES', 'SLOW 6 HP ENGINES'] }, races: { items: ['REGULAR RACES', 'BONUS PACK RACES'] } }, flow: ['class', 'laps', 'engine', 'races'], opens: [['main', 7, 'info'], ['main', 6, 'options'], ['main', 5, 'comm'], ['options', 1, 'detail'], ['options', 3, 'toggles'], ['detail', 1, 'single'], ['detail', 2, 'split']], shifts: { main: 0, options: 0, comm: 0, toggles: 0, info: 0, detail: -28, single: -52, split: -52, class: -432, laps: -432, engine: -444, races: -432 }, leave: 'LEAVE THIS MENU' }, 'menu.tree-observed');
 
 // The FAMOUS DRIVERS menus of the Info menu (menu.famous-menus): the classes, the cups and the time trial's cups and tracks, built for the bonus pack of the settings.
 const FAM = () => K({ drivers: { items: ['AMATEUR CLASS DRIVERS', 'PRO CLASS DRIVERS', 'CHAMP CLASS DRIVERS', 'TIME TRIAL DRIVERS', 'LEAVE THIS MENU'] }, cups: { items: ['BRONZE RACE', 'SILVER RACE', 'GOLD RACE', 'LEAVE THIS MENU'], bonus: 'BONUS' }, trials: { items: ['BRONZE TRIALS', 'SILVER TRIALS', 'GOLD TRIALS', 'LEAVE THIS MENU'], bonus: 'BONUS' }, tracks: { names: ['BRONZE', 'SILVER', 'GOLD'], track: 'TRACK', count: 5, leave: 'LEAVE THIS MENU' }, opens: { info: 3, drivers: [1, 2, 3], trial: 4 } }, 'menu.famous-menus');
-const FAM_ID = /^(drivers|trials|cups[123]|tracks[123]|restore|zones|hits|duoMode|duoClass|keys|keysOne|keysTwo)$/;
+const FAM_ID = /^(drivers|trials|cups[123]|tracks[123]|restore|zones|hits|duoMode|duoClass|keys|keysOne|keysTwo|sound|soundEffects|soundMusic)$/;
 // The keyboard layout menus, which the game does not have (SETUP.EXE sets its keys): GAME OPTIONS gets the item KEYBOARD CONTROLS, which opens the list of the two players and the defaults; a player's list
 // shows each of the six keys with the name SETUP.EXE gives it (setup.key-table) and Enter on a line asks for the key. The wording is SETUP.EXE's ("Player 1 keyboard controls", "Redefine keyboard controls").
 const KEY_MENU = { item: 'KEYBOARD CONTROLS', items: ['PLAYER ONE KEYS', 'PLAYER TWO KEYS', 'DEFAULT KEYS', 'LEAVE THIS MENU'], titles: ['PLAYER 1 KEYBOARD CONTROLS', 'PLAYER 2 KEYBOARD CONTROLS'], labelWidth: 12 }; // @math the label column: the longest label, STEER RIGHT, and a space (the bars then end inside the screen with the icons)
@@ -21,6 +22,8 @@ function famousDef(id, settings) {
   const F = FAM(), pack = settings.flow.races === 2, prefixed = (list, bonus) => list.map((t, k) => (pack && k < list.length - 1 ? `${bonus} ${t}` : t)); // @math the bonus pack is the second race type; the last item is LEAVE THIS MENU
   const back = { back: true }, last = n => n - 1; // @math the last item
   if (id === 'keys') return { items: KEY_MENU.items, actions: [{ open: 'keysOne' }, { open: 'keysTwo' }, { keysDefault: true }, back] }; // the keyboard layout menus (the page's own, not the game's)
+  if (id === 'sound') return { items: [...SOUND_MENU.items, TREE().leave], actions: [{ open: 'soundEffects' }, { open: 'soundMusic' }, back] }; // the sound device menus (the page's own, not the game's)
+  if (id === 'soundEffects' || id === 'soundMusic') { const { key, items } = deviceList(id); return { items, actions: items.map(() => ({ pick: { group: 'sound', key } })) }; } // a list of devices opens on the current one and the item picked is the choice
   if (id === 'keysOne' || id === 'keysTwo') { const player = id === 'keysOne' ? 0 : 1, names = namesOf(settings.keys, player), items = [...SLOT_LABELS.map((label, k) => label.padEnd(KEY_MENU.labelWidth) + names[k]), TREE().leave]; return { items, actions: items.map((_, k) => (k === last(items.length) ? back : { rebind: { player, slot: k } })) }; }
   if (id === 'restore') return { items: restoreItems(), actions: [{ restore: true }, { newGame: true }] }; // the saved game's menu (race.save-game)
   if (id === 'duoMode') return { items: VERSUS_RACE().menu, actions: VERSUS_RACE().menu.map((_, i) => ({ duo: i + 1 })) }; // RACE HEAD TO HEAD and RACE WITH ALL CARS: the two player race word // @math items count from 1
@@ -58,7 +61,7 @@ export const switchOf = word => TREE().menus.toggles.words.indexOf(word);
 // they start are the words of WACKY.CFG (menu.default-settings): every switch on and both levels HIGH in the installed files; the page may pass the level the player chose.
 // `famous` turns on the menus that no recording shows (menu.famous-menus): the page's menu has them, the records' replays do not.
 const DEFAULTS = () => K({ files: 3, words: 5, switch: 1, level: 1, fileOffsets: [0x952, 0x954, 0x956, 0x3c, 0x860] }, 'menu.default-settings');
-export const defaultSettings = (detail = DEFAULTS().level, famous = false) => ({ famous, switches: TREE().menus.toggles.words.map(() => DEFAULTS().switch), detail: { single: detail, split: detail }, flow: Object.fromEntries(TREE().flow.map(id => [id, 1])), keys: defaultKeys() }); // @math one switch for each word; the first level and the first item of every setup menu
+export const defaultSettings = (detail = DEFAULTS().level, famous = false) => ({ famous, switches: TREE().menus.toggles.words.map(() => DEFAULTS().switch), detail: { single: detail, split: detail }, flow: Object.fromEntries(TREE().flow.map(id => [id, 1])), keys: defaultKeys(), sound: defaultDevices() }); // @math one switch for each word; the first level and the first item of every setup menu
 
 // The text of a switch: its name, then ON or OFF at the end of a bar of fixed width.
 const switchText = (T, name, on) => name.padEnd(T.menus.toggles.width - T.menus.toggles.on.length) + (on ? T.menus.toggles.on : T.menus.toggles.off);
@@ -69,7 +72,7 @@ export function menuDef(id, settings = defaultSettings()) {
   const T = TREE(), main = id === 'main', famous = FAM_ID.test(id), def = main ? { items: menuItems() } : famous ? famousDef(id, settings) : T.menus[id];
   if (!def) throw new Error(`no menu ${id}`);
   if (famous) return { id, kind: 'sub', items: def.items, actions: def.actions, flowStep: id === 'duoClass' };
-  if (id === 'options' && settings.famous) def.items = [...def.items.slice(0, -1), KEY_MENU.item, def.items.at(-1)]; // the page's own item before LEAVE THIS MENU (the records of the game's menu have four items)
+  if (id === 'options' && settings.famous) def.items = [...def.items.slice(0, -1), KEY_MENU.item, SOUND_MENU.item, def.items.at(-1)]; // the page's own items before LEAVE THIS MENU (the records of the game's menu have four items)
   const items = id === 'toggles' ? def.items.map((name, i) => (name === T.leave ? name : switchText(T, name, settings.switches[i]))) : def.items;
   const actions = def.items.map((text, i) => {
     const link = T.opens.find(([from, item]) => from === id && item === i + 1); // @math items count from 1
@@ -88,6 +91,7 @@ export function menuDef(id, settings = defaultSettings()) {
     if (settings.famous && id === 'info' && text === 'INSTRUCTIONS') return { slides: 'instructions' }; // the pages INT1 to INT8
     if (id === 'options' && text === 'VOLUME LEVELS') return { volume: true }; // the volume screen (menu.volume-screen)
     if (id === 'options' && text === KEY_MENU.item) return { open: 'keys' };
+    if (id === 'options' && text === SOUND_MENU.item) return { open: 'sound' };
     if (id === 'info' && text === 'CREDITS') return { credits: true }; // the credits pages (menu.credits)
     if (main && i === def.items.length - 1) return { leave: true }; // LEAVE GAME, the last item: the game ends on its text screen (exit.screen-select)
     if (main && i === 1) return { duoMenu: true }; // @math the second item of the main menu, TWO PLAYER RACE: head to head or with all cars first (versus.race-rules)

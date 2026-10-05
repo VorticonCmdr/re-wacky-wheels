@@ -1,0 +1,726 @@
+{
+ "id": "flameword-5",
+ "tool": "dosbox-automation 0.84.0-vc1 (f6d9b)",
+ "via": "REST GET /api/v1/memory/{offset}/{len}",
+ "date": "2026-10-05",
+ "exe": {
+  "name": "WW.EXE",
+  "size": 650437,
+  "sha1": "ea41ea5ec1be24e2cbec15dbee3a04263b04a8d4"
+ },
+ "archive": {
+  "name": "WACKY.DAT",
+  "size": 7771880,
+  "sha1": "9e35b8032394adb93c341c3b44fd65ddeac2facd"
+ },
+ "moment": "the attract demo of track 5 from its countdown: the racer's rear flame frame and stage words, the counter, the mode and the throttle at every pause",
+ "bases": {
+  "1": 2015232,
+  "2": 2330624
+ },
+ "track": 5,
+ "frameAt": 43748,
+ "stageAt": 43762,
+ "samples": [
+  {
+   "counter": 3,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 4,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 4,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 5,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 5,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 6,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 7,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 7,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 8,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 9,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 9,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 10,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 11,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 11,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 12,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 12,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 13,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 14,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 14,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 15,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 16,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 16,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 17,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 18,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 18,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 19,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 20,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 20,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 21,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 22,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 22,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 23,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 23,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 24,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 25,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 25,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 26,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 27,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 27,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 28,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 29,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 29,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 30,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 31,
+   "mode": 1,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 31,
+   "mode": 1,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 32,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 32,
+   "mode": 1,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 33,
+   "mode": 1,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 34,
+   "mode": 2,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 34,
+   "mode": 2,
+   "frame": 2,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 35,
+   "mode": 2,
+   "frame": 3,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 36,
+   "mode": 2,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 36,
+   "mode": 2,
+   "frame": 0,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 37,
+   "mode": 2,
+   "frame": 1,
+   "stage": 0,
+   "throttle": 0
+  },
+  {
+   "counter": 38,
+   "mode": 2,
+   "frame": 0,
+   "stage": 1,
+   "throttle": 10
+  },
+  {
+   "counter": 38,
+   "mode": 2,
+   "frame": 1,
+   "stage": 1,
+   "throttle": 10
+  },
+  {
+   "counter": 39,
+   "mode": 2,
+   "frame": 2,
+   "stage": 1,
+   "throttle": 20
+  },
+  {
+   "counter": 40,
+   "mode": 2,
+   "frame": 2,
+   "stage": 1,
+   "throttle": 30
+  },
+  {
+   "counter": 40,
+   "mode": 2,
+   "frame": 3,
+   "stage": 1,
+   "throttle": 30
+  },
+  {
+   "counter": 41,
+   "mode": 2,
+   "frame": 0,
+   "stage": 2,
+   "throttle": 40
+  },
+  {
+   "counter": 41,
+   "mode": 2,
+   "frame": 0,
+   "stage": 2,
+   "throttle": 40
+  },
+  {
+   "counter": 42,
+   "mode": 2,
+   "frame": 1,
+   "stage": 2,
+   "throttle": 50
+  },
+  {
+   "counter": 43,
+   "mode": 2,
+   "frame": 2,
+   "stage": 2,
+   "throttle": 60
+  },
+  {
+   "counter": 43,
+   "mode": 2,
+   "frame": 2,
+   "stage": 2,
+   "throttle": 60
+  },
+  {
+   "counter": 44,
+   "mode": 2,
+   "frame": 3,
+   "stage": 2,
+   "throttle": 70
+  },
+  {
+   "counter": 45,
+   "mode": 2,
+   "frame": 0,
+   "stage": 3,
+   "throttle": 80
+  },
+  {
+   "counter": 45,
+   "mode": 2,
+   "frame": 0,
+   "stage": 3,
+   "throttle": 80
+  },
+  {
+   "counter": 46,
+   "mode": 2,
+   "frame": 1,
+   "stage": 3,
+   "throttle": 90
+  },
+  {
+   "counter": 46,
+   "mode": 2,
+   "frame": 1,
+   "stage": 3,
+   "throttle": 90
+  },
+  {
+   "counter": 47,
+   "mode": 2,
+   "frame": 2,
+   "stage": 3,
+   "throttle": 100
+  },
+  {
+   "counter": 48,
+   "mode": 2,
+   "frame": 3,
+   "stage": 3,
+   "throttle": 100
+  },
+  {
+   "counter": 48,
+   "mode": 2,
+   "frame": 3,
+   "stage": 3,
+   "throttle": 100
+  },
+  {
+   "counter": 49,
+   "mode": 2,
+   "frame": 0,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 50,
+   "mode": 2,
+   "frame": 1,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 50,
+   "mode": 2,
+   "frame": 1,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 51,
+   "mode": 2,
+   "frame": 2,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 52,
+   "mode": 2,
+   "frame": 2,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 52,
+   "mode": 2,
+   "frame": 3,
+   "stage": 4,
+   "throttle": 100
+  },
+  {
+   "counter": 53,
+   "mode": 2,
+   "frame": 0,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 53,
+   "mode": 2,
+   "frame": 0,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 54,
+   "mode": 2,
+   "frame": 1,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 55,
+   "mode": 2,
+   "frame": 2,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 55,
+   "mode": 2,
+   "frame": 2,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 56,
+   "mode": 2,
+   "frame": 3,
+   "stage": 5,
+   "throttle": 100
+  },
+  {
+   "counter": 57,
+   "mode": 2,
+   "frame": 0,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 57,
+   "mode": 2,
+   "frame": 0,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 58,
+   "mode": 2,
+   "frame": 1,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 59,
+   "mode": 2,
+   "frame": 2,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 59,
+   "mode": 2,
+   "frame": 2,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 60,
+   "mode": 2,
+   "frame": 3,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 61,
+   "mode": 2,
+   "frame": 3,
+   "stage": 6,
+   "throttle": 100
+  },
+  {
+   "counter": 61,
+   "mode": 2,
+   "frame": 0,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 62,
+   "mode": 2,
+   "frame": 1,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 63,
+   "mode": 2,
+   "frame": 1,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 63,
+   "mode": 2,
+   "frame": 2,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 64,
+   "mode": 2,
+   "frame": 3,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 64,
+   "mode": 2,
+   "frame": 3,
+   "stage": 7,
+   "throttle": 100
+  },
+  {
+   "counter": 65,
+   "mode": 2,
+   "frame": 0,
+   "stage": 8,
+   "throttle": 100
+  },
+  {
+   "counter": 66,
+   "mode": 2,
+   "frame": 1,
+   "stage": 8,
+   "throttle": 100
+  },
+  {
+   "counter": 66,
+   "mode": 2,
+   "frame": 1,
+   "stage": 8,
+   "throttle": 100
+  }
+ ]
+}
