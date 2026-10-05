@@ -14,7 +14,7 @@ import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } fro
 import { stripValues, swapSeat } from './game/versus.js';
 import { versusKeys, buttonCodes } from './game/versus-keys.js';
 import { loadKeys, saveKeys, defaultKeys, inputOf, codesOf, scancodeOf, rebind, namesOf, SLOTS } from './game/keys.js';
-import { SHOOT, FLOW as VERSUS_FLOW } from './game/versus-rules.js';
+import { SHOOT, FLOW as VERSUS_FLOW, RACE as VERSUS_RACE } from './game/versus-rules.js';
 import { messageAt, winnerLayout, raceValues, carsBySeat as carsOf } from './game/versus.js';
 import { finalPlaces, racePoints } from './game/versus-race.js';
 import { frameMs } from './game/clock.js';
@@ -49,6 +49,10 @@ import { boardRows, boardLayout, humanFrame } from './game/leaderboard.js';
 import { loadBoardArt, renderBoard } from './render/leaderboard.js';
 import { createChoice, stepChoice, choiceView } from './game/choice.js';
 import { createAudio } from './play-audio.js';
+import { createLink } from './play-link.js';
+import { INPUT_SIZE, encodeInput, decodeInput, encodeParams, decodeParams, delayFor, raceHash, checkParams } from './net/race.js';
+import { driverCount } from './game/drivers.js';
+import { ROLE } from './net/packets.js';
 import { raceSong, menuSong, boardSong } from './game/sounds.js';
 import { boardFiles, enterBoard as enterCupBoardState, stepBoard, boardPass, boardSound } from './game/cupboard.js';
 import { loadBoards, renderBoardPicture } from './render/cupboard.js';
@@ -82,15 +86,16 @@ function setMessage(text, bad = false) { const m = $('message'); m.textContent =
 function playSounds() {
   const a = state.audio;
   if (!a) { state.sounds = []; return; }
-  for (const e of state.sounds ?? []) { const ev = typeof e === 'object' ? e : { id: e }; a.play({ ...ev, id: ev.id === 'driver' ? state.humanSlot : ev.id }); }
+  const L = state.linkPlay, own = L ? { car: L.seat === 0 ? state.car : state.seat2.car, player: L.seat === 0 ? state.player : state.seat2.player, slot: L.slots[L.seat] } : { car: state.car, player: state.player, slot: state.humanSlot }; // in a link race the own car is the player's seat
+  for (const e of state.sounds ?? []) { const ev = typeof e === 'object' ? e : { id: e }; a.play({ ...ev, id: ev.id === 'driver' ? own.slot : ev.id }); }
   state.sounds = [];
-  if (state.screen === 'race') { if (state.car.crashed || state.player.pending) a.engineStop(); else a.engineSpeed(state.car.speed); }
+  if (state.screen === 'race') { if (own.car.crashed || own.player.pending) a.engineStop(); else a.engineSpeed(own.car.speed); }
 }
 
 // The song of a screen: the menus the main menu's, the boards the ASHES song, a race the cup's song for the race (the card prefetches it while it shows).
 function songFor(screen) {
   if ((screen === 'race' && state.demo) || (screen === 'card' && state.card?.demo)) return menuSong(); // a demo race and its card keep the menu's song (demo.flow)
-  if (screen === 'menu' || screen === 'vehicle' || screen === 'famous' || screen === 'credits' || screen === 'volume' || screen === 'keyset') return menuSong();
+  if (screen === 'menu' || screen === 'vehicle' || screen === 'famous' || screen === 'credits' || screen === 'volume' || screen === 'keyset' || screen === 'link') return menuSong();
   if (screen === 'cupboard' || screen === 'board' || screen === 'card' || screen === 'notice' || screen === 'hall' || screen === 'duckChooser' || screen === 'duckIntro' || screen === 'duckEnd' || screen === 'shootCard' || screen === 'versusEnd') return boardSong(); // the chooser plays ASHES (duck.flow)
   if (screen === 'race' && (state.duck || state.versus?.kind === 'shootout')) return duckSong(state.duckFlow.zone); // the zone's own song (duck.flow)
   const c = state.cup; return raceSong(c ? c.cup : 1, c ? c.bonus : 0, c ? c.race : 1); // @math a race outside a cup is the first race of the Bronze cup
@@ -120,9 +125,9 @@ function startTrack() {
   const item = state.menu.settings.flow.class, forced = forcedOf(item), engine = forced.engine ?? Number($('engine').value); // the kid mode sets the engine, the kid mode and the time trial the laps (setup.forced-items)
   startTrackWith({ name: $('track').value, engine, cls: classOf(item), laps: forced.laps ?? lapsTotal(state.menu.settings.flow.laps) });
 }
-function startTrackWith({ name, engine, cls, laps }) {
+function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusMode) }) {
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
-  startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split: Boolean(state.versusMode) }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
+  startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
   state.accumulator = 0; state.pause = null; beginIntro(state); // the camera's fly-in before the countdown (race.intro)
   if (state.cup && state.carry) { const car = { ...state.car, counter: state.carry.counter, held: state.carry.held }; state.car = car; state.player = { ...state.player, car }; } // the pickups go from one race of a cup to the next (obj1+0x2006a)
   rgba = rgbaPalette(state.world.palette);
@@ -294,6 +299,7 @@ function tickDemo() {
 // The keyboard of the manual (player 1) unless the player set another layout: the arrows steer, Alt accelerates, Down brakes, Space is the hand brake turn and Ctrl fires a hog or drops the held item.
 function tickOnce() {
   if (state.demo) { tickDemo(); return; }
+  if (state.linkPlay) return tickLink();
   const has = k => state.keys.has(k);
   if (state.versus) { // the two humans of the split screen (versus.js)
     const keys = versusKeys(has, state.menu.settings.keys);
@@ -330,6 +336,7 @@ function stepMenuClock(now) {
     const key = state.menuKey ?? state.menuHeld, read = isSettled(state.menu), before = state.menu.settings.sound, { menu, chosen, notice } = stepFrame(state.menu, key); state.menu = menu;
     if (menu.settings.sound !== before) { saveDevices(menu.settings.sound); state.audio?.setDevices(menu.settings.sound); } // a device picked in the sound menus (sound-devices.js)
     state.menuKey = null; state.menuAccumulator -= ms;
+    if (state.linkPlay && state.menu.id === 'main') { abortLink(); return; } // the host left the setup menus: the link is given up
     if (key === 'escape' && read) state.menuHeld = null; // Esc is read once and the routine waits for its release (obj1+0x626a to +0x628f)
     // a cursor key that is still held is read again at the next pass with the icons settled (menu.input-sampling)
     if (state.idleMenu !== menu.id || key === 'up' || key === 'down') { state.idleMenu = menu.id; state.idle = 0; } else state.idle += 1; // the menu loop's idle count: a cursor key or another menu starts it again (obj1+0x630f, +0x631b)
@@ -427,6 +434,9 @@ function drawVolume() {
 }
 
 function chooseItem(action) {
+  if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
+  if ('duo' in action && state.linkPlay) { linkMode(action.duo); return; } // the host's choice of the link race
+  if (action.race === 1 && state.linkPlay) { hostStart(action.settings.flow); return; }
   if (action.duoMenu) { state.menu = enterMenu('duoMode', [{ id: 'main', cursor: 2 }], state.menu.settings); return; } // TWO PLAYER RACE: head to head or with all cars (versus.race-rules) // @math the cursor of TWO PLAYER RACE
   if ('duo' in action) { state.duo = { cars: action.duo }; state.shoot = null; enterVehicle('duo1'); return; }
   if (action.shoot) { state.duo = null; enterVehicle('shoot1'); return; } // TWO PLAYER SHOOT OUT: the vehicle screens first (versus.flow)
@@ -489,6 +499,7 @@ function drawVersus() {
 }
 
 function draw() {
+  if (state.linkPlay && state.versus) { drawLinkRace(); return; }
   if (state.versus) { drawVersus(); return; }
   const mode = Number($('detail').value);
   state.detail = mode; drawRaceFrame(state, index);
@@ -502,9 +513,9 @@ function draw() {
 
 // ---- the vehicle screen in front of the setup menus (menu.vehicle-screen)
 function enterVehicle(first) {
-  const second = first === 'shoot2' || first === 'duo2', two = second || first === 'shoot1' || first === 'duo1'; // the two player modes ask both players: the second one's car list has the first one's crossed out (versus.flow)
+  const second = first === 'shoot2' || first === 'duo2' || first === 'link2', two = second || first === 'shoot1' || first === 'duo1' || first === 'link1'; // the link's two players each choose on their own machine (the host first) // the two player modes ask both players: the second one's car list has the first one's crossed out (versus.flow)
   if (!two) state.duo = null;
-  state.vehicle = { v: createVehicle(two ? { player: second ? 1 : 0, taken: second ? (state.shoot ?? state.duo).slots[0] : null } : {}), art: state.vehicleArt ??= loadVehicleArt(state.menuArt, archiveMembers(state.dat)), wait: 0, next: first, key: null, since: performance.now() }; // @math the intro's first pass has no wait
+  state.vehicle = { v: createVehicle(two ? { player: second ? 1 : 0, taken: second ? (state.shoot ?? state.duo ?? state.linkPlay).slots[0] : null } : {}), art: state.vehicleArt ??= loadVehicleArt(state.menuArt, archiveMembers(state.dat)), wait: 0, next: first, key: null, since: performance.now() }; // @math the intro's first pass has no wait
   state.screen = 'vehicle'; state.last = performance.now(); state.keys.clear();
 }
 
@@ -514,7 +525,8 @@ function stepVehicleClock(now) {
   while (c.wait <= 0 && state.screen === 'vehicle') {
     const out = stepVehicle(c.v, c.key); c.v = out.vehicle; c.key = null; c.wait += out.wait; // the first key since the last pass
     if (out.help) { c.help = { armed: false }; return; } // F1 (menu.controls-help): the screen waits for F1 to be released and then for a key
-    if (out.leave === 'menu') { saveDuckTable(); state.screen = 'menu'; state.menuAccumulator = 0; return; }
+    if (out.leave === 'menu') { saveDuckTable(); if (state.linkPlay) abortLink(); state.screen = 'menu'; state.menuAccumulator = 0; return; }
+    if (out.leave && (c.next === 'link1' || c.next === 'link2')) { linkPicked(out.leave.slot); return; }
     if (out.leave && c.next === 'shoot1') { state.shoot = { slots: [out.leave.slot], hits: 5 }; enterVehicle('shoot2'); return; } // @math the default hits are the first item's
     if (out.leave && c.next === 'shoot2') { state.shoot.slots[1] = out.leave.slot; state.menu = enterMenu('hits', [{ id: 'main', cursor: 3 }], state.menu.settings); state.screen = 'menu'; state.menuAccumulator = 0; return; } // @math the cursor of TWO PLAYER SHOOT OUT
     if (out.leave && c.next === 'duo1') { state.duo.slots = [out.leave.slot]; enterVehicle('duo2'); return; }
@@ -525,7 +537,7 @@ function stepVehicleClock(now) {
 }
 
 function drawVehicle() {
-  const c = state.vehicle, vga = c.help ? renderControlsHelp(index, c.art, { player: c.v.player ?? 0, versus: c.v.player !== null, controller: vehicleLayout().controller.text, names: namesOf(state.menu.settings.keys, c.v.player ?? 0) }) : renderVehicle(index, c.art, c.v); // the second player of a two player game has the second player's keys
+  const c = state.vehicle, vga = c.help ? renderControlsHelp(index, c.art, { player: c.v.player ?? 0, versus: c.v.player !== null, controller: vehicleLayout().controller.text, names: namesOf(state.menu.settings.keys, state.linkPlay ? 0 : c.v.player ?? 0) }) : renderVehicle(index, c.art, c.v); // the second player of a two player game has the second player's keys
   blit(rgbaPalette(vga));
   $('readout').innerHTML = `<dt>Vehicle</dt><dd>${c.v.phase}</dd>`;
   $('badge').className = 'badge bad'; $('badge').textContent = 'Not compared with frames of the running game yet beyond the idle screen: the vehicle screen (menu.vehicle-screen); the zoom of the texts in its intro and the pictures of the chosen animation are not ported.';
@@ -747,6 +759,123 @@ function keySetKey(e) {
   state.keyset = null; state.screen = 'menu'; state.menuAccumulator = 0; state.keys.clear();
 }
 
+// ---- COMM-BAT PLAY over WebRTC (play-link.js, net/, docs/comm-bat.md): a deviation from the DOS game, which links two machines by modem or serial cable. The host (player one) and the guest (player two)
+// are linked by the menus' WEBRTC PEERJS (a code) or WEBRTC LOCAL (no code, the pages of one address), each picks a car on their own machine, the host chooses the race, and both machines then run
+// the same two player race (split-screen rules, full-screen view of the own car) with the players' input swapped every frame.
+const linkCtl = () => (state.linkCtl ??= createLink({ archive: state.dat, on: { linked: onLinked, closed: onLinkClosed } }));
+const LINK_BADGE = 'Not in the original game: COMM-BAT PLAY links two browsers by WebRTC instead of a modem or a serial cable (docs/comm-bat.md). Both machines run the two player race with the input of both players swapped every frame; the link and the race rules around it are the page\'s own, not read from the game.';
+function startLink(kind) {
+  state.linkBase = Uint8Array.from(state.menuArt.title.indices); state.linkPlay = null; // the messages are boxes over the plain menu picture
+  linkCtl().start(kind); state.screen = 'link'; state.last = performance.now(); state.keys.clear();
+}
+function drawLink() {
+  const lines = linkCtl().lines, top = 92 - (lines.length - 1) * 10; // @math a box is 16 rows and the first stands on row 92: stack the lines 20 rows apart around it
+  index.set(state.linkBase);
+  lines.forEach((text, k) => drawMessage(index, state.hudArt.ofont, messageAt(text, top + k * 20)));
+  blit(state.menuArt.rgba);
+  $('readout').innerHTML = `<dt>Link</dt><dd>${linkCtl().kind ?? ''} ${linkCtl().stage}</dd>`;
+  $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE;
+}
+// The link is up (both sides said hello): the host picks a car first, the guest waits for that pick (the guest's list has the host's car crossed out).
+function onLinked(c) {
+  const host = c.role === ROLE.HOST, s = c.session;
+  state.linkPlay = { role: c.role, seat: host ? 0 : 1, session: s, slots: [null, null], cars: 1 };
+  s.on('pick', (role, slot) => {
+    const L = state.linkPlay; if (!L) return;
+    L.slots[role] = slot;
+    if (host && L.slots[0] !== null) hostMenus(); else if (!host) enterVehicle('link2');
+  });
+  s.on('setup', setup => {
+    let p = null; try { p = decodeParams(setup.params); } catch { /* not a race of this page */ }
+    const members = archiveMembers(state.dat), tracks = [...members.keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => Number(n.replace('.GAM', '')));
+    const bad = setup.size !== INPUT_SIZE ? 'THE OTHER PLAYER SENT INPUT THIS GAME CANNOT READ' : p === null ? 'THE OTHER PLAYER CHOSE A RACE THIS GAME CANNOT RUN' : checkParams(p, { tracks, drivers: driverCount() });
+    if (bad) { abortLink(bad); return; }
+    beginLinkRace(p, setup.seed);
+  });
+  s.on('desync', frame => { setMessage(`The two games have drifted apart at frame ${frame}.`, true); abortLink('THE TWO GAMES DO NOT AGREE'); });
+  if (host) enterVehicle('link1'); else c.say('LINK ESTABLISHED', 'WAITING FOR PLAYER');
+}
+function onLinkClosed(reason) { abortLink(reason, true); }
+// A car is chosen on this machine: it goes to the other side, and the host goes on once both have chosen.
+function linkPicked(slot) {
+  const L = state.linkPlay; L.slots[L.seat] = slot; L.session.pick(slot);
+  state.linkBase = Uint8Array.from(state.menuArt.title.indices); state.screen = 'link'; state.last = performance.now(); state.keys.clear();
+  linkCtl().say('WAITING FOR PLAYER');
+  if (L.seat === 0 && L.slots[1] !== null) hostMenus();
+}
+const linkSettings = on => { state.menu = { ...state.menu, settings: { ...state.menu.settings, link: on } }; };
+// The host chooses the race with the menus of the two player race: head to head or with all cars, the class of that one, the laps and the engine (the race type menu is left out).
+function hostMenus() {
+  linkSettings(true); state.menu = enterMenu('duoMode', [{ id: 'main', cursor: 5 }], state.menu.settings); state.screen = 'menu'; state.menuAccumulator = 0; state.keys.clear(); // @math the cursor of COMM-BAT PLAY in the main menu
+}
+function linkMode(cars) {
+  state.linkPlay.cars = cars;
+  state.menu = cars === 2 ? enterMenu('duoClass', [{ id: 'main', cursor: 5 }], state.menu.settings) : enterSetup(state.menu, 'laps'); // @math the cursor of COMM-BAT PLAY in the main menu
+}
+function hostStart(flow) {
+  const L = state.linkPlay, s = L.session, seed = Math.floor(Math.random() * 0x7fffffff);
+  const params = { cars: L.cars, cls: L.cars === 2 ? flow.duoClass : 1, laps: lapsTotal(flow.laps), engine: flow.engine, track: Number($('track').value), slotOne: L.slots[0], slotTwo: L.slots[1], detail: state.menu.settings.detail.single }; // @math head to head forces the class 1
+  linkSettings(false);
+  s.start({ delay: delayFor(s.rtt, frameMs()), seed, params: encodeParams(params), size: INPUT_SIZE });
+  beginLinkRace(params, seed);
+}
+// Both sides begin the same race: the two players' drivers and the seed the computer racers' drivers are drawn from; the view is of the own car, full screen, with the page's usual panel.
+function beginLinkRace(p, seed) {
+  const L = state.linkPlay; if (!L) return;
+  const slots = [p.slotOne, p.slotTwo];
+  state.duo = { cars: p.cars, slots }; state.shoot = null; state.demo = null; state.cup = null; state.carry = null; state.result = null; state.screen = 'race'; state.keys.clear();
+  state.versusMode = { kind: 'race', cars: p.cars, laps: p.laps, class: p.cls, engine: p.engine, slots, scores: [0, 0] };
+  state.humanSlot = slots[0]; state.slots = null; state.seed = seed; state.detail = p.detail; $('track').value = String(p.track); $('engine').value = String(p.engine);
+  startTrackWith({ name: String(p.track), engine: p.engine, cls: classOf(p.cls), laps: p.laps, split: false }); state.versusMode = null;
+  state.fadeIn = null; L.taunt = 0; state.tauntQueue = []; L.params = p;
+}
+// One frame of the link race: the other player's input for it has to be here, else the race waits (as the game's serial link did) and the frame is not stepped.
+function tickLink() {
+  const L = state.linkPlay, s = L.session;
+  if (!s.ready()) { s.waiting(); return false; }
+  const [one, two] = s.take(), has = k => state.keys.has(k);
+  stepRace(state, { p1: decodeInput(one), p2: decodeInput(two) }); playSounds();
+  const ms = frameMs(); state.hud = advanceTimer(state.hud, ms); state.seat2.hud = advanceTimer(state.seat2.hud, ms); // the clock follows the frames, not the wall clock: both machines must agree
+  s.report(raceHash(state, carsOf(state)));
+  const input = inputOf(has, state.menu.settings.keys, 0); if (L.taunt) { input.taunt = L.taunt; L.taunt = 0; }
+  s.submit(encodeInput(input));
+  return true;
+}
+// The own car's view full screen: the other seat is swapped in for its draw.
+function drawLinkRace() {
+  const L = state.linkPlay, cars = carsOf(state);
+  state.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(state.ai ? state.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; // the overhead map's dots: the other human, then the computer racers
+  if (L.seat === 1) swapSeat(state);
+  drawRaceFrame(state, index);
+  if (L.seat === 1) swapSeat(state);
+  blit(raceRgba());
+  const [a, b] = carsOf(state);
+  $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`;
+  $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE;
+}
+function endLinkRace() {
+  const L = state.linkPlay, places = finalPlaces(state), mine = places[L.seat];
+  closeLink(mine === 1 ? 'YOU WON THE RACE' : `YOU CAME IN PLACE ${mine}`, 'race');
+}
+// The player gave the game up (Esc), or the line failed: back to the menu with the reason in a box.
+function abortLink(reason = null, fromLine = false) {
+  if (!state.linkPlay && !reason) return;
+  closeLink(reason, fromLine ? 'line' : 'leave');
+}
+// How the link ends: 'leave' (the player left: the other side is told), 'line' (the line failed or the other side left: nothing to tell) or 'race' (the race is over: the line stays up for a moment so
+// that the other player's last frames get through, link.finish). What the race left in the page is cleared, so that a later single player race starts as if there had been none.
+function closeLink(reason, how = 'leave') {
+  state.linkPlay = null; state.minimapOthers = null; state.versus = null; state.duo = null; state.versusMode = null; state.result = null; state.audio?.stopAll(); linkSettings(false);
+  state.seed = undefined; state.slots = null; state.humanSlot = null; state.fadeIn = null; // the link race's seed, drivers and opponents are not the next race's
+  state.menu = enterMenu('main', [], state.menu.settings); // the setup menus are done with
+  if (how === 'leave') linkCtl().close();
+  if (reason) { state.linkBase = Uint8Array.from(state.menuArt.title.indices); if (how === 'race') linkCtl().finish(reason); else linkCtl().notice(reason); state.screen = 'link'; state.last = performance.now(); } else returnToMenu();
+  state.keys.clear();
+}
+
+// The link screen ended (Esc, or its message's count): back to the menu the player came from.
+function leaveLinkScreen() { if (state.linkPlay) { state.linkPlay = null; linkSettings(false); } returnToMenu(); }
+
 // The bonus notice (race.bonus-notice): a box over the plain background for 544 counts, then the bonus race.
 function enterNotice(kind = 'bonus') {
   const art = state.rostrumArt ??= loadRostrumArt(archiveMembers(state.dat), state.humanSlot), kid = kind === 'kid'; // the kid mode's box stands over the menu screen, the bonus notice over the plain background
@@ -842,6 +971,7 @@ function drawRostrum() {
 
 // The race ended (race.finish-flow): the leaderboard, the menu of a lost race or the game over.
 function raceOver() {
+  if (state.linkPlay) { endLinkRace(); return; }
   if (state.result === 'duck') { endDuck(); return; } // the time is up (duck.race-rules)
   if (state.result === 'versus') { endVersus(); return; } // a player reached the hits (versus.shootout-rules)
   if (state.result === 'versusRace') { endVersusRace(); return; } // a human finished: the points of the places, then the leaderboard (versus.race-rules)
@@ -887,6 +1017,7 @@ function frame(now) {
   if (state.screen === 'hall') { stepHall(now); state.last = now; if (state.screen === 'hall') drawHall(now); requestAnimationFrame(frame); return; }
   if (state.screen === 'trialEntry') { state.last = now; drawTrialEntry(); requestAnimationFrame(frame); return; }
   if (state.screen === 'keyset') { state.last = now; drawKeySet(); requestAnimationFrame(frame); return; }
+  if (state.screen === 'link') { state.last = now; if (linkCtl().step(now) === 'leave') leaveLinkScreen(); else drawLink(); requestAnimationFrame(frame); return; }
   if (state.screen === 'notice') { stepNotice(now); state.last = now; if (state.screen === 'notice') drawNotice(); requestAnimationFrame(frame); return; }
   if (state.screen === 'volume') { runVolume(now); state.last = now; if (state.screen === 'volume') drawVolume(); requestAnimationFrame(frame); return; }
   if (state.screen === 'credits') { runCredits(now); state.last = now; if (state.screen === 'credits') drawCredits(); requestAnimationFrame(frame); return; }
@@ -904,10 +1035,13 @@ function frame(now) {
   }
   if (state.pause) { stepPauseClock(now); state.last = now; if (state.screen === 'race') draw(); requestAnimationFrame(frame); return; } // the race does not run while its menu is open
   const elapsed = Math.min(now - state.last, 250); // @math at most a quarter second at a time after a pause
-  state.accumulator += elapsed; state.last = now; state.hud = advanceTimer(state.hud, elapsed);
+  state.accumulator += elapsed; state.last = now; if (!state.linkPlay) state.hud = advanceTimer(state.hud, elapsed);
   if (state.duck && !state.result && state.hud.ticks >= duckRules().timer) state.result = 'duck'; // the clock reaches 0 (duck.race-rules)
   const frame_ms = frameMs();
-  while (state.accumulator >= frame_ms && !state.result) { tickOnce(); state.accumulator -= frame_ms; }
+  while (state.accumulator >= frame_ms && !state.result) {
+    if (tickOnce() === false) { state.accumulator = Math.min(state.accumulator, 2 * frame_ms); break; } // a link race waiting for the other player does not run ahead when the input comes
+    state.accumulator -= frame_ms;
+  }
   draw();
   if (state.result) raceOver();
   requestAnimationFrame(frame);
@@ -934,10 +1068,10 @@ $('file').addEventListener('change', e => { if (e.target.files.length) load(open
 $('local').addEventListener('click', async () => { try { await load(await openDevGame({ base: import.meta.env.BASE_URL })); } catch (e) { setMessage(e.message, true); } });
 document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) load(openPicked(e.dataTransfer.files)); });
-for (const id of ['track', 'engine']) $(id).addEventListener('change', () => state.dat && freeRace());
-$('reset').addEventListener('click', () => state.dat && freeRace());
+for (const id of ['track', 'engine']) $(id).addEventListener('change', () => state.dat && !state.linkPlay && freeRace()); // a link race is not restarted by one machine
+$('reset').addEventListener('click', () => state.dat && !state.linkPlay && freeRace());
 // The browser keys the race reads: the first player's six keys, in a split screen game both players' (the layout of keys.js).
-const gameCodes = () => new Set((state.versus ? [0, 1] : [0]).flatMap(p => SLOTS.flatMap((_, slot) => codesOf(state.menu.settings.keys, p, slot)))); // @math the players 0 and 1
+const gameCodes = () => new Set((state.versus && !state.linkPlay ? [0, 1] : [0]).flatMap(p => SLOTS.flatMap((_, slot) => codesOf(state.menu.settings.keys, p, slot)))); // @math the players 0 and 1
 const vehicleKeys = next => { // the keys of the vehicle screen's passes: the player's steering keys, a button of the player (the first two buttons of the table, in the second player's pass the third as well), Enter and Space are a fire (obj1+0xb2d2, +0xb3a0, +0xb3b3); the second player's pass also takes the first player's fire key (versus.flow)
   const keys = state.menu.settings.keys, p = next === 'shoot2' || next === 'duo2' ? 1 : 0, map = { Escape: 'escape', Enter: 'fire', Space: 'fire' }; // @math the second player's pass is the player 1
   const add = (codes, what) => codes.forEach(c => { map[c] ??= what; });
@@ -952,6 +1086,8 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'SELECT' || !state.dat) return;
   if (state.screen === 'race' && state.pause) { if (MENU_KEYS[e.code]) { e.preventDefault(); if (!state.pauseKey) state.pauseKey = MENU_KEYS[e.code]; } return; }
   if (state.screen === 'race' && state.demo) { if (e.code === 'Escape') state.demo.escape = true; else if (/^(Arrow|Enter|Space|Alt)/.test(e.code)) { state.keys.add(e.code); e.preventDefault(); } return; } // a demo race: Esc leaves, the arrows, Enter, Space and Alt turn the slides' pages
+  if (state.screen === 'link') { e.preventDefault(); if (linkCtl().key(e) === 'leave') leaveLinkScreen(); return; }
+  if (state.screen === 'race' && state.linkPlay && e.code === 'Escape') { e.preventDefault(); abortLink('YOU LEFT THE GAME'); return; } // a link race cannot be paused: Esc gives it up for both players
   if (state.screen === 'race' && e.code === 'Escape') { // Esc opens the in-race menu unless the race is finished or the car wrecked, where the game ignores it (race.pause-menu)
     if (canPause(state.finished, state.car.crashed || state.car.wrecked)) { state.pause = createPause(Boolean(state.duck || state.versus?.kind === 'shootout')); state.pauseKey = null; state.pauseAccumulator = 0; state.keys.clear(); state.last = performance.now(); }
     return;
@@ -986,6 +1122,12 @@ addEventListener('keydown', e => {
     return;
   }
   if (state.screen !== 'race') return;
+  if (state.linkPlay) { // the own player's keys, the first player's layout; F1 to F6 and 1 to 6 taunt the other player
+    const taunt = /^F([1-6])$|^Digit([1-6])$/.exec(e.code);
+    if (taunt) { e.preventDefault(); state.linkPlay.taunt = Number(taunt[1] ?? taunt[2]); return; }
+    if (gameCodes().has(e.code)) { state.keys.add(e.code); e.preventDefault(); }
+    return;
+  }
   if (state.versus) { // the two players' keys and the taunt keys: F1 to F6 for the first player, 1 to 6 for the second (versus.taunts)
     const taunt = /^F([1-6])$/.exec(e.code) ?? null, second = /^Digit([1-6])$/.exec(e.code) ?? null;
     if (taunt || second) { e.preventDefault(); (state.tauntQueue ??= []).push({ player: taunt ? 0 : 1, id: Number((taunt ?? second)[1]) }); return; } // @math the players count from 0

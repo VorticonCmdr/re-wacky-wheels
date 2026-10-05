@@ -1,0 +1,44 @@
+<!doctype html>
+<meta charset="utf-8"><title>Link frames</title>
+<style>body{margin:0;background:#222;color:#eee;font:12px monospace}iframe{width:49.5vw;height:90vh;border:1px solid #555;background:#000}</style>
+<div><iframe id="a" src="../play.html?debug"></iframe><iframe id="b" src="../play.html?debug"></iframe></div>
+<pre id="log" style="margin:4px"></pre>
+<script>
+// A development tool: two copies of the page side by side, driven by script. A browser tab that is not in front gets no animation frames, so `run(ms)` calls the pages' own frame function by hand
+// (the yield between calls lets the WebRTC messages in), and `press` types a key through the pages' key handlers.
+const tick = () => new Promise(r => { const c = new MessageChannel(); c.port1.onmessage = r; c.port2.postMessage(0); });
+window.dbg = who => document.getElementById(who).contentWindow.wackyDebug;
+window.runOnly = async (ids, ms) => { const end = performance.now() + ms; while (performance.now() < end) { const t = performance.now(); for (const w of ids) { dbg(w)?.frame(t); dbg(w)?.state.linkCtl?.session?.tick(); } await tick(); } };
+window.run = async ms => { const end = performance.now() + ms; while (performance.now() < end) { const t = performance.now(); for (const w of ['a', 'b']) { dbg(w)?.frame(t); dbg(w)?.state.linkCtl?.session?.tick(); } await tick(); } };
+window.press = async (who, code, hold = 100) => { const w = document.getElementById(who).contentWindow; w.dispatchEvent(new w.KeyboardEvent('keydown', { code, key: code.replace('Digit', '').replace('Key', '') })); await run(hold); w.dispatchEvent(new w.KeyboardEvent('keyup', { code, key: code })); await run(350); };
+window.hold = (who, code) => { const w = document.getElementById(who).contentWindow; w.dispatchEvent(new w.KeyboardEvent('keydown', { code, key: code })); };
+window.release = (who, code) => { const w = document.getElementById(who).contentWindow; w.dispatchEvent(new w.KeyboardEvent('keyup', { code, key: code })); };
+window.loadBoth = async () => {
+  // the pages' own animation loops end: only `run` calls the frame function, one call at a time
+  for (const id of ['a', 'b']) { const w = document.getElementById(id).contentWindow; w.requestAnimationFrame = () => 0; }
+  for (const id of ['a', 'b']) document.getElementById(id).contentDocument.getElementById('local').click();
+  await run(4000);
+};
+window.toItem = async (w, target) => { for (let i = 0; i < 8 && dbg(w).state.menu.cursor !== target; i++) await press(w, 'ArrowDown'); };
+// Both pages to WEBRTC LOCAL: page b first (it waits, so it is the host), then page a.
+window.linkUp = async () => {
+  await loadBoth();
+  for (const w of ['b', 'a']) { await toItem(w, 5); await press(w, 'Enter'); await toItem(w, 2); await press(w, 'Enter'); await run(800); }
+  await run(2500);
+  return [dbg('a').state.screen, dbg('b').state.screen];
+};
+// The whole way to a race: link, both choose a car, the host chooses head to head (or all cars with `cars` 2) and the engine.
+window.raceUp = async (cars = 1) => {
+  await linkUp(); await run(500);
+  for (let i = 0; i < 40 && dbg('b').state.screen === 'vehicle'; i++) await press('b', 'Enter');
+  await run(1000);
+  for (let i = 0; i < 6 && dbg('a').state.vehicle?.v.phase !== 'idle'; i++) await run(500);
+  await press('a', 'ArrowLeft'); await run(1500);
+  for (let i = 0; i < 40 && dbg('a').state.screen === 'vehicle'; i++) await press('a', 'Enter');
+  await run(1500);
+  if (cars === 2) { await press('b', 'ArrowDown'); }
+  for (let i = 0; i < 8 && dbg('b').state.screen === 'menu'; i++) await press('b', 'Enter');
+  await run(1500);
+  return [dbg('a').state.screen, dbg('b').state.screen];
+};
+</script>

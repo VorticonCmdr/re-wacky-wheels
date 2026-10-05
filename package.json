@@ -25,11 +25,18 @@
     "make-test-archive": "node tools/dosbox/make-test-archive.mjs",
     "check:race": "node scripts/check-race.js",
     "check:duck": "node scripts/check-duck.js",
-    "check:versus": "node scripts/check-versus.js"
+    "check:versus": "node scripts/check-versus.js",
+    "check:link": "node scripts/check-link.js",
+    "dev:lan": "vite --host 0.0.0.0",
+    "serve:lan": "node tools/lan-server.mjs"
   },
   "devDependencies": {
     "acorn": "^8.18.0",
     "acorn-walk": "^8.3.5",
     "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "peerjs": "^1.5.5",
+    "ws": "^8.22.0"
   }
 }

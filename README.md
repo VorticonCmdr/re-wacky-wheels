@@ -15,6 +15,8 @@ Open the address printed by Vite and select **Load local game**. The development
 
 Alternatively, use **Open files**, **Open folder**, or drop `WACKY.DAT` onto the viewer. These inputs read files locally in the browser and work in both development and the production build. For a complete collection, select the installed WACKY directory, including its DAT and loose assets.
 
+**Playing against another person** (COMM-BAT™ PLAY in the main menu, a deviation from the DOS game: WebRTC in the places of the modem and the serial cable, `docs/comm-bat.md`): WEBRTC PEERJS needs nothing but the page (a four digit code through PeerJS's free cloud server); WEBRTC LOCAL pairs the pages of one address on the local network, which needs the page to be served by `npm run serve:lan` (after `npm run build`) or `npm run dev:lan`. Both players need the same `WACKY.DAT`.
+
 `game/` is ignored by Git. The build never copies it into `dist/`. No original game assets, extracted copies, sound samples, or palettes are embedded in the source.
 
 ## Viewer features
@@ -51,6 +53,7 @@ Read the [format references](docs/README.md). Implementation observations:
 npm test
 npm run check:assets
 npm run check:tracks
+npm run check:link
 npm run build
 npm run preview
 ```

@@ -1,0 +1,41 @@
+<!doctype html>
+<meta charset="utf-8"><title>Link test</title>
+<style>body{font:14px monospace;margin:16px}button,input{font:inherit;margin:2px}pre{background:#111;color:#9f9;padding:8px;height:60vh;overflow:auto}</style>
+<h3>COMM-BAT link test (a development tool: connects two pages and runs a lockstep of dummy inputs)</h3>
+<div><button id="hostp">PeerJS: host</button> <input id="code" size="5" placeholder="code"><button id="joinp">PeerJS: join</button> <button id="local">Local</button> <button id="stop">Stop</button></div>
+<pre id="log"></pre>
+<script type="module">
+import { hostPeerJs, joinPeerJs } from '../src/net/peerjs.js';
+import { connectLocal } from '../src/net/local.js';
+import { LinkSession, PHASE } from '../src/net/session.js';
+import { ROLE } from '../src/net/packets.js';
+const log = t => { const el = document.getElementById('log'); el.textContent += t + '\n'; el.scrollTop = el.scrollHeight; window.__log = (window.__log ?? []).concat(t); };
+let cancel = () => {}, timer = null;
+async function run(role, link) {
+  const com = await link; log('channel open, ordered=' + com.raw.ordered + ' maxRetransmits=' + com.raw.maxRetransmits + ' binaryType=' + com.raw.binaryType);
+  const s = new LinkSession({ role, archive: 0x1234, send: b => com.send(b) });
+  com.onmessage = b => s.receive(b); com.onclose = () => { log('channel closed'); s.close('LINE DROPPED'); };
+  s.on('phase', (p, r) => log('phase ' + p + (r ? ' ' + r : '') + ' rtt=' + s.rtt)); s.on('desync', f => log('DESYNC at ' + f));
+  let sim = 0, state = 0, size = 2, started = false;
+  const frames = 600;
+  const keys = (who, f) => Uint8Array.of((f * 7 + who * 3) & 255, (f >> 2) & 255);
+  const who = role === ROLE.HOST ? 0 : 1;
+  const begin = () => { started = true; };
+  s.on('setup', () => begin());
+  const pump = () => {
+    s.tick();
+    if (role === ROLE.HOST && s.phase === PHASE.LINKED && !s.setup) { s.start({ delay: Math.max(2, Math.min(8, Math.ceil((s.rtt ?? 40) / 2 / 14) + 1)), seed: 7, size }); log('host starts, delay=' + s.setup.delay); begin(); }
+    while (started && sim < frames && s.ready()) { const [a, b] = s.take(); state = (Math.imul(state, 31) + a[0] * 256 + a[1] + Math.imul(b[0] * 256 + b[1], 17) + sim) >>> 0; s.report(state); sim++; s.submit(keys(who, sim - 1 + s.frames.delay)); }
+    if (started && sim < frames && !s.ready()) s.waiting();
+    if (started && sim === frames) { log('DONE ' + sim + ' frames, state=' + state.toString(16) + ' rtt=' + Math.round(s.rtt)); started = false; }
+  };
+  const receive = com.onmessage; com.onmessage = b => { s.receive(b); pump(); };
+  timer = setInterval(pump, 14);
+  cancel = () => { clearInterval(timer); s.close(); com.close(); };
+}
+const hello = text => log(text);
+document.getElementById('hostp').onclick = async () => { const h = hostPeerJs({ status: hello }); cancel = h.cancel; try { const code = await h.ready; log('CODE ' + code); run(ROLE.HOST, h.link); } catch (e) { log('ERR ' + e.message); } };
+document.getElementById('joinp').onclick = () => { const j = joinPeerJs(document.getElementById('code').value, { status: hello }); cancel = j.cancel; run(ROLE.GUEST, j.link).catch(e => log('ERR ' + e.message)); };
+document.getElementById('local').onclick = async () => { const c = connectLocal({ status: hello }); cancel = c.cancel; try { const role = await c.paired; log('paired as ' + role); run(role === 'host' ? ROLE.HOST : ROLE.GUEST, c.link); } catch (e) { log('ERR ' + e.message); } };
+document.getElementById('stop').onclick = () => cancel();
+</script>

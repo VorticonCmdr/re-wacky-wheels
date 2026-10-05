@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
+import { attachSignaling } from './src/net/signal-server.js';
 
 // Only the development server exposes the ignored originals. They never enter dist.
 function localGameFiles() {
@@ -43,9 +44,15 @@ function localGameFiles() {
   };
 }
 
+// The signaling server of COMM-BAT PLAY > WEBRTC LOCAL (docs/comm-bat.md) on the dev and preview servers: pages loaded from the same address find each other.
+function localSignaling() {
+  const attach = server => { if (server.httpServer) attachSignaling(server.httpServer); };
+  return { name: 'local-signaling', configureServer: attach, configurePreviewServer: attach };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [localGameFiles(), {
+  plugins: [localGameFiles(), localSignaling(), {
     name: 'third-party-notices',
     async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: await readFile(resolve('THIRD_PARTY_NOTICES.md'), 'utf8') });

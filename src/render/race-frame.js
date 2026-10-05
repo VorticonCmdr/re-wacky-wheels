@@ -17,7 +17,7 @@ export function drawRaceFrame(state, index) {
   renderScene(state, index, state.detail, state.demo?.pictures ? fb => drawDemoSky(fb, state.demo.pictures[state.demo.page - 1]) : null); // the page picture is the slide's sky and horizon (demo.flow)
   if (minimapAllowed({ duck: state.duck, demo: state.demo, slides: demoModel().modes.slides }) && minimapOn(state.menu.settings)) { // the overhead map: the picture of the race, its rectangle kept from the first frame, the racers' dots (hud.minimap-draw)
     if (!state.minimap) { const race = minimapRace({ cup: state.cup, demo: state.demo?.spec, track: state.world.name }); state.minimap = { picture: minimapPicture(archiveMembers(state.dat), race), saved: null }; if (!race.known) state.unproven.add('the overhead map\'s picture in the page\'s free race (the game has none: it takes the Bronze cup\'s picture of the track\'s place)'); }
-    if (state.minimap.picture) drawMinimap(index, state.minimap, minimapDots([{ x: state.car.px, y: state.car.py }, ...(state.ai ? state.ai.racers.slice(1) : [])], state.world.mapxy));
+    if (state.minimap.picture) drawMinimap(index, state.minimap, minimapDots([{ x: state.car.px, y: state.car.py }, ...(state.minimapOthers ?? (state.ai ? state.ai.racers.slice(1) : []))], state.world.mapxy)); // `minimapOthers`: the page's link race lists the other human and the computer racers itself
   }
   const gates = hudGates(state.menu.settings), text = state.laps.shown && !state.figure && !state.finished ? lapText(state.laps.lap, state.total, false) : null, unseen = text ? unseenGlyphs(text) : [];
   if (unseen.length) state.unproven.add(`the lap text glyphs ${unseen.join(' ')} (from the character map, not seen on screen)`);

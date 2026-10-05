@@ -53,3 +53,5 @@ Local observations refer to `game/WackyWhe/WACKY/WACKY.DAT` in this installation
 HTT/HI and OTT/TIM share layouts; each extension has its own entry. The FX container, its offset table, and its two embedded effect layouts have separate references. DAT is distinguished from the unrelated TRIG.DAT table. Extensionless NDIST, SLP, and VIEW are included. Executables and unrelated distribution files are outside the wiki’s format inventory.
 
 The wiki credits Phil Carter and Klas Arvidsson for track/BMC reverse engineering, and Malvineous for KLM. Source links in every entry preserve attribution and allow checking incomplete details.
+
+The page's own features that the game does not have are described apart from the formats: [comm-bat.md](comm-bat.md) (COMM-BAT PLAY over WebRTC) and [enhancements.md](enhancements.md) (the proposed graphics roadmap).
