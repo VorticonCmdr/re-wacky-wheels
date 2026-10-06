@@ -46,11 +46,14 @@ export function layerTemplate(world, mode, plainSky, horizon) {
 }
 
 // The floor of render/floor.js for a camera whose x and y may hold fractions: the texel of a sample is the floor of the exact sum, so a
-// whole-unit camera reproduces the original's 16-bit sums (the kind and depth of its pixels are layerTemplate's).
-export function drawFloor(world, camera, mode, fb) {
+// whole-unit camera reproduces the original's 16-bit sums (the kind and depth of its pixels are layerTemplate's). With `liquid`
+// ({ texels, wet, wave, shade }: water.js), every sample on a liquid texel also marks its pixels in `wet` with the liquid's kind (texels:
+// per tile and texel 0, 1 or 2) and fills `wave` with shade(kind, x, y, column, step).
+export function drawFloor(world, camera, mode, fb, liquid = null) {
   const F = models().floor, step = F.columnSteps[mode - 1], half = F.trigEntryBytes / 2, scale = 2 ** F.fixedBits; // @math the second dword of a TRIG entry is half an entry on
   const ix = Math.floor(camera.x), iy = Math.floor(camera.y), fx = (camera.x - ix) * scale, fy = (camera.y - iy) * scale;
   let angle = (((camera.heading - F.angleBias) % F.wrap) + F.wrap) % F.wrap;
+  const texels = liquid ? liquid.texels : null;
   for (let c = 0; c < F.columns; c += step) {
     const v0 = world.trig.getUint32(angle * F.trigEntryBytes, true), v1 = world.trig.getUint32(angle * F.trigEntryBytes + half, true);
     for (let k = 0; k < F.steps; k++) {
@@ -58,10 +61,11 @@ export function drawFloor(world, camera, mode, fb) {
       const x = (Math.floor((Math.imul(v0, n) + fx) / scale) + ix) & 0xffff, y = (Math.floor((Math.imul(v1, n) + fy) / scale) + iy) & 0xffff; // @math the exact product (it fits 31 bits) plus the fraction, then the 16-bit sum
       const row = (y >> F.tileShift) - F.mapOrigin, col = (x >> F.tileShift) - F.mapOrigin;
       const inside = row >= 0 && row < F.mapRows && col >= 0 && col < F.mapColumns;
-      const id = inside ? world.tiles[row * F.mapColumns + col] : 0, sheet = Math.floor(id / F.sheetCount);
-      const pixel = world.sheets[sheet][(id % F.sheetCount) * F.tileBytes + ((y & F.tileMask) << F.tileShift) + (x & F.tileMask)];
+      const id = inside ? world.tiles[row * F.mapColumns + col] : 0, sheet = Math.floor(id / F.sheetCount), texel = ((y & F.tileMask) << F.tileShift) + (x & F.tileMask);
+      const pixel = world.sheets[sheet][(id % F.sheetCount) * F.tileBytes + texel];
       const at = (F.bottomRow - k) * F.width + c;
       fb.fill(pixel, at, at + step);
+      if (texels !== null) { const kind = texels[id * F.tileBytes + texel]; if (kind !== 0) { const light = liquid.shade(kind, x, y, c, k); for (let j = at; j < at + step; j++) { liquid.wet[j] = kind; liquid.wave[j] = light; } } }
     }
     angle += step;
     if (angle >= F.wrap) angle = F.resetTo;

@@ -10,14 +10,15 @@ import { playerGeometry } from '../game/player-car.js';
 import { starterPoint } from '../game/start.js';
 import { drawFloor, layerTemplate, projectFine, roundWord, KIND } from './project.js';
 import { stampShadow, casterOf, castOf, castShadow, sunDirection, blurCast } from './shadows.js';
+import { waterShader, sunGlitter } from './water.js';
 import { models } from './models.js';
 
 // The layers beside an indexed picture: the kind and the distance of every pixel, the contact shadows, the sun shadows and the skid marks
-// on the ground, and a scratch buffer for the blur.
+// on the ground, the liquid under a floor pixel and its light (water.js), and a scratch buffer for the blur.
 export function createLayers(size) {
-  return { kind: new Uint8Array(size), depth: new Float32Array(size), shade: new Float32Array(size), cast: new Float32Array(size), mark: new Float32Array(size), scratch: new Float32Array(size) };
+  return { kind: new Uint8Array(size), depth: new Float32Array(size), shade: new Float32Array(size), cast: new Float32Array(size), mark: new Float32Array(size), wet: new Uint8Array(size), wave: new Float32Array(size), scratch: new Float32Array(size) };
 }
-export const LAYER_KEYS = ['kind', 'depth', 'shade', 'cast', 'mark'];
+export const LAYER_KEYS = ['kind', 'depth', 'shade', 'cast', 'mark', 'wet', 'wave'];
 
 // The horizon strip at a pixel offset (sky.js draws it in steps of four pixels: `offset` x pixelsPerByte).
 function drawHorizonFine(par, offset, fb) {
@@ -95,16 +96,18 @@ function blitFlatLayers(fb, L, d, distance, width, height) {
   }
 }
 
-// Draws the viewer's world into `fb` (indexed) and `L` (kind, depth, contact and sun shadows, skid marks). `P` is the present state with the viewer's seat swapped in,
-// `fine` the blend with fractions, `seat` the viewer's seat, `mode` the detail level, `sky` the demo's sky (or null), `opts` the settings.
+// Draws the viewer's world into `fb` (indexed) and `L` (kind, depth, contact and sun shadows, skid marks, liquids). `P` is the present state with the viewer's seat swapped in,
+// `fine` the blend with fractions, `seat` the viewer's seat, `mode` the detail level, `sky` the demo's sky (or null), `opts` the settings
+// (`water`: null, or the track's liquids (water.js liquidsOf), its water's strength and whether the game cycles its water's palette).
 // Returns the camera the frame was drawn from (with fractions) for the particles.
 export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts) {
   const S = models().sky, width = S.width, height = fb.length / width, world = P.world, own = fine.seats[seat];
   const camI = sceneCamera(P), camF = opts.subPixel && own ? { x: own.cx, y: own.cy, heading: camI.heading } : camI;
   const template = layerTemplate(world, mode, !sky, { from: S.horizonRow, to: S.horizonRow + S.horizonRows });
-  fb.fill(0); L.kind.set(template.kind); L.depth.set(template.depth); L.shade.fill(0); L.cast.fill(0); L.mark.fill(0);
+  fb.fill(0); L.kind.set(template.kind); L.depth.set(template.depth); L.shade.fill(0); L.cast.fill(0); L.mark.fill(0); L.wet.fill(0);
   if (sky) sky(fb); else { renderSky(world.sky, fb); drawHorizonFine(world.par, own ? own.horizon : P.car.horizon, fb); }
-  drawFloor(world, camF, mode, fb);
+  const W = opts.water, liquid = W ? { texels: W.liquids.texels, wet: L.wet, wave: L.wave, shade: waterShader(world, { time: opts.now, strength: W.strength, beach: W.beach, glitter: sunGlitter(sunDirection(world, opts.sunAngle, camI.heading), new Float32Array(width)) }) } : null;
+  drawFloor(world, camF, mode, fb, liquid);
   const records = [];
   for (const r of sceneRecords(P, camI, own ? { heading: own.tickHeading } : null)) { // the racers' direction frames stay on the tick's heading
     const a = camF !== camI ? anchorOf(r, P, fine, seat) : null, moved = a ? refine(r, world, camF, camI, a) : r;

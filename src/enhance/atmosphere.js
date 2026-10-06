@@ -1,7 +1,7 @@
-// The atmosphere of each track (docs/enhancements.md, Stage 3): the sun, the fog's colour and strength, the clouds and the lighting grade
-// the Enhanced presentation draws a track with. Set in the track editor, kept in this browser by track number (ATMOSPHERE.storageKey),
+// The atmosphere of each track (docs/enhancements.md, Stage 3): the sun, the fog's colour and strength, the clouds, the far range, the
+// water's movement and the lighting grade the Enhanced presentation draws a track with. Set in the track editor, kept in this browser by track number (ATMOSPHERE.storageKey),
 // apart from the game files; a track with nothing stored has the defaults.
-import { ATMOSPHERE, GRADES, SUN } from './config.js';
+import { ATMOSPHERE, GRADES, RANGE, SUN } from './config.js';
 
 const D = ATMOSPHERE.defaults;
 const level = (v, max = 1) => Math.round(Math.min(Math.max(Number(v), 0), max) * ATMOSPHERE.steps) / ATMOSPHERE.steps;
@@ -16,8 +16,9 @@ export function normalizeAtmosphere(input = {}) {
   if (isNumber(a.sunHeight)) out.sunHeight = level(a.sunHeight);
   if (typeof a.fogTint === 'string' && HEX.test(a.fogTint)) out.fogTint = a.fogTint.toLowerCase();
   if (isNumber(a.fog)) out.fog = level(a.fog, ATMOSPHERE.fogMax);
-  for (const k of ['clouds', 'cloudSpeed', 'gradeStrength']) if (isNumber(a[k])) out[k] = level(a[k]);
+  for (const k of ['clouds', 'cloudSpeed', 'gradeStrength', 'range', 'water']) if (isNumber(a[k])) out[k] = level(a[k]);
   if (typeof a.grade === 'string' && GRADES.names.includes(a.grade)) out.grade = a.grade;
+  if (typeof a.rangeShape === 'string' && RANGE.names.includes(a.rangeShape)) out.rangeShape = a.rangeShape;
   return out;
 }
 
@@ -68,6 +69,8 @@ export function describeAtmosphere(atmosphere) {
   const a = normalizeAtmosphere(atmosphere), parts = [], pct = v => `${Math.round(v * 100)}%`; // @math a level as a percentage
   if (a.grade !== D.grade) parts.push(`${GRADE_WORDS[a.grade]} lighting${a.gradeStrength < 1 ? ` at ${pct(a.gradeStrength)}` : ''}`);
   if (a.clouds !== D.clouds || a.cloudSpeed !== D.cloudSpeed) parts.push(a.clouds === 0 ? 'no clouds' : `clouds ${pct(a.clouds)}`);
+  if (a.range !== D.range || a.rangeShape !== D.rangeShape) parts.push(a.range === 0 ? 'no far range' : `far ${a.rangeShape} ${pct(a.range)}`);
+  if (a.water !== D.water) parts.push(a.water === 0 ? 'still water' : `water moving ${pct(a.water)}`);
   if (a.sunAngle !== D.sunAngle || a.sunHeight !== D.sunHeight) parts.push('its own sun');
   if (a.fogTint !== D.fogTint || a.fog !== D.fog) parts.push('its own fog');
   return parts.length ? parts.join(', ') : 'the defaults';

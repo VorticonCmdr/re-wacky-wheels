@@ -4,7 +4,8 @@ Status: built in the playtest page:
 - the first milestone (the Enhanced preset: smooth motion, contact shadows, surface particles and distance fog over the original art), see [the first milestone as built](#the-first-milestone-as-built);
 - skid marks and sun shadows from Stage 2, and the enhancement previews of the asset garage (the viewer), see [skid marks, sun shadows and the viewer's previews](#skid-marks-sun-shadows-and-the-viewers-previews);
 - the display options and the CRT look of Stage 1 (scaling, the 4:3 shape, full screen, scanlines, glow and curvature), see [display options and the CRT look](#display-options-and-the-crt-look);
-- from Stage 3, each track's atmosphere, clouds in the sky and track lighting, with an atmosphere preview in the track editor, see [Stage 3 as built](#stage-3-as-built-track-atmosphere-clouds-and-lighting).
+- from Stage 3, each track's atmosphere, clouds in the sky and track lighting, with an atmosphere preview in the track editor, see [Stage 3 as built](#stage-3-as-built-track-atmosphere-clouds-and-lighting);
+- then a far range of hills or mountains behind the horizon strip and the moving water, see [the far range and the moving water](#the-far-range-and-the-moving-water).
 
 Everything else in this document is a proposal.
 
@@ -74,9 +75,13 @@ Marks should survive camera movement and disappear cleanly when a race restarts.
 
 Build on the existing sky and horizon with drifting clouds and several scenery layers moving at different apparent distances. Keep the original horizon recognizable and avoid seams during a full turn. Optional enhancement metadata could select cloud speed, tint and layer depth for each track.
 
+Built: the clouds and one further layer, the far range ([below](#the-far-range-and-the-moving-water)), each set per track.
+
 ### Animated scenery and water
 
 Add restrained movement to flags, foliage and trackside props. Extend the existing palette cycling with optional water ripples or highlights. Reflections are a later feature because they need masks, scene information and careful performance budgeting.
+
+Built: the water's ripples and highlights, and a plain mirror of the haze by distance ([below](#the-far-range-and-the-moving-water)). Not built: the flags, foliage and props, and true reflections.
 
 Animation should add life without obscuring racers or making static collision boundaries look as if they move.
 
@@ -151,7 +156,7 @@ Built 2026-10-05 in `src/enhance/` and the Graphics panel of `play.html`. Origin
 
 **Using it.** In the game's own menus: GAME OPTIONS has the item DISPLAY AND EFFECTS (named ENHANCED GRAPHICS until the display options joined it; only in the page's menus, like KEYS AND SOUND; the game's records of its four-item menu are untouched). It opens:
 - PRESET, which Enter switches between ORIGINAL and ENHANCED (from CUSTOM, a mix of switches, back to ORIGINAL);
-- MOTION AND SHADOWS (smooth motion, contact, scenery and sun shadows) and SURFACE AND SKY (particles, skid marks, distance fog, and since Stage 3 clouds and track lighting): the switches with ON or OFF, which Enter flips, in two lists so that each stands below the logo ([the menus and the logo](#the-menus-and-the-logo));
+- MOTION AND SHADOWS (smooth motion, contact, scenery and sun shadows, and since the moving water skid marks) and SURFACE AND SKY (particles, moving water, distance fog, sky layers, track lighting): the switches with ON or OFF, which Enter flips, in two lists so that each stands below the logo ([the menus and the logo](#the-menus-and-the-logo));
 - EFFECT LEVELS: the strengths of the shadows, the fog and the particles (Enter goes up a quarter, from 100 to OFF), the side the sun shines from (Enter goes round in eighths; north is the top of the track map) and DEFAULT LEVELS;
 - DISPLAY OPTIONS, added with the display options of Stage 1 ([below](#display-options-and-the-crt-look));
 - LEAVE THIS MENU.
@@ -314,7 +319,7 @@ Built 2026-10-06 (Stage 1 apart from the HUD layer): `src/enhance/display.js` (t
   - 4:3 with whole rows at 1333 x 1000, and fit at 1523 x 1142: every screen pixel inside one picture pixel is exact, and every edge pixel lies within the colours of the picture pixels it covers.
   - The canvas hashes the same with the CRT look on and off, and Original with the CRT look leaves the Enhanced presentation off.
   - The menus were driven with key events: each line changes the setting, and the panel and the store follow.
-- **Not exercised in automation:** entering real full screen. The automated tab's synthetic keys carry no user activation, so the check only shows that FULL SCREEN calls the request from the key's handler.
+- **Real full screen:** not exercised in automation (the automated tab's synthetic keys carry no user activation, so that check only shows that FULL SCREEN calls the request from the key's handler). The maintainer checked it by hand on 2026-10-06: it works.
 - **Frame time.**
   - The pass costs about 0.12 ms of CPU time a frame.
   - With the graphics card made to finish every frame (a one-pixel read-back after each draw) at 2880 x 1800, a full screen of that Mac: 1.47 ms without the CRT look, 1.78 ms with it, 1.43 ms with it but no glow.
@@ -341,7 +346,7 @@ Built 2026-10-06: from Stage 3, each track's atmosphere (the per-track metadata 
   - its own fog colour (otherwise the colour of the horizon strip) and the fog's strength (up to twice the game setting).
 - **Race view:** above the controls, a race on the track as it is being edited, drawn by the Enhanced graphics with that atmosphere. It has *Play*, a *Moment* slider and an *Original* switch for the reference picture.
 - **Game page:** the playtest page draws each track with its atmosphere whenever its Enhanced graphics have the effect switched on. The Graphics panel says which atmosphere the current track has.
-- **Switches:** two new effect switches, **Clouds** and **Track lighting**, are in the panel and in GAME OPTIONS > DISPLAY AND EFFECTS > SURFACE AND SKY. That list was renamed from PARTICLES AND FOG and has six lines, so it still stands below the logo.
+- **Switches:** two new effect switches, **Clouds** and **Track lighting**, are in the panel and in GAME OPTIONS > DISPLAY AND EFFECTS > SURFACE AND SKY. That list was renamed from PARTICLES AND FOG and has six lines, so it still stands below the logo. (Since the far range, the clouds' switch is SKY LAYERS, *Sky layers* in the panel: [below](#the-far-range-and-the-moving-water).)
 - **Defaults:**
   - The Enhanced preset now includes the clouds, so every track shows some by default. Turn the *Clouds* switch off to remove them, or set a track's clouds to 0 in the editor.
   - Settings stored before Stage 3 keep their preset: an Enhanced player stays Enhanced.
@@ -349,7 +354,7 @@ Built 2026-10-06: from Stage 3, each track's atmosphere (the per-track metadata 
 
 **The atmosphere and where it is kept.**
 - **Store:** each track's atmosphere is kept in this browser under `wackywheels.atmosphere`, by track number, apart from the game files and from the editor's draft. A track with nothing stored has the defaults. The editor writes each change at once, and the playtest page and the asset garage read it whenever a race starts.
-- **Defaults draw as before:** with the clouds and the lighting off, the defaults draw exactly as before Stage 3. A run of six scenarios (the attract demo, races on tracks 2, 3 and 7, the split screen and the duck game, all other effects on) hashes every picture the same as the committed code.
+- **Defaults draw as before:** with the clouds and the lighting off, the defaults draw exactly as before Stage 3 (and the water too, since it came). A run of six scenarios (the attract demo, races on tracks 2, 3 and 7, the split screen and the duck game, all other effects on) hashes every picture the same as the committed code.
 - **Keyed by number, not archive:** the editor's own draft is keyed by its archive's fingerprint, which the playtest page does not know. An edited archive's track 12 therefore has the same atmosphere as the original's.
 - **Project file:** the editor's *Save project* file carries every stored atmosphere in a top-level `atmosphere` section. *Open project* takes them in, over this browser's for the same tracks. The project format stays version 1: an older editor ignores the section, and a project with atmospheres but no edited track opens.
 - **Not in the draft:** the browser draft does not carry the atmospheres, so restoring an old draft never brings back older atmospheres. Atmosphere edits are not part of the editor's undo, and they never enable the edited-archive export.
@@ -423,9 +428,77 @@ Built 2026-10-06: from Stage 3, each track's atmosphere (the per-track metadata 
   All of these fit a 60 Hz frame.
 
 **Not done.**
-- The roadmap's "several scenery layers" (a second, distant horizon) and animated scenery and water ("Animated scenery and water", which needs a reading of which surfaces are water, or water areas marked per track).
+- The roadmap's "several scenery layers" (a second, distant horizon) and animated water: built next, [below](#the-far-range-and-the-moving-water).
 - A HUD layer for high-density screens (Stage 1).
 - Hand-made atmospheres for the game's tracks: every track starts from the defaults.
+
+### The far range and the moving water
+
+Built 2026-10-06 on Stage 3: a second, more distant horizon behind the horizon strip (the roadmap's "several scenery layers") and water that moves ("Animated scenery and water").
+- **Code:** `src/enhance/ranges.js` (the far range), `src/enhance/water.js` (the liquids and their light), the composite's sky, strip and ground passes, the floor draw's liquid hook (`project.js` `drawFloor`) and `tileSurfaces` in `src/game/surface.js` (each tile's two terrain values, the `.SIN` dwords the game's lookup reads).
+- **Design numbers:** `RANGE` and `WATER` in `config.js`, art direction with no claims.
+
+**Using it.**
+- **Switches:** *Moving water* (MOVING WATER in the menu) is a new switch. The far range comes with the clouds under one switch, *Sky layers* (SKY LAYERS; the switch that was called Clouds, whose stored key stays `clouds`).
+- **The menu:** its two lists of switches have room for five each and DISPLAY AND EFFECTS for no third list, so SKID MARKS moved to MOTION AND SHADOWS. MOTION AND SHADOWS has smooth motion, contact, scenery and sun shadows and skid marks; SURFACE AND SKY has particles, moving water, distance fog, sky layers and track lighting. Each is six lines with LEAVE THIS MENU. The panel lists the switches in the same order.
+- **The preset:** both are part of Enhanced and only colour the picture, so switching them keeps the scene.
+- **Per track,** in the editor's Atmosphere tab: *Far range* (hills or mountains), *Range height* (0 for none; the default is half) and *Water moves* (0 for still water, as the game draws it; the default is full).
+- **Defaults:** under Enhanced every track gets low hills and moving water. With the sky layers, the lighting and the water off, every picture is the same as before (see Checks).
+
+**The far range (`ranges.js`).**
+- **Where:** it stands on the strip's last row (129) and shows on the strip pixels drawn in the strip's sky indices (the indices of the sky picture's row under them, the pixels the lighting's gradient goes over) and on the sky rows above. It is therefore behind every building, dune, cloud and sun the strips draw, and shows under their floating clouds and between tree trunks, where the strips leave sky down to the horizon. Only over the track's sky in a single view: never on a demo's slide, never in the split screen.
+- **Shapes:** hills (up to 22 rows at full height, rolling) and mountains (up to 30 rows, ridged, snow on the tops of the tallest part). The profile is value noise over a lattice that repeats every 1,024 pixels.
+- **Movement:** it follows the strip's scroll without its wraps, as the clouds do, at 0.55 of it. It moves slower than the strip's scenery and so reads as farther away, and it has no seam at the wraps or over a full turn (the profile repeats). The clouds' far bank lies above it and is drawn over the tallest mountains where they reach it (rows 100 and 101).
+- **Colour:** the sky's colour of each row (with the lighting's gradient) pulled toward a darkened haze (the track's fog colour, or its own fog tint). Faces rising to the right are lit and the others shaded, in three steps dithered only near the middle between two, as the strips' own dunes are drawn. The last rows above the foot fade into the haze. The strip's fog does not go over it, so its part in the strip meets its part above without a step; the lighting grade goes over it with the rest.
+- **Looked at** on all nine strips of the archive: those of tracks 1 and 5 (the city), 2 (the beach), 3 and 9 (the red skies) and 4 and 8 (the deserts) side by side, and those of tracks 6 and 7 (the brown and red mountains of the red-liquid and the lake tracks) in the water's pictures and in Chrome. On the red skies the range passes behind the strip's setting sun, so the sun stands in front of it.
+
+**The moving water (`water.js`).**
+- **Which surfaces:** the game's own reading of the surfaces a car sinks into (`terrain.special-values`): the surface a stopped car is drawn four rows shorter on (5), and the two that start the pit state (6, 15), whose pictures (`effects.pit`) are a splash and the car under the surface with only a periscope showing.
+  - On the user's archive (a script over the 42 tracks' tiles, not a check), 5 and 6 are blue on every track that has them. Surface 15 is red on the six tracks that have it (6, 13, 20, 25, 32 and 39), where it is the whole ground off the road.
+  - The port draws a liquid whose mean colour on the track is redder than blue as the red liquid, and the others as water. These are the port's labels, not names the game holds ([surfaces.md](surfaces.md)).
+  - A surface the game does not treat specially is drawn as one of the track's liquids when its mean colour lies within 40 of that liquid's. On the user's archive that is only surface 25, single deep-blue tiles inside the lakes of tracks 7, 14, 23 and 30, which would otherwise stand still in moving water.
+- **Marking:** the floor draw marks every liquid pixel from a table per tile and texel, made once per track from its mask sheets and `.SIN` entries (1 to 3 ms in node once the code is warm, more the first time in a session; a track with no sinking surface on its map makes none); an edited map is a new track and gets its own table.
+- **Water:** two cloud fields drift over the ground in different directions, and where their values meet runs a thin highlight line, one pixel to either side at any distance (the difference over its slope), dithered in three steps; the surface shows short, moving glints. Between the lines it is a little lighter or darker.
+  - The lines thin out between the distances 260 and 640, so the far rows do not sparkle, and are brighter in the columns that look toward the sun (the track's own sun or SUN FROM).
+  - Far water mirrors the haze (toward the lighting's sky), up to 32% at the floor's far edge.
+- **The beach tracks** (2, 12, 16, 27, 33 and 42): the game cycles their water's palette itself (`palette.cycle-rules`). There the water gets only the highlight lines, no mirror and no shimmer, so the cycle reads as before.
+- **The red liquid:** it moves at 0.35 of the water's speed, with slightly narrower lines (0.9 of the water's) that go toward an orange glow, and mirrors nothing. The lighting grade lights it only as much as the pictures, so it glows at night.
+- **Unchanged:** skid marks were never laid on these surfaces, and the particles' splashes are as before.
+
+**Checks.**
+- `npm test`: `test/sky-water.test.js` covers:
+  - the atmosphere's new values;
+  - the range's profile (it repeats without a step), its cover (it stands on the foot in every column, is no taller than its rows and moves at its parallax), its colours and the fade's cap;
+  - the composite's range: on the sky and the strip's sky-coloured pixels without the strip's fog, never on its scenery or the overlays, within the cap;
+  - the liquids of a synthetic track (water, red, the similar colour, the mask);
+  - the water's light: within its range, highlights only on a beach, moving with time, nothing at no strength;
+  - the composite's water and the red liquid's grade;
+  - the floor draw with the hook: the same picture, and every pixel marked with the kind of the texel it shows;
+  - the water as a switch that keeps the scene.
+- `npm run check:enhance`, section 3b:
+  - the dark atmosphere now also has full mountains and full water, and is compared with the sky layers, the lighting and the water all off, on the slides demo, the split screen and race 7;
+  - then one effect alone on the race view's pilot, a moment every 75 passes from 150 to 1,200: the sky layers on track 3 change only the sky and the strip's sky-coloured pixels, the water on track 7 and the red liquid on track 6 only the liquid ground, and each changes some.
+- **Hashes:** the six scenarios of the Stage 3 hash run give the same pictures as the uncommitted Stage 3 tree in two ways: with the sky layers, the lighting and the water off, and with every effect on and a night, dusk, sunset, overcast or dawn on several tracks but every track's range and water at 0.
+- **In Chrome:** the editor's new controls and the race view of track 7 with mountains and its lake, *Play* included, and the panel's switches.
+
+**Frame time.** Node v26.8.1 on the MacBook Air (Mac14,2, Apple M2), 2026-10-06: the four attract demos at five pictures a tick, every configuration drawn on the same ticks in turn. The table was measured before the water's slope test was skipped wherever no line can be, so its water rows are, if anything, high. (A `--time` run and a later run of this table made while the machine was busy with other work measured everything 20% and 140% slower, the reference renderer included, in about the same proportions; they are not quoted.)
+
+| Configuration | Mean | Median | 95th percentile |
+| --- | --- | --- | --- |
+| Reference renderer | 0.96 ms | 0.92 ms | 1.11 ms |
+| Smooth motion | 1.92 ms | 1.84 ms | 2.16 ms |
+| Smooth motion, clouds without the range | 2.44 ms | 2.35 ms | 2.75 ms |
+| Smooth motion and the sky layers (the default hills) | 2.56 ms | 2.47 ms | 2.86 ms |
+| Smooth motion and water | 2.01 ms | 1.92 ms | 2.49 ms |
+| Enhanced without the range and the water | 3.42 ms | 3.29 ms | 4.26 ms |
+| Enhanced (all) | 3.65 ms | 3.53 ms | 4.61 ms |
+
+- The range costs about 0.1 ms a frame.
+- The water costs little on the demos (only track 2's race has water). Where liquid fills the view it costs about 1.2 to 1.6 ms: the red liquid of track 6 at pass 390 drew in 3.1 ms without and 4.7 ms with it, the lake of track 7 in 3.2 and 4.4 ms (medians of 300 pictures, after the slope of a line was skipped wherever no line can be).
+
+**Not done.**
+- Flags, foliage and trackside props that move; true reflections of the scenery.
+- A third sky layer, or a range drawn from each strip's own skyline.
 
 ### Tools that make later milestones easier
 

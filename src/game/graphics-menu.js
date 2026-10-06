@@ -10,8 +10,8 @@ export const GRAPHICS_MENU = {
   item: 'DISPLAY AND EFFECTS',
   preset: 'PRESET',
   groups: [
-    { id: 'gfxShadows', name: 'MOTION AND SHADOWS', effects: [['smooth', 'SMOOTH MOTION'], ['shadows', 'CONTACT SHADOWS'], ['sceneryShadows', 'SCENERY SHADOWS'], ['sunShadows', 'SUN SHADOWS']] },
-    { id: 'gfxParticles', name: 'SURFACE AND SKY', effects: [['particles', 'PARTICLES'], ['skidMarks', 'SKID MARKS'], ['fog', 'DISTANCE FOG'], ['clouds', 'CLOUDS'], ['lighting', 'TRACK LIGHTING']] }, // the track's own atmosphere (its fog, clouds and lighting) is set in the track editor
+    { id: 'gfxShadows', name: 'MOTION AND SHADOWS', effects: [['smooth', 'SMOOTH MOTION'], ['shadows', 'CONTACT SHADOWS'], ['sceneryShadows', 'SCENERY SHADOWS'], ['sunShadows', 'SUN SHADOWS'], ['skidMarks', 'SKID MARKS']] },
+    { id: 'gfxParticles', name: 'SURFACE AND SKY', effects: [['particles', 'PARTICLES'], ['water', 'MOVING WATER'], ['fog', 'DISTANCE FOG'], ['clouds', 'SKY LAYERS'], ['lighting', 'TRACK LIGHTING']] }, // SKY LAYERS: the clouds and the far range; the track's own atmosphere (its fog, sky, water and lighting) is set in the track editor
   ],
   levelsItem: 'EFFECT LEVELS',
   levels: [['shadowStrength', 'SHADOWS'], ['fogStrength', 'FOG'], ['particleAmount', 'PARTICLES'], ['sunAngle', 'SUN FROM']],

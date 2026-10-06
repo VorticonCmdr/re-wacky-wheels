@@ -70,7 +70,7 @@ function demoOf(track) {
 export function createRacePreview(dat, track, { atmosphere = null, demoControls = true } = {}) {
   const members = archiveMembers(dat), bmc = demoControls ? members.get(`${track}.BMC`) : null, hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
   const recorded = bmc ? demoOf(track) : null, demo = recorded?.spec ?? null; // the demo's class, engine, laps and detail level (the detail sets the steering rate)
-  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${anyEffect(s)}`; // the clouds and the lighting only colour the picture (but with every effect off the enhancer takes no snapshot)
+  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${anyEffect(s)}`; // the sky's layers, the lighting and the water only colour the picture (but with every effect off the enhancer takes no snapshot)
   let state = null, enh = null, inputs = null, switches = null, controls = null;
   const index = new Uint8Array(SIZE), ref = new Uint8Array(SIZE);
 

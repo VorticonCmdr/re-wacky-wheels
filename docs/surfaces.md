@@ -37,6 +37,8 @@ Values computed from the user's `WACKY.DAT` with the SDX and `.SIN` parsers (a s
 | 28 (0x1c) | 0 | 0.000 | 0 | 0 | not read |
 | 29 (0x1d) | 0 | 0.000 | 0 | 0 | not read |
 
+The Enhanced presentation's moving water ([enhancements.md](enhancements.md#the-far-range-and-the-moving-water)) draws the surfaces a car sinks into, 5, 6 and 15, as liquids, and calls them water (5, 6: blue on every track that has them in the user's archive) and the red liquid (15: red on the six tracks that have it, the whole ground off the road there), with surface 25 (single deep-blue tiles inside the lakes of tracks 7, 14, 23 and 30) drawn as the water around it by its colour. These are the port's labels for the colours of the tiles, set by a script run over the archive, not names the game holds, and no claim.
+
 Reading the table: the surfaces with a zero fraction and a slide count of 0, 20 or less are the ones the car runs on freely; the highest fractions (0.6 to 0.7) are the surfaces that slow it most; surface 5, which shortens a stopped car's picture, slows by only 0.1 but needs 60 calls of held steering before the car slides, the largest count; surfaces 24, 28 and 29 occur in no track. Which values are grass, sand, water, ice and so on is not read: the game never names them in the code that was read.
 
 See [driving-model.md](driving-model.md) for how these fields enter the move, [sdx.md](sdx.md) and [sin.md](sin.md) for the files, and [TODO.md](TODO.md) for what is unread.

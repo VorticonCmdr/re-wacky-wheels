@@ -9,8 +9,9 @@
 //  3. the largest steps between ticks stay under the discontinuity limits, particles and skid marks stay under their caps and a reset
 //     leaves none;
 //  4. the asset garage's race preview runs, draws, and reaches the same tick going back and forward;
-//  4b. Stage 3: the clouds and the track lighting change the track's sky and world but never a demo's slide page, the split screen's
-//     strips or the overlays;
+//  4b. Stage 3: the sky's layers (the clouds and the far range), the track lighting and the moving water change the track's sky and world
+//     but never a demo's slide page, the split screen's strips or the overlays; the sky's layers alone change only the sky and the strip's
+//     sky-coloured pixels, and the water alone only the liquid pixels of the ground;
 //  5. with --time, the mean and 95th percentile draw time of each effect on the demos, on this machine.
 // usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time]
 import { readFile } from 'node:fs/promises';
@@ -39,6 +40,7 @@ import { createRandom } from '../src/enhance/particles.js';
 import { KIND } from '../src/enhance/project.js';
 import { ATMOSPHERE } from '../src/enhance/config.js';
 import { decodePcxMember } from '../src/formats/pcx.js';
+import { stripSkyIndices } from '../src/enhance/clouds.js';
 
 const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const dat = path ? new Uint8Array(await readFile(path)) : await (await openGameFolder()).open('WACKY.DAT');
@@ -236,8 +238,8 @@ for (const track of ['2', '6', '12', '27']) {
   } catch (e) { fail(`preview of track ${track}: ${e.message}`); }
 }
 
-// ---- 3b. Stage 3: with a dark, cloudy atmosphere on every track, the clouds and the lighting change the track's sky and world, and leave alone
-// what is not the track's sky (a demo's slide page, the split screen's strips) and the overlays
+// ---- 3b. Stage 3: with a dark, cloudy, mountainous atmosphere on every track, the sky's layers, the lighting and the water change the track's
+// sky and world, and leave alone what is not the track's sky (a demo's slide page, the split screen's strips) and the overlays
 function slides() {
   const spec = demoSpec('ordering', null), state = { ...base(), class: spec.class, engine: spec.engine, detail: spec.detail, humanSlot: 0, demo: { kind: 'ordering', spec, mode: spec.mode, page: 1, pictures: spec.pages.map(n => decodePcxMember(members.get(n))) } };
   startRace(state, { ...loadTrack(dat, String(spec.track), spec.engine, 0), lion: lionBytes(members) }, spec.laps); beginIntro(state);
@@ -245,10 +247,10 @@ function slides() {
   return { name: `slides of track ${spec.track}`, state, input: () => { if (state.intro) return {}; const s = bmcStep(bmc); bmc = s.state; return s.controls.end ? {} : s.controls; } };
 }
 {
-  const dark = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9 }])); // @math every track night and cloudy
+  const dark = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1 }])); // @math every track night, cloudy and mountainous
   for (const [make, sky] of [[slides, false], [() => versus(1, 'race'), false], [() => race(7), true]]) { // @math a slides demo, the split screen, a race on a track with sky
     const sc = make(), s = sc.state, on = createEnhancer({ storage: memory(dark) }), off = createEnhancer({ storage: memory(dark) });
-    on.configure(PRESETS.enhanced); off.configure({ ...PRESETS.enhanced, clouds: false, lighting: false });
+    on.configure(PRESETS.enhanced); off.configure({ ...PRESETS.enhanced, clouds: false, lighting: false, water: false });
     const a = new Uint8ClampedArray(SIZE * 4), b = new Uint8ClampedArray(SIZE * 4), idx = new Uint8Array(SIZE), ref = new Uint8Array(SIZE); // @math four bytes a colour
     let wrong = null, changed = 0, compared = 0;
     for (let t = 0; t < Math.min(frames, 300) && !wrong; t++) { // @math long enough for the slides and the clouds to move
@@ -265,9 +267,31 @@ function slides() {
       }
       compared++;
     }
-    if (wrong) fail(`${sc.name}, clouds and lighting: ${wrong}`);
-    else if (sky && !changed) fail(`${sc.name}: the clouds and the lighting changed no pixel of the track's sky`);
-    else console.log(`ok   ${sc.name}: ${compared} pictures with a night and cloudy atmosphere: the overlays untouched${sky ? `, ${changed} sky pixels changed` : ', the sky rows (not the track\'s sky) untouched'}`);
+    if (wrong) fail(`${sc.name}, sky layers, lighting and water: ${wrong}`);
+    else if (sky && !changed) fail(`${sc.name}: the sky layers and the lighting changed no pixel of the track's sky`);
+    else console.log(`ok   ${sc.name}: ${compared} pictures with a night, cloudy, mountainous atmosphere: the overlays untouched${sky ? `, ${changed} sky pixels changed` : ', the sky rows (not the track\'s sky) untouched'}`);
+  }
+  // One effect alone, on the race view's pilot (it drives the computer cars' route, over the bridges and the lakes): the sky's layers change
+  // only the sky and the strip's pixels in its sky's indices, the water only the ground's liquid pixels; each changes some.
+  for (const [track, label, key, own] of [[3, 'the sky layers', 'clouds', (L, i, idx, w) => L.kind[i] === KIND.sky || (L.kind[i] === KIND.horizon && stripSkyIndices(w)[(Math.floor(i / WIDTH) - 110) * 256 + idx[i]] === 1)], [7, 'the water', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0], [6, 'the red liquid', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0]]) { // @math tracks with a sun in the strip, a lake, the red liquid; the strip's first row and 256 index flags a row
+    const atmo = { [track]: { range: 1, rangeShape: 'mountains', clouds: 0.9, water: 1 } }, base = { ...PRESETS.enhanced, lighting: false, clouds: false, water: false, [key]: true };
+    const pOn = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false }), pOff = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false });
+    const o = new Uint8ClampedArray(SIZE * 4), a = new Uint8ClampedArray(SIZE * 4), b = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+    let wrong = null, changed = 0;
+    for (let pass = 150; pass <= 1200 && !wrong; pass += 75) { // @math a moment every 75 passes of the pilot's drive
+      pOn.seek(pass, base); pOff.seek(pass, { ...base, [key]: false });
+      pOff.draw({ alpha: 1, hud: true }, o, b); pOn.draw({ alpha: 1, hud: true }, o, a);
+      const { L, mask } = pOn.enhancer.inspect(), w = pOn.race.world, idx = new Uint8Array(SIZE);
+      pOn.enhancer.drawSingle(pOn.race, 1, { index: idx, out: new Uint8ClampedArray(SIZE * 4), palette: rgbaPalette(w.palette), mode: 1, sky: sceneSky(pOn.race), overlays: (p, fb) => drawRaceOverlays({ ...p, demo: null }, fb) }); // @math four bytes a colour: the indexed picture of the same moment
+      for (let i = 0; i < SIZE && !wrong; i++) {
+        if ([0, 1, 2].every(k => a[i * 4 + k] === b[i * 4 + k])) continue; // @math four bytes a colour, three compared
+        if (mask[i] || !own(L, i, idx, w)) wrong = `pass ${pass}: the pixel ${i % WIDTH},${Math.floor(i / WIDTH)} (kind ${L.kind[i]}) changed`;
+        else changed++;
+      }
+    }
+    if (wrong) fail(`track ${track}, ${label} alone: ${wrong}`);
+    else if (!changed) fail(`track ${track}: ${label} changed no pixel`);
+    else console.log(`ok   track ${track}, ${label} alone: ${changed} pixels changed, all of them its own`);
   }
 }
 
@@ -275,7 +299,7 @@ function slides() {
 if (timing) {
   const device = (() => { try { return process.platform === 'darwin' ? execSync('sysctl -n hw.model', { encoding: 'utf8' }).trim() : os.hostname(); } catch { return os.hostname(); } })();
   console.log(`\ndraw time per frame on ${device}, ${os.cpus()[0].model}, node ${process.version}, about 5 pictures a tick (60 Hz over the 11.3 Hz ticks):`);
-  const configs = [['reference renderer', null], ['smooth motion', { ...PRESETS.original, smooth: true }], ['+ shadows', { ...PRESETS.original, smooth: true, shadows: true, sceneryShadows: true }], ['+ sun shadows', { ...PRESETS.original, smooth: true, sunShadows: true }], ['+ particles', { ...PRESETS.original, smooth: true, particles: true }], ['+ skid marks', { ...PRESETS.original, smooth: true, skidMarks: true }], ['+ fog', { ...PRESETS.original, smooth: true, fog: true }], ['+ clouds', { ...PRESETS.original, smooth: true, clouds: true }], ['+ lighting (sunset)', { ...PRESETS.original, smooth: true, lighting: true }, { grade: 'sunset' }], ['Enhanced (all)', PRESETS.enhanced], ['Enhanced, sunset', PRESETS.enhanced, { grade: 'sunset' }]];
+  const configs = [['reference renderer', null], ['smooth motion', { ...PRESETS.original, smooth: true }], ['+ shadows', { ...PRESETS.original, smooth: true, shadows: true, sceneryShadows: true }], ['+ sun shadows', { ...PRESETS.original, smooth: true, sunShadows: true }], ['+ particles', { ...PRESETS.original, smooth: true, particles: true }], ['+ skid marks', { ...PRESETS.original, smooth: true, skidMarks: true }], ['+ fog', { ...PRESETS.original, smooth: true, fog: true }], ['+ sky layers', { ...PRESETS.original, smooth: true, clouds: true }], ['+ sky, mountains', { ...PRESETS.original, smooth: true, clouds: true }, { range: 1, rangeShape: 'mountains' }], ['+ water', { ...PRESETS.original, smooth: true, water: true }], ['+ lighting (sunset)', { ...PRESETS.original, smooth: true, lighting: true }, { grade: 'sunset' }], ['Enhanced (all)', PRESETS.enhanced], ['Enhanced, sunset', PRESETS.enhanced, { grade: 'sunset' }]];
   for (const [label, cfg, atmosphere] of configs) {
     const times = [];
     for (const race of [1, 2, 3, 4]) { // @math the four attract races

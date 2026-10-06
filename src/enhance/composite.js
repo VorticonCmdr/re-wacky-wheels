@@ -1,6 +1,6 @@
 // The last step of the Enhanced presentation: the indexed picture through the frame's palette (the palette cycle and the demo's fade
-// included), then on the world's pixels only the track's sky (the lighting's gradient and the clouds), the shadows on the ground, the distance
-// fog, the particles and last the lighting grade. The pixels the overlays drew (the HUD, the overhead map, the finish labels, the messages,
+// included), then on the world's pixels only the track's sky (the lighting's gradient, the far range and the clouds), the water, the shadows
+// on the ground, the distance fog, the particles and last the lighting grade. The pixels the overlays drew (the HUD, the overhead map, the finish labels, the messages,
 // the menus, the split screen's strips) are taken as they are: the overlay code draws a second time into a buffer of sentinels, and
 // whatever it wrote there is the mask. The sky rows are the track's sky only in a single view of a race: the split screen's are the strips'
 // picture and a demo's slide its page, which the enhancer marks by giving no `sky` and a grade without its sky.
@@ -43,22 +43,32 @@ const mixInto = (c, target, t) => [c[0] + (target[0] - c[0]) * t, c[1] + (target
 
 // out: RGBA bytes of the screen. `index` the indexed picture with the overlays, `mask` the overlay pixels, `L` the composed layers, `palette`
 // the RGBA palette of the frame, `effects` { shadow: strength or 0, fog: { color, ramp, horizon } or null, sky: the track's sky or null,
-// grade: the lighting or null, cap: the largest component (the demo's fade) }, `splats` the particle discs with `map` (the row of the
-// viewer's picture to the screen row, or -1). `sky` is { rows, stripRows, strip, tint: { colours, amount } or null, clouds: [{ alpha, light, lit,
-// shade }] }: per sky row (and strip row) the colour the lighting mixes the sky toward, `strip` the strip's sky indices (clouds.js
-// stripSkyIndices: the lighting's gradient goes on over them), per sky row each bank's lit and shaded colour, per pixel each bank's cover and light. `grade` is grade.js gradeOf's
-// with `trackSky`: whether the sky rows are the track's sky.
+// water: the water's colours or null, grade: the lighting or null, cap: the largest component (the demo's fade) }, `splats` the particle
+// discs with `map` (the row of the viewer's picture to the screen row, or -1). `sky` is { rows, stripRows, strip, tint: { colours, amount } or
+// null, range: { cover: { alpha, tone, snow }, colours: { lit, shade, snow } } or null, clouds: [{ alpha, light, lit, shade }] }: per sky row (and strip row) the colour
+// the lighting mixes the sky toward, `strip` the strip's sky indices (clouds.js stripSkyIndices: the lighting's gradient and the far range go
+// on over them), the far range's cover and light per pixel and its colours per row (ranges.js), per sky row each bank's lit and shaded
+// colour, per pixel each bank's cover and light. `water` is { sky, highlight, glow, reflect (a table by distance) or null }: where the layer
+// `wet` marks water (1) or the red liquid (2), the water mirrors `sky` by its distance, and the layer `wave` darkens (below 0) or goes toward
+// `highlight` (water) or `glow` (the red liquid). `grade` is grade.js gradeOf's with `trackSky`: whether the sky rows are the track's sky.
 export function composite(out, { index, mask, L, palette, width, effects, splats = [] }) {
-  const { shadow, fog, sky = null, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
-  const fogC = fog ? fog.color.map(v => Math.min(v, cap)) : null, ramp = fog?.ramp, last = ramp ? ramp.length - 1 : 0, skyEnd = sky ? sky.rows * width : 0, stripEnd = sky?.tint ? (sky.rows + sky.stripRows) * width : 0;
+  const { shadow, fog, sky = null, water = null, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
+  const fogC = fog ? fog.color.map(v => Math.min(v, cap)) : null, ramp = fog?.ramp, last = ramp ? ramp.length - 1 : 0, skyEnd = sky ? sky.rows * width : 0, stripEnd = sky?.strip ? (sky.rows + sky.stripRows) * width : 0;
+  const range = sky?.range ?? null, rangeAlpha = range?.cover.alpha, rangeTone = range?.cover.tone, rangeSnow = range?.cover.snow, rangeLit = range?.colours.lit, rangeShade = range?.colours.shade, rangeWhite = range?.colours.snow;
+  const wet = water ? L.wet : null, wave = L.wave, reflect = water?.reflect ?? null, reflectLast = reflect ? reflect.length - 1 : 0, mirror = water?.sky, highlight = water?.highlight, glow = water?.glow;
   for (let i = 0; i < index.length; i++) {
     const p = index[i] * 4, o = i * 4; // @math four bytes a colour
     let r = palette[p], g = palette[p + 1], b = palette[p + 2]; // @math the three components
     if (!mask[i]) {
       const kind = L.kind[i];
-      if (i < skyEnd && kind === KIND.sky) { // the track's sky: the lighting's gradient, then the clouds over it
+      let ranged = false;
+      if (i < skyEnd && kind === KIND.sky) { // the track's sky: the lighting's gradient, the far range, then the clouds over them
         const k = Math.floor(i / width) * 3, t = sky.tint; // @math three components a row
         if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
+        if (range && rangeAlpha[i]) {
+          if (rangeSnow[i]) { r = rangeWhite[k]; g = rangeWhite[k + 1]; b = rangeWhite[k + 2]; } // @math the three components
+          else { const v = rangeTone[i]; r = rangeShade[k] + (rangeLit[k] - rangeShade[k]) * v; g = rangeShade[k + 1] + (rangeLit[k + 1] - rangeShade[k + 1]) * v; b = rangeShade[k + 2] + (rangeLit[k + 2] - rangeShade[k + 2]) * v; } // @math the three components
+        }
         for (const c of sky.clouds) { // the banks over it
           const a = c.alpha[i]; if (!(a > 0)) continue;
           const l = c.light[i], cr = c.shade[k] + (c.lit[k] - c.shade[k]) * l, cg = c.shade[k + 1] + (c.lit[k + 1] - c.shade[k + 1]) * l, cb = c.shade[k + 2] + (c.lit[k + 2] - c.shade[k + 2]) * l; // @math the three components
@@ -66,15 +76,30 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
         }
         r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
       }
-      else if (i < stripEnd && kind === KIND.horizon) { // the strip's sky-coloured background: the gradient goes on over it
+      else if (i < stripEnd && kind === KIND.horizon) { // the strip's sky-coloured background: the gradient and the far range go on over it, as over the sky above
         const row = Math.floor(i / width), t = sky.tint;
-        if (sky.strip[(row - sky.rows) * 256 + index[i]]) { const k = row * 3; r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math a flag for each palette index; three components a row
+        if (sky.strip[(row - sky.rows) * 256 + index[i]]) { // @math a flag for each palette index
+          const k = row * 3; // @math three components a row
+          if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
+          if (range && rangeAlpha[i]) { // the range's own haze: no strip fog over it, so it meets its part above the strip without a step
+            ranged = true;
+            if (rangeSnow[i]) { r = rangeWhite[k]; g = rangeWhite[k + 1]; b = rangeWhite[k + 2]; } // @math the three components
+            else { const v = rangeTone[i]; r = rangeShade[k] + (rangeLit[k] - rangeShade[k]) * v; g = rangeShade[k + 1] + (rangeLit[k + 1] - rangeShade[k + 1]) * v; b = rangeShade[k + 2] + (rangeLit[k + 2] - rangeShade[k + 2]) * v; } // @math the three components
+          }
+          r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
+        }
       }
-      if (kind === KIND.floor) { // the ground: the shadows (the darker of contact and sun), then the skid marks
+      if (kind === KIND.floor) { // the ground: the water, the shadows (the darker of contact and sun), then the skid marks
+        if (wet !== null && wet[i] !== 0) {
+          if (wet[i] === 1 && reflect !== null) { const t = reflect[Math.min(Math.round(L.depth[i]), reflectLast)]; r += (mirror[0] - r) * t; g += (mirror[1] - g) * t; b += (mirror[2] - b) * t; } // @math the three components
+          const v = wave[i];
+          if (v < 0) { r *= 1 + v; g *= 1 + v; b *= 1 + v; }
+          else if (v > 0) { const h = wet[i] === 1 ? highlight : glow; r += (h[0] - r) * v; g += (h[1] - g) * v; b += (h[2] - b) * v; } // @math the three components
+        }
         const dark = Math.max(L.shade[i] * darken, L.cast[i] * sunDarken), m = (1 - dark) * (1 - L.mark[i]);
         if (m !== 1) { r *= m; g *= m; b *= m; }
       }
-      if (fogC && kind !== KIND.sky) {
+      if (fogC && kind !== KIND.sky && !ranged) {
         const t = kind === KIND.horizon ? fog.horizon : ramp[Math.min(Math.round(L.depth[i]), last)];
         r += (fogC[0] - r) * t; g += (fogC[1] - g) * t; b += (fogC[2] - b) * t; // @math the three components
       }
@@ -98,13 +123,13 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
       }
     }
   }
-  if (grade) { // the lighting, last: over the particles too, never over the overlays nor over sky rows that are not the track's sky (grade.js gradePixel, inlined)
+  if (grade) { // the lighting, last: over the particles too, never over the overlays nor over sky rows that are not the track's sky (grade.js gradePixel, inlined); the pictures and the red liquid get its weaker part
     const world = grade.lut, worldSat = grade.saturation, pictures = grade.sprite.lut, picturesSat = grade.sprite.saturation;
     for (let i = 0, o = 0; i < index.length; i++, o += 4) { // @math four bytes a colour
       if (mask[i]) continue;
       const kind = L.kind[i];
       if (kind === KIND.sky && !grade.trackSky) continue;
-      const t = kind === KIND.sprite ? pictures : world, s = kind === KIND.sprite ? picturesSat : worldSat;
+      const weak = kind === KIND.sprite || (kind === KIND.floor && L.wet[i] === 2), t = weak ? pictures : world, s = weak ? picturesSat : worldSat; // @math the red liquid (wet 2) glows: lit as the pictures are
       const r = t[out[o]], g = t[256 + out[o + 1]], b = t[512 + out[o + 2]], grey = 0.299 * r + 0.587 * g + 0.114 * b; // @math the green and blue tables follow the red one; the Rec. 601 luma weights
       out[o] = Math.min(grey + (r - grey) * s, cap); out[o + 1] = Math.min(grey + (g - grey) * s, cap); out[o + 2] = Math.min(grey + (b - grey) * s, cap); // @math the three components
     }

@@ -1,9 +1,9 @@
 // The track editor's Atmosphere tab (docs/enhancements.md, Stage 3; docs/track-editor.md): the atmosphere of the selected track (the sun, the
-// fog, the clouds, the lighting) and a race view of the track as it is being edited, drawn by the Enhanced presentation over the original
+// fog, the clouds, the far range, the water, the lighting) and a race view of the track as it is being edited, drawn by the Enhanced presentation over the original
 // art. The atmosphere is kept in this browser by track number (src/enhance/atmosphere.js), apart from the game files and the editor's own
 // draft: the playtest page draws the track with it. Nothing here changes a track's game files.
 import { normalizeAtmosphere, defaultAtmosphere, isDefaultAtmosphere, loadAtmospheres, saveAtmosphere, saveAtmospheres } from './enhance/atmosphere.js';
-import { ATMOSPHERE, GRADES, PRESETS, LEVELS } from './enhance/config.js';
+import { ATMOSPHERE, GRADES, RANGE, PRESETS, LEVELS } from './enhance/config.js';
 import { normalize } from './enhance/settings.js';
 import { createRacePreview } from './viewer-preview.js';
 import { patchArchive, trackChanges } from './track-model.js';
@@ -16,6 +16,7 @@ const GRADE_LABELS = {
   night: 'Night',
   overcast: 'Overcast',
 };
+const RANGE_LABELS = { hills: 'Hills', mountains: 'Mountains' };
 const OWN_SUN = { sunAngle: LEVELS.sunAngle, sunHeight: 0.5 }; // where the sliders start when a track gets its own sun: the game setting's direction, half way up
 const STRIP_FOG = '#a0b4c8'; // where the colour picker starts when a track gets its own fog colour
 const WIDTH = 320;
@@ -30,7 +31,7 @@ export function createAtmospherePanel({ $, context, status }) {
     original = new Uint8ClampedArray(WIDTH * HEIGHT * 4),
     enhanced = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
   const settings = normalize(PRESETS.enhanced);
-  const CONTROLS = ['atmo-grade', 'atmo-gradeStrength', 'atmo-clouds', 'atmo-cloudSpeed', 'atmo-ownSun', 'atmo-sunAngle', 'atmo-sunHeight', 'atmo-ownFog', 'atmo-fogTint', 'atmo-fog', 'atmo-reset', 'atmo-play', 'atmo-original', 'atmo-moment'];
+  const CONTROLS = ['atmo-grade', 'atmo-gradeStrength', 'atmo-clouds', 'atmo-cloudSpeed', 'atmo-rangeShape', 'atmo-range', 'atmo-water', 'atmo-ownSun', 'atmo-sunAngle', 'atmo-sunHeight', 'atmo-ownFog', 'atmo-fogTint', 'atmo-fog', 'atmo-reset', 'atmo-play', 'atmo-original', 'atmo-moment'];
   let local = loadAtmospheres(), // this session's atmospheres: what the browser keeps, and what it did not keep (`unsaved`)
     values = defaultAtmosphere(),
     stem = null,
@@ -61,6 +62,9 @@ export function createAtmospherePanel({ $, context, status }) {
   $('atmo-grade').replaceChildren(
     ...GRADES.names.map((name) => new Option(GRADE_LABELS[name], name))
   );
+  $('atmo-rangeShape').replaceChildren(
+    ...RANGE.names.map((name) => new Option(RANGE_LABELS[name], name))
+  );
   function showValues() {
     const a = values,
       none = stem === null;
@@ -75,6 +79,10 @@ export function createAtmospherePanel({ $, context, status }) {
     $('atmo-clouds').value = String(a.clouds);
     $('atmo-cloudSpeed').value = String(a.cloudSpeed);
     $('atmo-cloudSpeed').disabled = a.clouds === 0;
+    $('atmo-rangeShape').value = a.rangeShape;
+    $('atmo-rangeShape').disabled = a.range === 0;
+    $('atmo-range').value = String(a.range);
+    $('atmo-water').value = String(a.water);
     const ownSun = a.sunAngle !== null || a.sunHeight !== null;
     $('atmo-ownSun').checked = ownSun;
     $('atmo-sunAngle').value = String(a.sunAngle ?? OWN_SUN.sunAngle);
@@ -87,7 +95,7 @@ export function createAtmospherePanel({ $, context, status }) {
     $('atmo-fog').value = String(a.fog);
     $('atmo-fog').max = String(ATMOSPHERE.fogMax);
     const count = Object.keys(local).length;
-    $('atmo-note').textContent = `Track ${stem}'s atmosphere is kept in this browser and drawn by the playtest page when its Enhanced graphics have clouds, track lighting, fog or sun shadows on. ${count === 1 ? '1 track has its own atmosphere' : `${count} tracks have their own atmosphere`}.${unsaved.size ? ' This browser did not keep some of them: they stay for this session, and Save project puts them in the project file.' : ''}`;
+    $('atmo-note').textContent = `Track ${stem}'s atmosphere is kept in this browser and drawn by the playtest page when its Enhanced graphics have sky layers, moving water, track lighting, fog or sun shadows on. ${count === 1 ? '1 track has its own atmosphere' : `${count} tracks have their own atmosphere`}.${unsaved.size ? ' This browser did not keep some of them: they stay for this session, and Save project puts them in the project file.' : ''}`;
   }
   function set(next) {
     if (stem === null) return;
@@ -109,12 +117,18 @@ export function createAtmospherePanel({ $, context, status }) {
   levelInput('atmo-gradeStrength', 'gradeStrength');
   levelInput('atmo-clouds', 'clouds');
   levelInput('atmo-cloudSpeed', 'cloudSpeed');
+  levelInput('atmo-range', 'range');
+  levelInput('atmo-water', 'water');
   levelInput('atmo-sunAngle', 'sunAngle');
   levelInput('atmo-sunHeight', 'sunHeight');
   levelInput('atmo-fog', 'fog');
   // A changed select or box gives up the focus, as the panel's buttons do: a focused one would take Space and the editor's letters.
   $('atmo-grade').addEventListener('change', (e) => {
     set({ ...values, grade: e.target.value });
+    e.target.blur();
+  });
+  $('atmo-rangeShape').addEventListener('change', (e) => {
+    set({ ...values, rangeShape: e.target.value });
     e.target.blur();
   });
   $('atmo-ownSun').addEventListener('change', (e) => {

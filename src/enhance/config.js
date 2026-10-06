@@ -5,14 +5,15 @@
 // this file: any other module of the directory may use only 0, 1 and lines tagged `// @math <reason>`.
 
 // The presets. Original is the reference renderer of the port, untouched; Enhanced turns every effect on (Stage 3 added the clouds and the
-// track lighting).
-export const EFFECTS = ['smooth', 'shadows', 'sceneryShadows', 'sunShadows', 'particles', 'skidMarks', 'fog', 'clouds', 'lighting'];
+// track lighting, then the far range and the water). The switch `clouds` is the sky's layers: the clouds and the far range behind the
+// horizon strip (SKY LAYERS in the game menu, whose two lists of switches have room for five each).
+export const EFFECTS = ['smooth', 'shadows', 'sceneryShadows', 'sunShadows', 'skidMarks', 'particles', 'water', 'fog', 'clouds', 'lighting']; // in the order of the menu's lists and the panel
 export const PRESETS = {
-  original: { smooth: false, shadows: false, sceneryShadows: false, sunShadows: false, particles: false, skidMarks: false, fog: false, clouds: false, lighting: false },
-  enhanced: { smooth: true, shadows: true, sceneryShadows: true, sunShadows: true, particles: true, skidMarks: true, fog: true, clouds: true, lighting: true },
+  original: { smooth: false, shadows: false, sceneryShadows: false, sunShadows: false, particles: false, skidMarks: false, fog: false, clouds: false, lighting: false, water: false },
+  enhanced: { smooth: true, shadows: true, sceneryShadows: true, sunShadows: true, particles: true, skidMarks: true, fog: true, clouds: true, lighting: true, water: true },
 };
 // The switches that only change how the picture is coloured: switching them keeps the scene (the snapshots, particles and skid marks).
-export const LOOK_EFFECTS = ['clouds', 'lighting'];
+export const LOOK_EFFECTS = ['clouds', 'lighting', 'water'];
 
 // The intensity controls of the page (each 0 to 1) and their defaults; `sunAngle` is the sun's direction in the world as a part of a turn
 // (the game's tracks carry no sun: this one serves every track that has no sun in its atmosphere, ATMOSPHERE below).
@@ -153,7 +154,7 @@ export const DISPLAY_MENU = {
 
 // Stage 3 (docs/enhancements.md): the atmosphere of each track, set in the track editor and kept in this browser under `storageKey` by track
 // number, apart from the game files. A track with nothing stored has the defaults, which draw exactly as before Stage 3 apart from the
-// clouds: the sun of the game setting (SUN FROM) at the height of SUN.length, the fog colour taken from the horizon strip at the strength of
+// clouds, the far range and the moving water: the sun of the game setting (SUN FROM) at the height of SUN.length, the fog colour taken from the horizon strip at the strength of
 // the game setting, and no lighting grade.
 // - `sunAngle`: null for the game setting, else a part of a turn; `sunHeight`: null for SUN.length, else 0 (a sun `sunElevation[0]` degrees
 //   above the horizon: long shadows) to 1 (`sunElevation[1]` degrees: short ones).
@@ -161,9 +162,11 @@ export const DISPLAY_MENU = {
 // - `clouds`: how much of the cloud banks is cloud (0 none, the default about a fifth of their middle rows, 1 nearly all); `cloudSpeed`:
 //   how fast the wind moves them.
 // - `grade`: one of GRADES.names; `gradeStrength`: how much of it, 0 to 1.
+// - `range`: how tall the far range behind the horizon strip is (0 none, 1 RANGE's `rows` of its shape); `rangeShape`: one of RANGE.names.
+// - `water`: how strongly the water and the red liquid move (0 still, as the game draws them).
 export const ATMOSPHERE = {
   storageKey: 'wackywheels.atmosphere',
-  defaults: { sunAngle: null, sunHeight: null, fogTint: null, fog: 1, clouds: 0.35, cloudSpeed: 0.3, grade: 'none', gradeStrength: 1 },
+  defaults: { sunAngle: null, sunHeight: null, fogTint: null, fog: 1, clouds: 0.35, cloudSpeed: 0.3, grade: 'none', gradeStrength: 1, range: 0.5, rangeShape: 'hills', water: 1 },
   fogMax: 2,
   steps: 40, // levels kept in fortieths
   sunElevation: [10, 70], // degrees
@@ -208,6 +211,81 @@ export const CLOUDS = {
   reliefGain: 3, // the light of a pixel: one half plus this times how much denser the field is below it than above
   levels: 4,
   lightLevels: 3,
+};
+
+// The far range: a second, more distant horizon of hills or mountains behind the horizon strip's scenery, in the haze. It stands on the
+// strip's last row and shows on the strip's sky-coloured pixels (those in the indices of the sky picture's row under them) and the sky rows
+// above, over the track's sky in a single view only (never a demo's slide, never the split screen). It turns with the strip at `parallax` of
+// the strip's scroll (without its wraps), so it moves slower than the strip's scenery and reads as farther away; its profile repeats every
+// `period` pixels, so a full turn has no seam. The clouds' far bank lies above it.
+// - per shape: `rows` the tallest it stands at the track's full range, `cells` the coarsest lattice of its profile across the period and
+//   `octaves` the finer ones (each twice as fine, half as strong), `ridged` folds each octave into ridges (peaks), `low` the profile's
+//   lowest point against its highest (a range without gaps), `snow` the part of its height above which its tops are snow (null for none).
+// - the colour of a row: the sky's colour of that row pulled `haze` of the way to the track's haze (its fog colour, `dark` darker); a
+//   slope rising to the right faces the light and goes `lit` of the way back to the sky, one falling to the right `shade` of the way to the
+//   dark haze (the slope in rows a pixel, taken over `reach` pixels either way, times `relief`, a half either way); the last `mist` rows above the foot fade toward the haze by
+//   up to `mistAmount`; snow goes `snowLight` of the way to white as far as the sky is bright (CLOUDS' brightSky and dimLight), then
+//   `snowHaze` of the way to the range's colour.
+// - `levels`: the steps of light; a pixel whose light lies within `dither` / 2 of the middle between two steps is dithered between them, the
+//   rest are flat faces, as the strips' own dunes are drawn.
+export const RANGE = {
+  names: ['hills', 'mountains'],
+  seed: 0x6a1e5,
+  period: 1024,
+  parallax: 0.55,
+  shapes: {
+    hills: { rows: 22, cells: 10, octaves: 4, ridged: false, low: 0.18, snow: null },
+    mountains: { rows: 30, cells: 8, octaves: 5, ridged: true, low: 0.1, snow: 0.72 },
+  },
+  haze: 0.75,
+  dark: 0.45,
+  lit: 0.3,
+  shade: 0.3,
+  relief: 0.6,
+  reach: 3,
+  dither: 0.6,
+  mist: 4,
+  mistAmount: 0.4,
+  snowLight: 0.75,
+  snowHaze: 0.3,
+  levels: 3,
+};
+
+// The water: the surfaces a car sinks into move. Which they are is the game's own reading (terrain.special-values): the surface a stopped
+// car is drawn four rows shorter on and the two that start the pit state, whose pictures (effects.pit) are a splash and the car under
+// the surface with only a periscope showing. On the user's archive the first two are blue on every track that has them and the third red
+// (tracks 6, 13, 20, 25, 32 and 39, where it is the whole ground off the road): the port draws a liquid whose mean colour is redder than
+// blue as the red liquid, the others as water. A surface the game does not treat specially is drawn as one of the track's liquids when
+// its mean colour lies within `similar` of that liquid's (the deep patches in the lakes of tracks 7, 14, 23 and 30).
+// - the movement: two cloud fields (`texture` texels, CLOUDS' octaves; seeds `seed` and the next) laid on the ground at `scale` texels a
+//   world unit, drifting by `flow` texels a second; where the two have the same value a bright line runs (the network of a rippled
+//   surface's highlights), `line` pixels to either side at any distance (the difference over its slope; full in the middle `1 / core` of
+//   it, fading toward its edges), and between the lines the
+//   surface is a little lighter or darker (`shimmer`). Highlights take `levels` dithered steps; they thin out between `far` (distances of
+//   the floor's depth table) so the far rows do not sparkle, and are brighter (and `sunWidth` times as much wider) in the columns that look
+//   toward the sun (`sun` times the view's alignment with the sun to the power `sunPower`).
+// - water: it mirrors the track's haze (its fog colour, the way toward the lighting's sky at the horizon that the sky goes) the more the
+//   farther it is, from `reflect.start` of the floor's farthest distance to `reflect.amount` at its far edge; a highlight goes
+//   `highlight` of the way from that colour to white. On the beach tracks the game cycles the water's palette itself: there the water only gets the highlights.
+// - the red liquid: it moves at `red.speed` of the water's speed, its lines are `red.line` pixels to either side and go toward `red.glow`;
+//   it mirrors nothing, and the lighting grade lights it only as much as the pictures (it glows at night).
+export const WATER = {
+  seed: 5,
+  texture: 128,
+  scale: 0.4,
+  flow: [[1.4, 0.6], [-0.9, 1.2]],
+  line: 1,
+  core: 2,
+  shimmer: 0.08,
+  levels: 3,
+  far: [260, 640],
+  sun: 1.4,
+  sunPower: 8,
+  sunWidth: 0.4,
+  reflect: { start: 0.25, amount: 0.32, curve: 1.3 },
+  highlight: 0.7,
+  red: { speed: 0.35, line: 0.9, glow: [255, 160, 48] },
+  similar: 40,
 };
 
 // The track lighting: a colour grade over the finished picture (never the overlays, nor the sky rows of the slides and the split screen),

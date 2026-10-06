@@ -23,6 +23,12 @@ export function terrainAt(world, x, y) {
   return dv.getUint32(mask === 0 ? T.maskZeroOffset : T.maskOneOffset, true);
 }
 
+// The two terrain values of every tile: per tile id, [where its mask pixel is 0, where it is not] (the .SIN entry's dwords terrainAt reads).
+export function tileSurfaces(world) {
+  const T = LOOKUP();
+  return world.sin.map(({ kept }) => { const dv = new DataView(kept.buffer, kept.byteOffset, kept.byteLength); return [dv.getUint32(T.maskZeroOffset, true), dv.getUint32(T.maskOneOffset, true)]; });
+}
+
 // The surface values the game code treats specially (terrain.special-values): the boost strip, the wall, the surface a stopped car sinks into, the pit state's surfaces and the fall.
 export const specialSurfaces = () => { const S = SPECIAL(); return { boost: S.boost, wall: S.wall, stopped: S.stopped, pit: S.pit, fall: S.fall }; };
 

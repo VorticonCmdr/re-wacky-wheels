@@ -41,8 +41,8 @@ function above(field, share) {
   return q[Math.round(Math.min(Math.max(1 - share, 0), 1) * (q.length - 1))];
 }
 
-// The bilinear sample of a field at (u, v) texels, repeating.
-function sample(field, size, u, v) {
+// The bilinear sample of a field at (u, v) texels, repeating (`size` a power of two).
+export function sample(field, size, u, v) {
   const x0 = Math.floor(u), y0 = Math.floor(v), tx = u - x0, ty = v - y0, m = size - 1;
   const a = (x0 & m), b = ((x0 + 1) & m), r0 = (y0 & m) * size, r1 = ((y0 + 1) & m) * size;
   const top = field[r0 + a] + (field[r0 + b] - field[r0 + a]) * tx, bottom = field[r1 + a] + (field[r1 + b] - field[r1 + a]) * tx;
@@ -51,7 +51,7 @@ function sample(field, size, u, v) {
 
 // The ordered-dither threshold of a pixel (the 4 x 4 Bayer matrix), in (0, 1).
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]; // @math the 4 x 4 Bayer matrix
-const bayer = (x, y) => (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16; // @math four by four cells, sixteen thresholds
+export const bayer = (x, y) => (BAYER[((y & 3) << 2) | (x & 3)] + 0.5) / 16; // @math four by four cells, sixteen thresholds
 
 // How much of a bank a sky row may hold: none above its rows, fading in down to `top` rows below their first, full down to `base` rows above
 // their last (the flat base), none below.
@@ -105,15 +105,16 @@ export function stripSkyIndices(world) {
   return flags;
 }
 
-// The mean colour of each sky row of the track's sky picture (the colour a cloud's light and shade are taken against): Float32Array of
-// skyRows x 3, 8-bit components.
+// The mean colour of each row of the track's sky picture down to the horizon strip's last row (the colour a cloud's light and shade and the
+// far range are taken against; the strip's sky-coloured background is drawn in the indices of the rows under it): Float32Array of
+// (skyRows + horizonRows) x 3, 8-bit components.
 const skyRows = new WeakMap();
 export function skyRowColours(world) {
   let c = skyRows.get(world.sky);
   if (c) return c;
-  const S = models().sky, W = S.width;
-  c = new Float32Array(S.skyRows * 3); // @math three components a row
-  for (let y = 0; y < S.skyRows; y++) {
+  const S = models().sky, W = S.width, rows = S.skyRows + S.horizonRows;
+  c = new Float32Array(rows * 3); // @math three components a row
+  for (let y = 0; y < rows; y++) {
     const sum = [0, 0, 0];
     for (let x = 0; x < W; x++) { const rgb = paletteColor(world, world.sky[y * W + x]); for (let k = 0; k < 3; k++) sum[k] += rgb[k]; } // @math three components
     for (let k = 0; k < 3; k++) c[y * 3 + k] = sum[k] / W; // @math three components

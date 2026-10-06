@@ -569,11 +569,11 @@ function showGraphics() {
   $('gfx-preset').value = s.preset;
   for (const k of EFFECTS) $(`gfx-${k}`).checked = s[k];
   for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
-  $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !s.sunShadows;
+  $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !(s.sunShadows || s.water); // the sun lights the shadows and the water's glints
   if (!enh.active()) $('gfx-stats').textContent = 'The reference renderer draws the race.';
   if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's DISPLAY AND EFFECTS shows the same settings
 }
-// The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the clouds, the lighting and the fog draw this track with.
+// The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the sky's layers, the water, the lighting and the fog draw this track with.
 function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
 function setGraphics(next, control) { enh.configure(next); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider)
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
