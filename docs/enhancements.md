@@ -2,7 +2,8 @@
 
 Status: built in the playtest page:
 - the first milestone (the Enhanced preset: smooth motion, contact shadows, surface particles and distance fog over the original art), see [the first milestone as built](#the-first-milestone-as-built);
-- skid marks and sun shadows from Stage 2, and the enhancement previews of the asset garage (the viewer), see [skid marks, sun shadows and the viewer's previews](#skid-marks-sun-shadows-and-the-viewers-previews).
+- skid marks and sun shadows from Stage 2, and the enhancement previews of the asset garage (the viewer), see [skid marks, sun shadows and the viewer's previews](#skid-marks-sun-shadows-and-the-viewers-previews);
+- the display options and the CRT look of Stage 1 (scaling, the 4:3 shape, full screen, scanlines, glow and curvature), see [display options and the CRT look](#display-options-and-the-crt-look).
 
 Everything else in this document is a proposal.
 
@@ -147,10 +148,11 @@ Eventually replace racers and scenery with models while using original layouts a
 
 Built 2026-10-05 in `src/enhance/` and the Graphics panel of `play.html`. Original is the default preset and draws the race exactly as before; Enhanced is opt-in.
 
-**Using it.** In the game's own menus: GAME OPTIONS has the item ENHANCED GRAPHICS (only in the page's menus, like KEYBOARD CONTROLS and SOUND DEVICES; the game's records of its four-item menu are untouched). It opens:
+**Using it.** In the game's own menus: GAME OPTIONS has the item DISPLAY AND EFFECTS (named ENHANCED GRAPHICS until the display options joined it; only in the page's menus, like KEYS AND SOUND; the game's records of its four-item menu are untouched). It opens:
 - PRESET, which Enter switches between ORIGINAL and ENHANCED (from CUSTOM, a mix of switches, back to ORIGINAL);
-- EFFECTS, the list of the seven effects with ON or OFF, which Enter flips;
+- MOTION AND SHADOWS (smooth motion, contact, scenery and sun shadows) and PARTICLES AND FOG (particles, skid marks, distance fog): the switches with ON or OFF, which Enter flips, in two lists so that each stands below the logo ([the menus and the logo](#the-menus-and-the-logo));
 - EFFECT LEVELS: the strengths of the shadows, the fog and the particles (Enter goes up a quarter, from 100 to OFF), the side the sun shines from (Enter goes round in eighths; north is the top of the track map) and DEFAULT LEVELS;
+- DISPLAY OPTIONS, added with the display options of Stage 1 ([below](#display-options-and-the-crt-look));
 - LEAVE THIS MENU.
 
 The same settings are in the panel beside the race screen: the preset (Original, Enhanced, or Custom once a switch differs), a switch for each effect, sliders for the strengths and the sun, and *Reset graphics*. The menu and the panel always show the same settings. The choice is kept in this browser under `wackywheels.graphics`, apart from the game files, the track data and the game's own settings (keys, sounds, saves). A panel control gives up the keyboard focus after a change, so Space and the arrows keep driving. The menus are in `src/game/graphics-menu.js` (the lines and what Enter chooses) and `src/enhance/settings.js` (`menuView`, the words they show, and what each choice does).
@@ -239,7 +241,7 @@ Both fit a 60 Hz frame many times over. On slower machines the strength sliders 
   It also checks the brake's skid marks, the caps of the particles and the marks, the second player's view of a link race, and the viewer's race preview.
 - *A production build served under a subpath.* `dist/` was copied to `/wacky/`, and an archive was dropped onto the page from outside the build. The build loaded and raced with the Enhanced preset, and the viewer's race view of track 4 ran from the dropped archive. The build contains no game files.
 
-**Not in this milestone.** The display options and CRT look of Stage 1 and the track editor's preview are still open; skid marks, sun shadows and the viewer's previews followed (next section). Also open: the tuning of the defaults with the player, by eye on more tracks and devices.
+**Not in this milestone.** The track editor's preview is still open; skid marks, sun shadows and the viewer's previews followed (next section), then the display options and the CRT look of Stage 1. Also open: the tuning of the defaults with the player, by eye on more tracks and devices.
 
 ### Skid marks, sun shadows and the viewer's previews
 
@@ -266,6 +268,63 @@ Built 2026-10-06 on the first milestone. Both effects are part of the Enhanced p
 - **Checked.** `check:enhance` runs the preview on a demo track and three pilot tracks: the drive must start a lap within 500 passes, draw, and reach the same tick going back and forward. The previews were also looked at in Chrome.
 
 **Shared code.** `raster.js` fills the convex shapes of marks and sun shadows with coverage; `models.js` reads the reconstructed values the effects share with the game once (each accessor validates its claim through `K()` on every call, which cost about a millisecond a frame on the per-point paths before it was cached).
+
+### Display options and the CRT look
+
+Built 2026-10-06 (Stage 1 apart from the HUD layer): `src/enhance/display.js` (the layout and the WebGL pass), `src/enhance/display-settings.js` (the settings, kept in this browser under `wackywheels.display`), the menus in `src/game/display-menu.js`.
+
+**Using it.**
+- In the game's menus: GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS. Its list has SCALING (FIT or INTEGER), ASPECT (16 BY 10 or 4 BY 3), FULL SCREEN, CRT LOOK and CRT LEVELS (SCANLINES, GLOW, CURVATURE, DEFAULT LEVELS). A level goes up a quarter with Enter, from 100 to OFF.
+- In the panel: the *Display* fieldset has the same settings, a *Full screen* button, *Reset display*, and a close-up of the screen's own pixels around the car, enlarged four times. Double-clicking the picture also toggles full screen. The menu and the panel always show the same settings.
+- Full screen is not stored: browsers enter it only from a key or a click.
+
+**What it changes.** The page still draws every screen into its 320 x 200 canvas exactly as before. The display only decides how that canvas reaches the screen, so it applies to the Original and Enhanced presets alike and to every screen (menus, cards, races, the split screen).
+- **The defaults:** 4:3, fit, and the CRT look off with its curvature off: the maintainer's choice (2026-10-06), the shape the game had on a monitor. They are drawn by the WebGL pass below, so a first visit makes a WebGL context.
+- **Square pixels, fit and no CRT look are the page as it was:** the browser scales the canvas itself, as before (nearest pixel, at most 960 CSS pixels wide, whatever the window's height), and the page makes no WebGL context; it is made the first time another setting or full screen needs it.
+- **Any other setting, or full screen:** a second canvas the size of the screen's own pixels takes the canvas's place. A WebGL 2 shader fills it from the picture. The canvas is hidden but still drawn as before, so `wackyDebug` and the checks read the same picture.
+- **Without WebGL 2:** the browser scales the canvas to the chosen shape and size, by the nearest pixel (at 4:3 the rows are then of uneven height). The CRT look is not available, and the menu's CRT LOOK says NONE.
+
+**The shapes.** 16 BY 10 is the canvas's square pixels. 4 BY 3 is the shape a VGA monitor of the time stretched the 320 x 200 picture to, which makes each pixel 1.2 times as tall as it is wide. That is a display convention, not a claim about the game.
+
+**The scaling.** Sizes are computed in screen (device) pixels, not CSS pixels. The canvas's drawing buffer follows the element's real size where the browser reports it.
+- **Fit**, everywhere but in the page as it was, draws the largest picture of the shape that fits the space. Each pixel's inside is its own colour; where a pixel falls between screen pixels its edge blends over one screen pixel (sharp bilinear), so the uneven nearest-pixel columns and rows of the browser's own scaling do not appear. In the page as it was the browser's scaling stays, as above.
+- **INTEGER** gives every picture row a whole number of screen rows, and with square pixels every column too.
+  - At 4:3, six screen rows per picture row is exactly five by six screen pixels per picture pixel (1600 x 1200), and any multiple of six rows is whole on both axes (twelve rows: ten by twelve).
+  - Other row counts give columns that are not whole, drawn as in fit.
+  - A space one screen pixel short of a multiple, in width or height, keeps that multiple and draws the picture a pixel smaller there. The browser's rounding of an element's size therefore cannot drop it to the next smaller multiple.
+- **Window and full screen.** Beside the panel, the picture is at most 960 CSS pixels wide (the page's old width) and fits the window's height below its top. In full screen it fills the screen, centred on black.
+
+**The CRT look.** It is a final pass over the scaled picture, with three levels (defaults 50, 25 and OFF: the curvature is off until the player sets it). The design numbers are in `CRT` of `config.js` and reach the shader as uniforms.
+- **Scanlines.** Each picture row is lit as a Gaussian beam and the space between rows darkens; part of the lost light is given back on the row's middle. They fade out below two screen rows per picture row and show fully from three and a half, so a small window gets no moiré.
+- **Glow.** The picture is blurred at its own size, over 2.5 pixels, and screen-blended over the result.
+- **Curvature.** It bulges the picture like a tube's face without cropping it. The midpoints of the edges touch the frame, while the corners are drawn in, rounded and slightly darkened.
+- **Readability.** At the default levels, and with the curvature at 25, the HUD's timer and the menu text stay readable; checked by eye on full-size captures.
+
+**Full screen and Esc.**
+- Full screen comes from the menu line (requested inside the key's handler, as browsers require; the menu's own pass, which reads the key later, does nothing more), the button or a double-click.
+- Esc leaves full screen, as browsers have it; after that it is the game's key again. The page ignores an Esc it receives while in full screen, so a browser that also passes that key on does not pause the race or give up a link race with it. The page does not lock Esc for itself (Chromium's Keyboard Lock API): leaving would then mean holding Esc, and the held key would reach the game as presses of its own Esc.
+- LEAVE GAME leaves full screen, because the DOS text screen is shown beside the picture.
+
+**Checks.**
+- `npm test`: `test/display.test.js` covers the placement for each shape and scaling, the window's space, the CRT pass's numbers, the settings and their store, the menus and the logo rule, and, on a page of stubs, how the picture is shown: the page as it was never asks for a WebGL context, the default 4:3 or another setting that needs one asks once, and a CRT look the browser cannot show does not move the page out of its layout. `test/menu-logo.test.js` checks the logo rule for every list the page's menus reach.
+- In Chrome 157 on a MacBook Air (Mac14,2, Apple M2, device pixel ratio 2), by reading back the drawn pixels:
+  - Square pixels with INTEGER at 1600 x 1000: all 1,600,000 screen pixels equal their picture pixel.
+  - 4:3 at 1600 x 1200: all 1,920,000 are exact 5 x 6 copies.
+  - 4:3 with whole rows at 1333 x 1000, and fit at 1523 x 1142: every screen pixel inside one picture pixel is exact, and every edge pixel lies within the colours of the picture pixels it covers.
+  - The canvas hashes the same with the CRT look on and off, and Original with the CRT look leaves the Enhanced presentation off.
+  - The menus were driven with key events: each line changes the setting, and the panel and the store follow.
+- **Not exercised in automation:** entering real full screen. The automated tab's synthetic keys carry no user activation, so the check only shows that FULL SCREEN calls the request from the key's handler.
+- **Frame time.**
+  - The pass costs about 0.12 ms of CPU time a frame.
+  - With the graphics card made to finish every frame (a one-pixel read-back after each draw) at 2880 x 1800, a full screen of that Mac: 1.47 ms without the CRT look, 1.78 ms with it, 1.43 ms with it but no glow.
+  - Those figures include the read-back's stall. The glow's two blur passes are most of the difference. They were measured before the blur's tap count became a uniform (a loop the shader compiler may no longer unroll) and before the bottom row's scanline fix; not measured again since.
+
+#### The menus and the logo
+
+The menu picture's logo ends on row 75. Every menu of the game the port models (`menu.tree-observed`, `menu.famous-menus`) starts its first bar at row 76 or below: the longest are the nine-line main menu, in its own layout, and the six-line lists of FAMOUS DRIVERS. That is not a rule shown for the whole game: the phone book of seven items that MAKE CALL opens ([leads/menus.md](leads/menus.md)) is not modelled, and where it stands is not read. The page's own lists are held to the modelled menus' row.
+- Every list the page's menus reach keeps to that (`test/menu-logo.test.js`), so none has more than six lines: GAME OPTIONS (its page items are KEYS AND SOUND, which opens KEYBOARD CONTROLS and SOUND DEVICES, and DISPLAY AND EFFECTS), DISPLAY AND EFFECTS with its two lists of switches, EFFECT LEVELS, DISPLAY OPTIONS and CRT LEVELS, and a player's key list, which has its six keys and no LEAVE THIS MENU (Esc goes back, as from the game's setup lists).
+- How it came about: DISPLAY OPTIONS was first tried as an eighth GAME OPTIONS item, whose first bar covered rows 64 to 75. That showed three earlier lists over the logo: GAME OPTIONS (7 lines), EFFECTS (8) and the key lists (7). On 2026-10-06 they were split as above.
+- Still over the logo: the key lists' boxed title (SETUP.EXE's PLAYER 1 KEYBOARD CONTROLS), which stands at the engine menu title's distance above the first bar, on rows 54 to 69 (before the split 48 to 63; docs/TODO.md).
 
 ### Tools that make later milestones easier
 

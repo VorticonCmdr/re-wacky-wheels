@@ -12,6 +12,8 @@ import { drawRaceFrame, drawRaceOverlays, sceneSky } from './render/race-frame.j
 import { createEnhancer } from './enhance/index.js';
 import { EFFECTS, LEVELS } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
+import { createDisplay } from './enhance/display.js';
+import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from './enhance/display-settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
 import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } from './render/versus.js';
 import { stripValues, swapSeat } from './game/versus.js';
@@ -71,7 +73,7 @@ import { racerRecords, racerFrame } from './game/racers.js';
 import { idleFrame, idlePlayer, starterRecord, lionBytes } from './game/start.js';
 import { startRace, stepRace, beginIntro, shownCycle } from './game/race.js';
 import { menuDef, defaultSettings, bannerOfMenu } from './game/menus.js';
-import { createMenu, stepFrame, viewOf, menuPeriod, enterSetup, isSettled } from './game/menu.js';
+import { createMenu, stepFrame, viewOf, menuPeriod, enterSetup, isSettled, actionAt } from './game/menu.js';
 import { createVehicle, stepVehicle, vehicleLayout } from './game/vehicle.js';
 import { loadVehicleArt, renderVehicle, renderControlsHelp } from './render/vehicle.js';
 import { HELP_KEY } from './game/help.js';
@@ -83,6 +85,9 @@ const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: nul
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 const enh = createEnhancer(); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer
+const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => showDisplay() }); // how the finished picture is put on the screen (docs/enhancements.md, Stage 1): it reads the canvas and never draws into it
+// A finished picture: into the canvas, then onto the screen through the display.
+function show() { ctx.putImageData(image, 0, 0); display.present(); showDisplayStats(); }
 
 function setMessage(text, bad = false) { const m = $('message'); m.textContent = text; m.style.color = bad ? 'var(--bad)' : ''; m.hidden = !text; }
 
@@ -319,7 +324,7 @@ function tickOnce() {
 
 function blit(palette) {
   for (let i = 0; i < index.length; i++) { const p = index[i] * 4; image.data[i * 4] = palette[p]; image.data[i * 4 + 1] = palette[p + 1]; image.data[i * 4 + 2] = palette[p + 2]; image.data[i * 4 + 3] = 255; } // @math RGBA
-  ctx.putImageData(image, 0, 0);
+  show();
 }
 
 // The main menu: the picture, the nine items, the selection icons and the two corner cars, all as the game draws them (menu.screen-model).
@@ -374,10 +379,11 @@ function restoreGame(record) {
 // LEAVE GAME: the game ends on its DOS text screen, WWREG.BIN for an archive that has 42.GAM and WWSW.BIN for a shareware one (exit.screen-select, archive.edition-probe); a key brings the menu back here.
 function showExit() {
   const members = archiveMembers(state.dat), registered = members.has('42.GAM'), box = exitScreen(members.get(registered ? 'WWREG.BIN' : 'WWSW.BIN')), stage = $('stage');
+  if (display.fullscreen()) document.exitFullscreen?.().catch(() => {}); // the text screen is beside the picture, not in it
   box.id = 'exit'; stage.hidden = true; stage.after(box); state.screen = 'exit'; state.keys.clear(); state.audio?.songStop(); state.audio?.engineStop();
   setMessage('The game has ended. Press any key to return to the main menu.');
 }
-function leaveExit() { $('exit')?.remove(); $('stage').hidden = false; setMessage(''); state.screen = 'menu'; state.menuAccumulator = 0; state.musicName = null; state.musicScreen = null; state.keys.clear(); }
+function leaveExit() { $('exit')?.remove(); $('stage').hidden = false; display.layout(); setMessage(''); state.screen = 'menu'; state.menuAccumulator = 0; state.musicName = null; state.musicScreen = null; state.keys.clear(); }
 
 // CREDITS (menu.credits): the car drives along the lines and the text appears behind it; the routine's steps run on the 136 Hz clock, Esc leaves.
 function enterCredits() {
@@ -440,7 +446,8 @@ function drawVolume() {
 }
 
 function chooseItem(action) {
-  if (action.graphics) { const g = action.graphics, s = enh.settings; setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return; } // GAME OPTIONS > ENHANCED GRAPHICS (graphics-menu.js): the same settings as the panel's
+  if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.level ? cycleCrtLevel(s, d.level) : defaultCrtLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE (no WebGL 2) does nothing
+  if (action.graphics) { const g = action.graphics, s = enh.settings; setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js): the same settings as the panel's
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
   if ('duo' in action && state.linkPlay) { linkMode(action.duo); return; } // the host's choice of the link race
   if (action.race === 1 && state.linkPlay) { hostStart(action.settings.flow); return; }
@@ -537,7 +544,7 @@ function drawEnhanced() {
   const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data;
   if (state.versus && !state.linkPlay) {
     enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays });
-    ctx.putImageData(image, 0, 0); versusReadout();
+    show(); versusReadout();
   } else {
     const L = state.linkPlay && state.versus ? state.linkPlay : null;
     if (!L) state.detail = Number($('detail').value);
@@ -547,7 +554,7 @@ function drawEnhanced() {
       if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
     } });
     if (!state.minimap && P.minimap) state.minimap = P.minimap; // the overhead map's picture and rectangle are kept from the race's first frame (hud.minimap-draw)
-    ctx.putImageData(image, 0, 0);
+    show();
     if (L) { const [a, b] = carsOf(state); $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`; $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE; } else raceReadout();
   }
   const now = performance.now();
@@ -563,7 +570,7 @@ function showGraphics() {
   for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
   $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !s.sunShadows;
   if (!enh.active()) $('gfx-stats').textContent = 'The reference renderer draws the race.';
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's ENHANCED GRAPHICS shows the same settings
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's DISPLAY AND EFFECTS shows the same settings
 }
 function setGraphics(next, control) { enh.configure(next); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider)
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
@@ -571,6 +578,30 @@ for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphi
 for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
 $('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
 showGraphics();
+
+// The display panel: the scaling, the shape, full screen, the CRT look and its levels, kept in this browser apart from the graphics settings.
+let dspShown = 0;
+function showDisplay() {
+  const s = display.settings, ready = display.crtReady(), full = display.fullscreen();
+  $('dsp-scaling').value = s.scaling; $('dsp-aspect').value = s.aspect; $('dsp-crt').checked = s.crt && ready; $('dsp-crt').disabled = !ready;
+  for (const k of CRT_LEVELS) { $(`dsp-${k}`).value = String(s[k]); $(`dsp-${k}`).disabled = !(s.crt && ready); }
+  $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
+  showDisplayStats(true);
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings
+}
+function showDisplayStats(now = false) {
+  const t = performance.now(); if (!now && t - dspShown < 500) return; dspShown = t; // @math twice a second
+  const d = display.stats(), r = d.rect;
+  $('dsp-stats').textContent = d.mode === 'gl' ? `Drawn by the graphics card at ${r.w} by ${r.h} screen pixels (${(r.w / screen.width).toFixed(2)} by ${(r.h / screen.height).toFixed(2)} for a pixel${r.integer ? ', whole rows' : ''}), ${d.ms.toFixed(2)} ms a frame.` : d.mode === 'css' ? `Scaled by the browser: ${d.lost ? "the graphics card's context was lost (the browser may give it back)" : d.failure && typeof WebGL2RenderingContext === 'function' ? `the graphics card could not be used (${d.failure})` : 'this browser has no WebGL 2'}, so the CRT look and the sharp scaling are not available.` : 'The page as it was: the browser scales the canvas itself.';
+}
+function setDisplay(next, control) { display.configure(next); saveDisplay(display.settings); showDisplay(); control?.blur(); } // a focused control would take the race's keys
+$('dsp-scaling').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'scaling', e.target.value), e.target));
+$('dsp-aspect').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'aspect', e.target.value), e.target));
+$('dsp-crt').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'crt', e.target.checked), e.target));
+for (const k of CRT_LEVELS) { $(`dsp-${k}`).addEventListener('input', e => setDisplay(changeDisplay(display.settings, k, Number(e.target.value)))); $(`dsp-${k}`).addEventListener('change', e => e.target.blur()); }
+$('dsp-fullscreen').addEventListener('click', e => { display.toggleFullscreen(); e.target.blur(); });
+$('dsp-reset').addEventListener('click', e => setDisplay(resetDisplay(), e.target));
+display.configure(loadDisplay()); showDisplay();
 
 // ---- the vehicle screen in front of the setup menus (menu.vehicle-screen)
 function enterVehicle(first) {
@@ -1062,7 +1093,7 @@ function stepRetryClock(now) {
 function drawRetry() {
   index.set(state.snapshot.index);
   renderMenuOverlay(index, state.menuArt, choiceView(state.retry));
-  if (state.snapshot.image) { enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: fb => renderMenuOverlay(fb, state.menuArt, choiceView(state.retry)) }); ctx.putImageData(image, 0, 0); }
+  if (state.snapshot.image) { enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: fb => renderMenuOverlay(fb, state.menuArt, choiceView(state.retry)) }); show(); }
   else blit(state.snapshot.rgba);
   $('badge').className = 'badge bad'; $('badge').textContent = 'The menu of a race that was not won in the first three places (obj1+0x219cd): not compared with a frame of the running game; SAVE AND QUIT is left out.';
 }
@@ -1122,9 +1153,9 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings) }); // the keyboard layout, the sound devices and the graphics settings of this browser (keys.js, sound-devices.js, enhance/settings.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
-    startTrack(); $('stage').hidden = false; setMessage('');
+    startTrack(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
   } catch (e) { state.dat = null; setMessage(`${e.message}`, true); }
 }
@@ -1150,6 +1181,7 @@ const MENU_KEYS = { ArrowUp: 'up', ArrowDown: 'down', Enter: 'enter', Space: 'en
 addEventListener('keydown', e => {
   state.audio?.unlock(); // browsers start the audio context with the first key
   if (e.target.tagName === 'SELECT' || !state.dat) return;
+  if (e.code === 'Escape' && display.fullscreen()) return; // the browser's key for leaving full screen: should a browser also pass it on, it neither pauses the race nor gives up a link race
   if (state.screen === 'race' && state.pause) { if (MENU_KEYS[e.code]) { e.preventDefault(); if (!state.pauseKey) state.pauseKey = MENU_KEYS[e.code]; } return; }
   if (state.screen === 'race' && state.demo) { if (e.code === 'Escape') state.demo.escape = true; else if (/^(Arrow|Enter|Space|Alt)/.test(e.code)) { state.keys.add(e.code); e.preventDefault(); } return; } // a demo race: Esc leaves, the arrows, Enter, Space and Alt turn the slides' pages
   if (state.screen === 'link') { e.preventDefault(); if (linkCtl().key(e) === 'leave') leaveLinkScreen(); return; }
@@ -1183,7 +1215,9 @@ addEventListener('keydown', e => {
   if (state.screen === 'retry') { if (MENU_KEYS[e.code]) { e.preventDefault(); if (!state.retryKey) state.retryKey = MENU_KEYS[e.code]; } return; }
   if (state.screen === 'menu' && MENU_KEYS[e.code]) {
     e.preventDefault(); if (e.repeat) return; // the game samples the keys, the browser's repeats add nothing (menu.input-sampling)
-    const key = MENU_KEYS[e.code]; if (!state.menuKey) state.menuKey = key;
+    const key = MENU_KEYS[e.code];
+    if (key === 'enter' && !state.menuKey && isSettled(state.menu) && actionAt(state.menu)?.display?.fullscreen) display.toggleFullscreen(); // FULL SCREEN: browsers enter it only inside a key's handler, so here rather than when the menu's pass reads the key
+    if (!state.menuKey) state.menuKey = key;
     if (key === 'up' || key === 'down' || key === 'escape') { state.menuHeld = key; state.menuHeldCode = e.code; } // read again while it is down and the icons settle
     return;
   }
@@ -1207,4 +1241,4 @@ addEventListener('keyup', e => { state.keys.delete(e.code); if (e.code === state
 addEventListener('blur', () => { state.keys.clear(); state.menuHeld = null; state.menuHeldCode = null; }); // a key released while the page is not focused would stay down
 
 // `play.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
-if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };
+if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };

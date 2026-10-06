@@ -11,7 +11,16 @@ button { cursor: pointer; }
 main { padding: 16px; max-width: 1100px; margin: 0 auto; }
 .message { color: var(--dim); }
 .stage { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
-canvas { width: min(100%, 960px); aspect-ratio: 320 / 200; image-rendering: pixelated; background: #000; border: 1px solid var(--dim); }
+.screen-box { width: min(100%, 960px); }
+#screen { display: block; width: 100%; aspect-ratio: 320 / 200; image-rendering: pixelated; background: #000; border: 1px solid var(--dim); }
+#screen.sized { border: 0; outline: 1px solid var(--dim); aspect-ratio: auto; }
+.screen-box canvas.display { display: block; background: #000; outline: 1px solid var(--dim); }
+.screen-box:fullscreen { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; background: #000; }
+.screen-box:fullscreen #screen, .screen-box:fullscreen canvas.display { outline: 0; border: 0; }
+.screen-box:fullscreen canvas.display { width: 100%; height: 100%; }
+.close-up { margin: 0; display: grid; gap: 4px; }
+.close-up canvas { width: 240px; height: 150px; image-rendering: pixelated; background: #000; border: 1px solid var(--dim); }
+.close-up figcaption { color: var(--dim); font-size: 13px; }
 .panel { display: grid; gap: 8px; min-width: 240px; flex: 1; }
 .panel label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-variant-numeric: tabular-nums; }

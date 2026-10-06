@@ -22,11 +22,13 @@ test('only item numbers inside the lists are valid, and a choice is kept in the 
   assert.deepEqual(loadDevices({ getItem() { throw new Error('blocked'); } }), defaultDevices());
 });
 
-test('GAME OPTIONS has the item SOUND DEVICES only in the page\'s menu, and it opens the two lists', () => {
-  assert.ok(!menuDef('options', defaultSettings()).items.includes(SOUND_MENU.item));
-  const settings = defaultSettings(1, true), options = menuDef('options', settings), at = options.items.indexOf(SOUND_MENU.item);
+test('GAME OPTIONS has KEYS AND SOUND only in the page\'s menu; it opens KEYBOARD CONTROLS and SOUND DEVICES, which opens the two lists', () => {
+  assert.ok(!menuDef('options', defaultSettings()).items.includes('KEYS AND SOUND'));
+  const settings = defaultSettings(1, true), options = menuDef('options', settings), at = options.items.indexOf('KEYS AND SOUND');
   assert.ok(at > 0 && options.items.at(-1) === 'LEAVE THIS MENU');
-  assert.deepEqual(options.actions[at], { open: 'sound' });
+  assert.deepEqual(options.actions[at], { open: 'keysSound' });
+  const keysSound = menuDef('keysSound', settings);
+  assert.deepEqual(keysSound.items, ['KEYBOARD CONTROLS', SOUND_MENU.item, 'LEAVE THIS MENU']); assert.deepEqual(keysSound.actions, [{ open: 'keys' }, { open: 'sound' }, { back: true }]);
   const sound = menuDef('sound', settings);
   assert.deepEqual(sound.items, [...SOUND_MENU.items, 'LEAVE THIS MENU']); assert.deepEqual(sound.actions.slice(0, 2), [{ open: 'soundEffects' }, { open: 'soundMusic' }]);
   assert.deepEqual(menuDef('soundEffects', settings).items, SOUND_MENU.effects); assert.deepEqual(menuDef('soundMusic', settings).items, SOUND_MENU.music);

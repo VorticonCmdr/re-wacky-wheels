@@ -79,6 +79,9 @@ function leave(menu) {
 // Whether the icons have settled, so that the next step reads the keys (menu.input-sampling).
 export const isSettled = menu => menu.busy === ANIM().lion.settled;
 
+// The action of the line under the cursor (what Enter on it would choose).
+export const actionAt = menu => menuDef(menu.id, menu.settings).actions[menu.cursor - CURSOR().base];
+
 export function stepFrame(menu, key) {
   const A = ANIM(), def = menuDef(menu.id, menu.settings), cars = carCount(def.kind), settled = menu.busy === A.lion.settled;
   if ((key === 'up' || key === 'down') && settled) {
