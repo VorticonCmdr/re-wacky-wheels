@@ -3,7 +3,8 @@
 Status: built in the playtest page:
 - the first milestone (the Enhanced preset: smooth motion, contact shadows, surface particles and distance fog over the original art), see [the first milestone as built](#the-first-milestone-as-built);
 - skid marks and sun shadows from Stage 2, and the enhancement previews of the asset garage (the viewer), see [skid marks, sun shadows and the viewer's previews](#skid-marks-sun-shadows-and-the-viewers-previews);
-- the display options and the CRT look of Stage 1 (scaling, the 4:3 shape, full screen, scanlines, glow and curvature), see [display options and the CRT look](#display-options-and-the-crt-look).
+- the display options and the CRT look of Stage 1 (scaling, the 4:3 shape, full screen, scanlines, glow and curvature), see [display options and the CRT look](#display-options-and-the-crt-look);
+- from Stage 3, each track's atmosphere, clouds in the sky and track lighting, with an atmosphere preview in the track editor, see [Stage 3 as built](#stage-3-as-built-track-atmosphere-clouds-and-lighting).
 
 Everything else in this document is a proposal.
 
@@ -150,7 +151,7 @@ Built 2026-10-05 in `src/enhance/` and the Graphics panel of `play.html`. Origin
 
 **Using it.** In the game's own menus: GAME OPTIONS has the item DISPLAY AND EFFECTS (named ENHANCED GRAPHICS until the display options joined it; only in the page's menus, like KEYS AND SOUND; the game's records of its four-item menu are untouched). It opens:
 - PRESET, which Enter switches between ORIGINAL and ENHANCED (from CUSTOM, a mix of switches, back to ORIGINAL);
-- MOTION AND SHADOWS (smooth motion, contact, scenery and sun shadows) and PARTICLES AND FOG (particles, skid marks, distance fog): the switches with ON or OFF, which Enter flips, in two lists so that each stands below the logo ([the menus and the logo](#the-menus-and-the-logo));
+- MOTION AND SHADOWS (smooth motion, contact, scenery and sun shadows) and SURFACE AND SKY (particles, skid marks, distance fog, and since Stage 3 clouds and track lighting): the switches with ON or OFF, which Enter flips, in two lists so that each stands below the logo ([the menus and the logo](#the-menus-and-the-logo));
 - EFFECT LEVELS: the strengths of the shadows, the fog and the particles (Enter goes up a quarter, from 100 to OFF), the side the sun shines from (Enter goes round in eighths; north is the top of the track map) and DEFAULT LEVELS;
 - DISPLAY OPTIONS, added with the display options of Stage 1 ([below](#display-options-and-the-crt-look));
 - LEAVE THIS MENU.
@@ -241,7 +242,7 @@ Both fit a 60 Hz frame many times over. On slower machines the strength sliders 
   It also checks the brake's skid marks, the caps of the particles and the marks, the second player's view of a link race, and the viewer's race preview.
 - *A production build served under a subpath.* `dist/` was copied to `/wacky/`, and an archive was dropped onto the page from outside the build. The build loaded and raced with the Enhanced preset, and the viewer's race view of track 4 ran from the dropped archive. The build contains no game files.
 
-**Not in this milestone.** The track editor's preview is still open; skid marks, sun shadows and the viewer's previews followed (next section), then the display options and the CRT look of Stage 1. Also open: the tuning of the defaults with the player, by eye on more tracks and devices.
+**Not in this milestone.** Skid marks, sun shadows and the viewer's previews followed (next section), then the display options and the CRT look of Stage 1, then Stage 3 with the track editor's preview. Also open: the tuning of the defaults with the player, by eye on more tracks and devices.
 
 ### Skid marks, sun shadows and the viewer's previews
 
@@ -257,7 +258,7 @@ Built 2026-10-06 on the first milestone. Both effects are part of the Enhanced p
 **Sun shadows (`shadows.js`).**
 - **What casts.** Every picture that can have a contact shadow casts on this switch of its own, whatever the contact and scenery switches say: racers, ducks, the other human, the own car on the ground and the scenery; never a shot, and not the own car in a pit, a crash or a wreck.
 - **The silhouette.** Each drawn column of a picture is cast as a line on the ground from the shadow of its lowest to that of its highest opaque pixel, the heights read off the picture at its distance (`cameraPoint` inverts the projection to find the picture's point). A picture is flat, so a sun to the side would cast a line; the column's line is therefore swept through a depth of 0.9 times the drawn width along the camera's view, which gives the shadow the body the picture shows. A lifted car or a bouncing object casts from its height, so its shadow moves away from its anchor.
-- **The sun.** One sun for every track (the tracks carry none): its direction is the *Sun direction* setting, a part of a turn in the world's compass, so the shadows turn with the camera as the car drives round the track. Its height gives a shadow 1.1 times as long as the picture is high (about 42 degrees). The shadows are softened by a one-pixel box blur and darken the ground by 46% at full strength (the shadow strength slider applies to both kinds); where a contact shadow and a sun shadow meet, the darker counts.
+- **The sun.** The game's tracks carry no sun, so one sun serves every track (since Stage 3 a track's atmosphere can give it its own direction and height): its direction is the *Sun direction* setting, a part of a turn in the world's compass, so the shadows turn with the camera as the car drives round the track. Its height gives a shadow 1.1 times as long as the picture is high (about 42 degrees). The shadows are softened by a one-pixel box blur and darken the ground by 46% at full strength (the shadow strength slider applies to both kinds); where a contact shadow and a sun shadow meet, the darker counts.
 
 **The asset garage's previews (`viewer-preview.js`).**
 - **Race view.** A track's *View* control (on any of its `.GAM`, `.M`, `.RD` and `.SPW` members) switches from the map to a race on the track seen from the race camera: the reference renderer on the left and the Enhanced presentation of the same moment on the right (or one of them alone).
@@ -326,8 +327,108 @@ The menu picture's logo ends on row 75. Every menu of the game the port models (
 - How it came about: DISPLAY OPTIONS was first tried as an eighth GAME OPTIONS item, whose first bar covered rows 64 to 75. That showed three earlier lists over the logo: GAME OPTIONS (7 lines), EFFECTS (8) and the key lists (7). On 2026-10-06 they were split as above.
 - Still over the logo: the key lists' boxed title (SETUP.EXE's PLAYER 1 KEYBOARD CONTROLS), which stands at the engine menu title's distance above the first bar, on rows 54 to 69 (before the split 48 to 63; docs/TODO.md).
 
+### Stage 3 as built: track atmosphere, clouds and lighting
+
+Built 2026-10-06: from Stage 3, each track's atmosphere (the per-track metadata the roadmap's Stage 3 sections and its section on tools ask for), clouds in the sky (from "Layered skies and horizons") and track lighting ("Track-specific lighting"), and the track editor's atmosphere preview.
+- **Code:** `src/enhance/atmosphere.js` (the atmosphere and its store), `clouds.js`, `grade.js` (the lighting), the composite's sky and grade passes, and `src/track-atmosphere.js` (the editor's tab).
+- **Design numbers:** in `config.js` under `ATMOSPHERE`, `CLOUDS` and `GRADES`. They are art direction, not claims about the game, and no track carries a hand-made theme.
+
+**Using it.**
+- **Editor:** the track editor has a third tab, **Atmosphere**, beside Tiles and Objects. For the selected track it sets:
+  - the lighting (none, dawn, sunset, dusk, night or overcast) and its strength;
+  - the clouds (how much of the sky they cover) and the wind;
+  - its own sun (direction and height; otherwise the game's SUN FROM setting at the usual shadow length);
+  - its own fog colour (otherwise the colour of the horizon strip) and the fog's strength (up to twice the game setting).
+- **Race view:** above the controls, a race on the track as it is being edited, drawn by the Enhanced graphics with that atmosphere. It has *Play*, a *Moment* slider and an *Original* switch for the reference picture.
+- **Game page:** the playtest page draws each track with its atmosphere whenever its Enhanced graphics have the effect switched on. The Graphics panel says which atmosphere the current track has.
+- **Switches:** two new effect switches, **Clouds** and **Track lighting**, are in the panel and in GAME OPTIONS > DISPLAY AND EFFECTS > SURFACE AND SKY. That list was renamed from PARTICLES AND FOG and has six lines, so it still stands below the logo.
+- **Defaults:**
+  - The Enhanced preset now includes the clouds, so every track shows some by default. Turn the *Clouds* switch off to remove them, or set a track's clouds to 0 in the editor.
+  - Settings stored before Stage 3 keep their preset: an Enhanced player stays Enhanced.
+  - The lighting has no effect until a track is given a grade.
+
+**The atmosphere and where it is kept.**
+- **Store:** each track's atmosphere is kept in this browser under `wackywheels.atmosphere`, by track number, apart from the game files and from the editor's draft. A track with nothing stored has the defaults. The editor writes each change at once, and the playtest page and the asset garage read it whenever a race starts.
+- **Defaults draw as before:** with the clouds and the lighting off, the defaults draw exactly as before Stage 3. A run of six scenarios (the attract demo, races on tracks 2, 3 and 7, the split screen and the duck game, all other effects on) hashes every picture the same as the committed code.
+- **Keyed by number, not archive:** the editor's own draft is keyed by its archive's fingerprint, which the playtest page does not know. An edited archive's track 12 therefore has the same atmosphere as the original's.
+- **Project file:** the editor's *Save project* file carries every stored atmosphere in a top-level `atmosphere` section. *Open project* takes them in, over this browser's for the same tracks. The project format stays version 1: an older editor ignores the section, and a project with atmospheres but no edited track opens.
+- **Not in the draft:** the browser draft does not carry the atmospheres, so restoring an old draft never brings back older atmospheres. Atmosphere edits are not part of the editor's undo, and they never enable the edited-archive export.
+
+**Clouds (`clouds.js`).**
+- **What they are:** two banks of a cloud field (repeating value noise) over the track's sky.
+  - A far bank of small, flat puffs sits just above the horizon strip, and a near bank of bigger clouds higher up.
+  - Each bank has a flat base and a top that thins out.
+  - The cover of a pixel is drawn in a few steps with ordered dithering, as the game's own sky ramps are dithered, and each cloud has a lit top and a shaded base, read from the field's slope.
+  - The cover follows the field's own distribution: the share of the field that is cloud is 0.95 × amount ^ 1.44, so the default amount 0.35 makes about a fifth of a bank's middle rows cloud and the full amount nearly all of them (its top and base thin out).
+- **How they move:** the game's sky picture never moves; only the strip scrolls, with the steering rather than the heading.
+  - The clouds move with the strip, using its scroll without its wraps. `motion.js` keeps a sky value per seat that adds each tick's step of the offset taken the short way round, so the 240 → 80 and 0 → 160 wraps leave no seam.
+  - The wind moves them on the race clock, so a pause stops them.
+- **Colours:** taken from the sky row they lie in. A lit top goes toward white as far as that row is bright, so on the red skies of the BACK3 tracks the clouds keep a reddish colour. A shaded base lies between the lit colour and the sky's, never darker than the sky.
+- **Where they are never drawn:**
+  - on a demo's slide page;
+  - on the split screen, whose sky rows are the strips' picture;
+  - over the overlays.
+
+  The overhead map's rectangle is drawn from the race's first frame, sky and all. In a single view of the track's sky, an overlay pixel that only puts back the sky's own index therefore stays sky, so the clouds and the lighting pass behind the map as they do around it. Counted over the check scenarios (tracks 2, 3, 7, 9 and 21, the demo, the split screen and the duck game, under a night grade), no overlay pixel outside the map's rectangle is let through this way.
+
+**Track lighting (`grade.js`).** A grade is a table per colour component (gain, lift and gamma) and a saturation, mixed with the picture by the track's strength. It is applied as the last step, after the particles. The fog colour, the clouds and the particles are therefore lit with the rest.
+- **Pictures:** racers, objects and shots get only part of the grade (60% for dawn and sunset, 50% at night), so what the player drives around stays easy to see.
+- **Sky:** each grade mixes the sky toward a gradient of its own. Every track's strip draws its sky-coloured background in the indices of the sky picture's row under it, so the gradient goes on over those strip pixels and the sky does not end at the strip's top.
+- **Never touched:** the overlays, the sky rows that are not the track's sky (slides and the split screen), and the demo's fade-in cap.
+- **Sun height:** a track's own sun height changes the shadows' length (10 to 70 degrees above the horizon). Sunset with a low sun casts long shadows.
+
+**The editor's race view (`track-atmosphere.js`, using `viewer-preview.js`).**
+- **What it runs:** the race of the track as edited. Its changed files are patched into a copy of the archive (`patchArchive`), and the race is the asset garage's preview on that copy.
+- **Who drives:** always the pilot that follows the computer cars' route. A track's demo recording does not fit an edited layout, so it is not used.
+- **What it shows:** no HUD (the overhead map would be the original's). An edited track with no waypoint left shows a message instead of a race.
+- **When it rebuilds:** only while the tab is shown, a moment after the game files changed. A change of the atmosphere only draws again, and *Play* runs the animation only while it plays.
+- **Memory:** `archiveMembers` (`src/game/track-data.js`) now keeps its tables in a WeakMap, so an archive copy that no preview holds any more is freed.
+
+**Checks.**
+- `npm test`: `test/atmosphere.test.js` covers:
+  - the atmosphere's normalizing (values of the wrong type, arrays and prototype names dropped);
+  - the store, and the settings migration;
+  - the sun's length and the fog tint;
+  - the sky scroll across the strip's wraps;
+  - the cloud field and banks;
+  - the grade tables;
+  - the composite's rules (overlays untouched, the sky of slides and the split screen untouched, the fade's cap, pictures graded less).
+- `test/menu-logo.test.js` keeps SURFACE AND SKY within six lines.
+- `npm run check:enhance`, section 3b, gives every track a night, cloudy atmosphere and compares the clouds and the lighting on and off:
+  - a slides demo: its page rows are untouched;
+  - the split screen: its strips' rows are untouched;
+  - a race on track 7: its sky changes;
+  - and in each, the overlays still equal the reference renderer's.
+- In the browser: clouds were looked at on six sky families (the city, beach, desert, mountains and both red skies), every grade on track 7, and the editor's tab on track 7.
+
+**Frame time.** Measured on the MacBook Air (Mac14,2, Apple M2), 2026-10-06, before the review's last small fixes (the clouds' fade cap, the cloud amount's curve, the map's rectangle in a single view only).
+- **Node v26.8.1, `npm run check:enhance -- --time`.** The four attract demos, five pictures a tick:
+
+  | Configuration | Mean | 95th percentile |
+  | --- | --- | --- |
+  | Reference renderer (with the page's palette blit) | 0.96 ms | 1.02 ms |
+  | Smooth motion | 1.75 ms | 1.87 ms |
+  | Smooth motion and clouds | 2.18 ms | 2.28 ms |
+  | Smooth motion and a sunset grade | 2.48 ms | 2.63 ms |
+  | Enhanced (all; no grade, as the default atmosphere has) | 3.04 ms | 3.81 ms |
+  | Enhanced with a sunset on every track | 3.72 ms | 4.44 ms |
+
+  - The clouds cost about 0.4 ms a frame and a grade about 0.7 ms.
+  - Until this change the script ran no ticks at all when called with `--time` alone: the frame count was read from the argument after `--frames`, which was absent. It now defaults to 500.
+- **Chrome 157, track 1, the enhancer's draw.** The page's tab was hidden, so it ran at background priority: its reference frame took 2.2 ms here, against the 1.5 ms the first milestone measured. Read these figures against each other, not against the node table:
+  - Enhanced without clouds and lighting: 4.1 ms.
+  - With clouds: 5.8 ms.
+  - With a sunset grade too: 7.0 ms, 7.8 ms for the whole frame.
+
+  All of these fit a 60 Hz frame.
+
+**Not done.**
+- The roadmap's "several scenery layers" (a second, distant horizon) and animated scenery and water ("Animated scenery and water", which needs a reading of which surfaces are water, or water areas marked per track).
+- A HUD layer for high-density screens (Stage 1).
+- Hand-made atmospheres for the game's tracks: every track starts from the defaults.
+
 ### Tools that make later milestones easier
 
-Add an enhancement preview to the viewer and track editor after the first gameplay integration: a fixed camera, effect toggles, intensity controls and an Original/Enhanced comparison. The viewer can preview sprite anchors and replacement sheets; the editor can preview track atmosphere. Store enhancement metadata in a separate project section or sidecar with sensible defaults so existing tracks remain usable.
+Built: the viewer's previews (above) and the track editor's atmosphere preview (Stage 3). The roadmap's note: add an enhancement preview to the viewer and track editor after the first gameplay integration: a fixed camera, effect toggles, intensity controls and an Original/Enhanced comparison. The viewer can preview sprite anchors and replacement sheets; the editor can preview track atmosphere. Store enhancement metadata in a separate project section or sidecar with sensible defaults so existing tracks remain usable.
 
 For efficient Canvas work, cache reusable visuals and separate layers with different update needs where profiling supports it; see [MDN's Canvas optimization guidance](https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Optimizing_canvas).

@@ -6,40 +6,83 @@ import { frameMs } from '../game/clock.js';
 import { carsBySeat, swapSeat } from '../game/versus.js';
 import { LAYOUT } from '../game/versus-rules.js';
 import { composeSplit, flipViewport } from '../render/versus.js';
-import { EFFECTS, FOG, SHADOW, TIMING_FRAMES } from './config.js';
+import { EFFECTS, LOOK_EFFECTS, FOG, SHADOW, CLOUDS, TIMING_FRAMES } from './config.js';
 import { loadSettings, saveSettings, normalize, anyEffect } from './settings.js';
 import { createMotion, present } from './motion.js';
 import { createParticles } from './particles.js';
 import { createLayers, renderEnhancedScene, LAYER_KEYS } from './scene.js';
+import { KIND } from './project.js';
 import { createMarks } from './marks.js';
 import { composite, overlayMask, fogColor, fogRamp, SENTINEL } from './composite.js';
 import { models } from './models.js';
+import { loadAtmospheres, normalizeAtmosphere, sunAngleOf, sunLengthOf, fogTintOf } from './atmosphere.js';
+import { coverClouds, skyRowColours, stripSkyIndices } from './clouds.js';
+import { gradeOf } from './grade.js';
 
-export function createEnhancer({ storage = globalThis.localStorage } = {}) {
+// `storage` keeps the settings and holds the tracks' atmospheres (atmosphere.js); `atmosphere(name)`, when given, is asked for a track's
+// atmosphere instead (the track editor's preview of the values being edited, the viewer's of the stored ones).
+export function createEnhancer({ storage = undefined, atmosphere = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
   const F = models().floor, size = F.width * F.height;
-  let settings = loadSettings(storage), ramps = new WeakMap();
+  let settings = loadSettings(storage), ramps = new WeakMap(), stored = atmosphere ? null : loadAtmospheres(storage);
+  const atmosphereOf = world => normalizeAtmosphere((atmosphere ? atmosphere(world.name) : stored[world.name]) ?? {});
   const motion = createMotion(), particles = createParticles(), marks = createMarks(), timing = { sum: 0, count: 0, last: 0 };
-  const L = createLayers(size), LA = createLayers(size), LB = createLayers(size), sceneA = new Uint8Array(size), sceneB = new Uint8Array(size), mask = new Uint8Array(size), sentinel = new Uint16Array(size);
+  const L = createLayers(size), LA = createLayers(size), LB = createLayers(size), sceneA = new Uint8Array(size), sceneB = new Uint8Array(size), mask = new Uint8Array(size), sentinel = new Uint16Array(size), under = new Uint8Array(size);
 
-  const opts = fine => ({ subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: settings.sunAngle, band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time });
-  const rampOf = world => { let r = ramps.get(world); if (!r) { r = fogRamp(world, settings.fogStrength); ramps.set(world, r); } return r; };
-  const effectsOf = (world, cap) => ({ shadow: settings.shadows || settings.sceneryShadows || settings.sunShadows ? settings.shadowStrength : 0, fog: settings.fog ? { color: fogColor(world), ramp: rampOf(world), horizon: FOG.horizon * settings.fogStrength } : null, cap });
+  const opts = (fine, atmo) => ({ subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time });
+  const rampOf = (world, strength) => { // the fog's table of a world at a strength (the game setting's times the track's)
+    let byStrength = ramps.get(world); if (!byStrength) { byStrength = new Map(); ramps.set(world, byStrength); }
+    let r = byStrength.get(strength); if (!r) { r = fogRamp(world, strength); byStrength.set(strength, r); }
+    return r;
+  };
+  const effectsOf = (world, cap, atmo) => ({ shadow: settings.shadows || settings.sceneryShadows || settings.sunShadows ? settings.shadowStrength : 0, fog: settings.fog ? { color: fogTintOf(atmo, fogColor(world)), ramp: rampOf(world, settings.fogStrength * atmo.fog), horizon: FOG.horizon * settings.fogStrength * atmo.fog } : null, cap });
   const view = (state, alpha) => { const fine = motion.view(state, settings.smooth ? alpha : 1, frameMs()); return { fine, P: present(state, fine) }; };
-  const overlaid = (P, overlays, index) => { overlays(P, index); sentinel.fill(SENTINEL); overlays(P, sentinel); overlayMask(sentinel, mask); };
+  // The overlays over the world, and their mask. In a single view of the track's own sky (`trackSky`), an overlay pixel that only puts back the
+  // sky's own index (the overhead map's rectangle, which the game takes from the race's first frame, sky and all) stays sky: the clouds and
+  // the lighting reach it as they reach the sky around it. Not in the split screen (its strips are drawn over the strips' picture) nor over a
+  // demo's slide.
+  const overlaid = (P, overlays, index, trackSky = false) => {
+    under.set(index); overlays(P, index); sentinel.fill(SENTINEL); overlays(P, sentinel); overlayMask(sentinel, mask);
+    if (trackSky) for (let i = 0; i < mask.length; i++) if (mask[i] && L.kind[i] === KIND.sky && index[i] === under[i]) mask[i] = 0;
+  };
   const timed = (fn) => { const t0 = performance.now(), out = fn(); timing.last = performance.now() - t0; timing.sum += timing.last; timing.count++; return out; };
   const composeLayers = () => { for (const k of LAYER_KEYS) composeSplit(LA[k], LB[k], L[k]); };
+  const S = models().sky, cloudCover = CLOUDS.layers.map(() => ({ alpha: new Float32Array(S.width * S.skyRows), light: new Float32Array(S.width * S.skyRows) }));
+  const rowsMixed = (rows, toward, t, cap) => rows.map((v, i) => Math.min(v + ((toward ? toward[i] : 0xff) - v) * t, cap)); // @math toward white when no colour is given
+  const litRows = (rows, light, cap) => rows.map((v, i) => { const k = i - (i % 3), grey = (rows[k] + rows[k + 1] + rows[k + 2]) / 3 / 0xff; return Math.min(v + (0xff - v) * light * Math.min(Math.max(grey / CLOUDS.brightSky, CLOUDS.dimLight), 1), cap); }); // @math the row's three components; 8-bit to 0 to 1
+  // The look of the frame: the lighting grade of the track's atmosphere, and over the track's sky (`trackSky`: a single view of a race, not a
+  // demo's slide, not the split screen) the grade's gradient and the clouds, which turn with the viewer's horizon strip.
+  const lookOf = (world, atmo, fine, seat, trackSky, cap) => {
+    const grade = settings.lighting ? gradeOf(atmo.grade, atmo.gradeStrength) : null, clouds = settings.clouds && atmo.clouds > 0;
+    let sky = null;
+    if (trackSky && (grade || clouds)) {
+      const base = skyRowColours(world).map(v => Math.min(v, cap)), tint = grade ? { colours: grade.sky.colours.map(v => Math.min(v, cap)), amount: grade.sky.amount } : null, under = tint ? rowsMixed(base, tint.colours, tint.amount, cap) : base; // all within the demo's fade
+      const layers = [];
+      if (clouds) {
+        coverClouds(cloudCover, { amount: atmo.clouds, speed: atmo.cloudSpeed, scroll: (fine.seats[seat]?.sky ?? 0) * S.pixelsPerByte, time: fine.time });
+        CLOUDS.layers.forEach((layer, n) => { // a bank's lit colour is the sky of its row toward white; its shaded base between that and the sky
+          const lit = litRows(under, grade ? layer.light + (grade.cloudLight - layer.light) * grade.strength : layer.light, cap);
+          layers.push({ ...cloudCover[n], lit, shade: lit.map((v, i) => v + (under[i] - v) * layer.shade) });
+        });
+      }
+      sky = { rows: S.skyRows, stripRows: S.horizonRows, strip: tint ? stripSkyIndices(world) : null, tint, clouds: layers };
+    }
+    return { sky, grade: grade ? { ...grade, trackSky } : null };
+  };
 
   const api = {
     get settings() { return settings; },
     active: () => anyEffect(settings),
     // New settings, kept in this browser; a switch that changed starts a new scene (no snapshot or particle of the old mode is kept).
     configure(next) {
-      const before = settings; settings = normalize(next); saveSettings(settings, storage); ramps = new WeakMap();
-      if (EFFECTS.some(k => before[k] !== settings[k])) api.reset();
+      const before = settings; settings = normalize(next); saveSettings(settings, storage);
+      if (EFFECTS.some(k => !LOOK_EFFECTS.includes(k) && before[k] !== settings[k]) || anyEffect(before) !== anyEffect(settings)) api.reset(); // the clouds and the lighting only colour the picture, but with every effect off no snapshot was taken
       return settings;
     },
-    // A new scene (a race start, a restart, a round, a mode change): no snapshot, no particle survives it.
-    reset() { motion.reset(); particles.clear(); marks.clear(); },
+    // A new scene (a race start, a restart, a round, a mode change): no snapshot, no particle survives it. The stored atmospheres are read
+    // again (the track editor may have changed them in another tab).
+    reset() { motion.reset(); particles.clear(); marks.clear(); if (!atmosphere) stored = loadAtmospheres(storage); },
+    // The atmosphere a world is drawn with.
+    atmosphereOf,
     // After every completed tick of the race; `sounds` are the tick's sounds when the page has already taken them out of the state.
     afterTick(state, { sounds = state.sounds } = {}) {
       if (!anyEffect(settings)) return;
@@ -54,10 +97,10 @@ export function createEnhancer({ storage = globalThis.localStorage } = {}) {
       return timed(() => {
         const { fine, P } = view(state, alpha);
         if (seat === 1) swapSeat(P); // @math the second player's seat
-        const camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine));
-        overlaid(P, overlays, index);
+        const atmo = atmosphereOf(P.world), camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine, atmo));
+        overlaid(P, overlays, index, !sky);
         const splats = settings.particles ? particles.splats(P.world, camera, fine.time).map(s => ({ ...s, map: y => y })) : [];
-        composite(out, { index, mask, L, palette, width: F.width, effects: effectsOf(P.world, cap), splats });
+        composite(out, { index, mask, L, palette, width: F.width, effects: { ...effectsOf(P.world, cap, atmo), ...lookOf(P.world, atmo, fine, seat, !sky, cap) }, splats });
         return P;
       });
     },
@@ -66,9 +109,9 @@ export function createEnhancer({ storage = globalThis.localStorage } = {}) {
     // overlays (the strips, the HUD, the flips of an inverted car, the message, the menu) over both.
     drawSplit(state, alpha, { index, out, palette, mode, overlays, cap = 255 }) { // @math the brightest 8-bit component
       return timed(() => {
-        const { fine, P } = view(state, alpha), Y = LAYOUT(), first = P.versus.viewer, cams = [];
-        cams[first] = renderEnhancedScene(P, fine, first, first === 0 ? sceneA : sceneB, first === 0 ? LA : LB, mode, null, opts(fine));
-        swapSeat(P); cams[1 - first] = renderEnhancedScene(P, fine, 1 - first, first === 0 ? sceneB : sceneA, first === 0 ? LB : LA, mode, null, opts(fine)); swapSeat(P);
+        const { fine, P } = view(state, alpha), Y = LAYOUT(), first = P.versus.viewer, cams = [], atmo = atmosphereOf(P.world);
+        cams[first] = renderEnhancedScene(P, fine, first, first === 0 ? sceneA : sceneB, first === 0 ? LA : LB, mode, null, opts(fine, atmo));
+        swapSeat(P); cams[1 - first] = renderEnhancedScene(P, fine, 1 - first, first === 0 ? sceneB : sceneA, first === 0 ? LB : LA, mode, null, opts(fine, atmo)); swapSeat(P);
         composeSplit(sceneA, sceneB, index); composeLayers();
         overlaid(P, overlays, index);
         const flipped = carsBySeat(P).map(c => c.inverted !== 0);
@@ -79,7 +122,7 @@ export function createEnhancer({ storage = globalThis.localStorage } = {}) {
           return flipped[n] && row >= top && row < top + Y.flip.rows ? top + Y.flip.rows - 1 - (row - top) : row; // @math the mirrored row
         };
         const splats = settings.particles ? [0, 1].flatMap(n => particles.splats(P.world, cams[n], fine.time).map(s => ({ ...s, map: y => rowOf(n, y) }))).sort((a, b) => b.depth - a.depth) : []; // @math the two viewers
-        composite(out, { index, mask, L, palette, width: F.width, effects: effectsOf(P.world, cap), splats });
+        composite(out, { index, mask, L, palette, width: F.width, effects: { ...effectsOf(P.world, cap, atmo), ...lookOf(P.world, atmo, fine, first, false, cap) }, splats });
         return P;
       });
     },

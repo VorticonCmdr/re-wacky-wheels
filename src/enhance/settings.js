@@ -5,9 +5,11 @@ import { EFFECTS, PRESETS, LEVELS, LEVEL_STEPS, DEFAULTS, STORAGE_KEY, MENU } fr
 const clampLevel = v => Math.round(Math.min(Math.max(Number(v), 0), 1) * LEVEL_STEPS) / LEVEL_STEPS;
 
 // A settings object from anything (stored JSON, a form): unknown keys dropped, switches as booleans, levels within 0 to 1, the preset recomputed.
+// A switch the input does not have (one added since the settings were stored) takes the value of the preset they were stored under, so a
+// player of Enhanced keeps Enhanced.
 export function normalize(input = {}) {
-  const out = { ...DEFAULTS };
-  for (const k of EFFECTS) if (typeof input?.[k] === 'boolean') out[k] = input[k];
+  const out = { ...DEFAULTS }, stored = typeof input?.preset === 'string' && Object.hasOwn(PRESETS, input.preset) ? PRESETS[input.preset] : null;
+  for (const k of EFFECTS) { if (typeof input?.[k] === 'boolean') out[k] = input[k]; else if (stored) out[k] = stored[k]; }
   for (const k of Object.keys(LEVELS)) if (Number.isFinite(Number(input?.[k])) && input?.[k] !== null && input?.[k] !== '') out[k] = clampLevel(input[k]);
   out.preset = presetOf(out);
   return out;
@@ -31,13 +33,13 @@ export const resetSettings = () => normalize(DEFAULTS);
 // Whether the page draws through the enhanced path at all: with every switch off it draws the reference renderer.
 export const anyEffect = settings => EFFECTS.some(k => settings[k]);
 
-export function loadSettings(storage = globalThis.localStorage) {
-  try { const kept = storage?.getItem(STORAGE_KEY); if (kept) return normalize(JSON.parse(kept)); } catch { /* no storage or a broken entry: the defaults */ }
+export function loadSettings(storage) { // `storage` defaults to the browser's, looked up inside the try (a browser may refuse it)
+  try { const kept = (storage === undefined ? globalThis.localStorage : storage)?.getItem(STORAGE_KEY); if (kept) return normalize(JSON.parse(kept)); } catch { /* no storage or a broken entry: the defaults */ }
   return resetSettings();
 }
 
-export function saveSettings(settings, storage = globalThis.localStorage) {
-  try { storage?.setItem(STORAGE_KEY, JSON.stringify(normalize(settings))); return true; } catch { return false; }
+export function saveSettings(settings, storage) {
+  try { (storage === undefined ? globalThis.localStorage : storage)?.setItem(STORAGE_KEY, JSON.stringify(normalize(settings))); return true; } catch { return false; }
 }
 
 // The words the game menu shows for the settings (src/game/graphics-menu.js lays them out): the preset, the switches, and each level as a percentage (OFF at 0) or,

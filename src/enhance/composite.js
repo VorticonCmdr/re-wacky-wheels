@@ -1,7 +1,9 @@
 // The last step of the Enhanced presentation: the indexed picture through the frame's palette (the palette cycle and the demo's fade
-// included), then on the world's pixels only the shadows on the ground, the distance fog and the particles. The pixels the overlays drew
-// (the HUD, the overhead map, the finish labels, the messages, the menus, the split screen's strips) are taken as they are: the overlay
-// code draws a second time into a buffer of sentinels, and whatever it wrote there is the mask.
+// included), then on the world's pixels only the track's sky (the lighting's gradient and the clouds), the shadows on the ground, the distance
+// fog, the particles and last the lighting grade. The pixels the overlays drew (the HUD, the overhead map, the finish labels, the messages,
+// the menus, the split screen's strips) are taken as they are: the overlay code draws a second time into a buffer of sentinels, and
+// whatever it wrote there is the mask. The sky rows are the track's sky only in a single view of a race: the split screen's are the strips'
+// picture and a demo's slide its page, which the enhancer marks by giving no `sky` and a grade without its sky.
 import { KIND } from './project.js';
 import { floorDepths } from './project.js';
 import { FOG, SHADOW, SUN } from './config.js';
@@ -40,16 +42,34 @@ export function overlayMask(buffer, mask) {
 const mixInto = (c, target, t) => [c[0] + (target[0] - c[0]) * t, c[1] + (target[1] - c[1]) * t, c[2] + (target[2] - c[2]) * t]; // @math the three components
 
 // out: RGBA bytes of the screen. `index` the indexed picture with the overlays, `mask` the overlay pixels, `L` the composed layers, `palette`
-// the RGBA palette of the frame, `effects` { shadow: strength or 0, fog: { color, ramp, horizon } or null, cap: the largest component
-// (the demo's fade) }, `splats` the particle discs with `map` (the row of the viewer's picture to the screen row, or -1).
+// the RGBA palette of the frame, `effects` { shadow: strength or 0, fog: { color, ramp, horizon } or null, sky: the track's sky or null,
+// grade: the lighting or null, cap: the largest component (the demo's fade) }, `splats` the particle discs with `map` (the row of the
+// viewer's picture to the screen row, or -1). `sky` is { rows, stripRows, strip, tint: { colours, amount } or null, clouds: [{ alpha, light, lit,
+// shade }] }: per sky row (and strip row) the colour the lighting mixes the sky toward, `strip` the strip's sky indices (clouds.js
+// stripSkyIndices: the lighting's gradient goes on over them), per sky row each bank's lit and shaded colour, per pixel each bank's cover and light. `grade` is grade.js gradeOf's
+// with `trackSky`: whether the sky rows are the track's sky.
 export function composite(out, { index, mask, L, palette, width, effects, splats = [] }) {
-  const { shadow, fog, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
-  const fogC = fog ? fog.color.map(v => Math.min(v, cap)) : null, ramp = fog?.ramp, last = ramp ? ramp.length - 1 : 0;
+  const { shadow, fog, sky = null, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
+  const fogC = fog ? fog.color.map(v => Math.min(v, cap)) : null, ramp = fog?.ramp, last = ramp ? ramp.length - 1 : 0, skyEnd = sky ? sky.rows * width : 0, stripEnd = sky?.tint ? (sky.rows + sky.stripRows) * width : 0;
   for (let i = 0; i < index.length; i++) {
     const p = index[i] * 4, o = i * 4; // @math four bytes a colour
     let r = palette[p], g = palette[p + 1], b = palette[p + 2]; // @math the three components
     if (!mask[i]) {
       const kind = L.kind[i];
+      if (i < skyEnd && kind === KIND.sky) { // the track's sky: the lighting's gradient, then the clouds over it
+        const k = Math.floor(i / width) * 3, t = sky.tint; // @math three components a row
+        if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
+        for (const c of sky.clouds) { // the banks over it
+          const a = c.alpha[i]; if (!(a > 0)) continue;
+          const l = c.light[i], cr = c.shade[k] + (c.lit[k] - c.shade[k]) * l, cg = c.shade[k + 1] + (c.lit[k + 1] - c.shade[k + 1]) * l, cb = c.shade[k + 2] + (c.lit[k + 2] - c.shade[k + 2]) * l; // @math the three components
+          r += (cr - r) * a; g += (cg - g) * a; b += (cb - b) * a;
+        }
+        r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
+      }
+      else if (i < stripEnd && kind === KIND.horizon) { // the strip's sky-coloured background: the gradient goes on over it
+        const row = Math.floor(i / width), t = sky.tint;
+        if (sky.strip[(row - sky.rows) * 256 + index[i]]) { const k = row * 3; r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math a flag for each palette index; three components a row
+      }
       if (kind === KIND.floor) { // the ground: the shadows (the darker of contact and sun), then the skid marks
         const dark = Math.max(L.shade[i] * darken, L.cast[i] * sunDarken), m = (1 - dark) * (1 - L.mark[i]);
         if (m !== 1) { r *= m; g *= m; b *= m; }
@@ -76,6 +96,17 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
         const a = s.alpha * (s.soft ? 1 - q : 1), o = i * 4; // @math four bytes a colour
         out[o] += (color[0] - out[o]) * a; out[o + 1] += (color[1] - out[o + 1]) * a; out[o + 2] += (color[2] - out[o + 2]) * a; // @math the three components
       }
+    }
+  }
+  if (grade) { // the lighting, last: over the particles too, never over the overlays nor over sky rows that are not the track's sky (grade.js gradePixel, inlined)
+    const world = grade.lut, worldSat = grade.saturation, pictures = grade.sprite.lut, picturesSat = grade.sprite.saturation;
+    for (let i = 0, o = 0; i < index.length; i++, o += 4) { // @math four bytes a colour
+      if (mask[i]) continue;
+      const kind = L.kind[i];
+      if (kind === KIND.sky && !grade.trackSky) continue;
+      const t = kind === KIND.sprite ? pictures : world, s = kind === KIND.sprite ? picturesSat : worldSat;
+      const r = t[out[o]], g = t[256 + out[o + 1]], b = t[512 + out[o + 2]], grey = 0.299 * r + 0.587 * g + 0.114 * b; // @math the green and blue tables follow the red one; the Rec. 601 luma weights
+      out[o] = Math.min(grey + (r - grey) * s, cap); out[o + 1] = Math.min(grey + (g - grey) * s, cap); out[o + 2] = Math.min(grey + (b - grey) * s, cap); // @math the three components
     }
   }
   return out;

@@ -76,7 +76,14 @@
             aria-selected="false"
             aria-controls="object-panel"
           >
-            Objects
+            Objects</button
+          ><button
+            id="atmosphere-tab"
+            role="tab"
+            aria-selected="false"
+            aria-controls="atmosphere-panel"
+          >
+            Atmosphere
           </button>
         </div>
         <div
@@ -113,6 +120,73 @@
             aria-label="Find an object"
           />
           <div id="objects" class="object-grid"></div>
+        </div>
+        <div
+          id="atmosphere-panel"
+          class="palette-panel atmosphere-panel"
+          role="tabpanel"
+          aria-labelledby="atmosphere-tab"
+          hidden
+        >
+          <figure class="atmo-preview">
+            <canvas
+              id="atmo-canvas"
+              width="320"
+              height="200"
+              aria-label="Race view of the track with its atmosphere"
+            ></canvas>
+            <figcaption id="atmo-caption" class="muted"></figcaption>
+          </figure>
+          <div class="atmo-row">
+            <button id="atmo-play" type="button">Play</button
+            ><label class="check"
+              ><input id="atmo-original" type="checkbox" /> Original</label
+            >
+          </div>
+          <label class="atmo-level"
+            >Moment
+            <input id="atmo-moment" type="range" min="0" max="2400" step="20" value="140"
+          /></label>
+          <label class="atmo-level"
+            >Lighting <select id="atmo-grade"></select
+          ></label>
+          <label class="atmo-level"
+            >Strength
+            <input id="atmo-gradeStrength" type="range" min="0" max="1" step="0.05"
+          /></label>
+          <label class="atmo-level"
+            >Clouds
+            <input id="atmo-clouds" type="range" min="0" max="1" step="0.05"
+          /></label>
+          <label class="atmo-level"
+            >Wind
+            <input id="atmo-cloudSpeed" type="range" min="0" max="1" step="0.05"
+          /></label>
+          <label class="check"
+            ><input id="atmo-ownSun" type="checkbox" /> Own sun (else the game's
+            setting)</label
+          >
+          <label class="atmo-level"
+            >Sun direction
+            <input id="atmo-sunAngle" type="range" min="0" max="0.975" step="0.025"
+          /></label>
+          <label class="atmo-level"
+            >Sun height
+            <input id="atmo-sunHeight" type="range" min="0" max="1" step="0.05"
+          /></label>
+          <label class="check"
+            ><input id="atmo-ownFog" type="checkbox" /> Own fog colour (else the
+            horizon's)</label
+          >
+          <label class="atmo-level"
+            >Fog colour <input id="atmo-fogTint" type="color"
+          /></label>
+          <label class="atmo-level"
+            >Fog
+            <input id="atmo-fog" type="range" min="0" max="2" step="0.05"
+          /></label>
+          <button id="atmo-reset" type="button">Reset to the defaults</button>
+          <p id="atmo-note" class="muted atmo-note"></p>
         </div>
         <div class="library-footer">
           <button id="import-draft">Open project</button

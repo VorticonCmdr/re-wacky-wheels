@@ -9,6 +9,8 @@
 //  3. the largest steps between ticks stay under the discontinuity limits, particles and skid marks stay under their caps and a reset
 //     leaves none;
 //  4. the asset garage's race preview runs, draws, and reaches the same tick going back and forward;
+//  4b. Stage 3: the clouds and the track lighting change the track's sky and world but never a demo's slide page, the split screen's
+//     strips or the overlays;
 //  5. with --time, the mean and 95th percentile draw time of each effect on the demos, on this machine.
 // usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time]
 import { readFile } from 'node:fs/promises';
@@ -34,11 +36,14 @@ import { createEnhancer } from '../src/enhance/index.js';
 import { PRESETS, MOTION, PARTICLES, MARKS } from '../src/enhance/config.js';
 import { createRacePreview } from '../src/viewer-preview.js';
 import { createRandom } from '../src/enhance/particles.js';
+import { KIND } from '../src/enhance/project.js';
+import { ATMOSPHERE } from '../src/enhance/config.js';
+import { decodePcxMember } from '../src/formats/pcx.js';
 
-const args = process.argv.slice(2), frames = Number(args[args.indexOf('--frames') + 1] || 500), path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
+const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const dat = path ? new Uint8Array(await readFile(path)) : await (await openGameFolder()).open('WACKY.DAT');
 const members = archiveMembers(dat), mov = parseMov(members.get('GIG.MOV')), hudArt = loadHudArt(members), SIZE = 64000, WIDTH = 320;
-const memory = () => { const m = new Map(); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v) }; };
+const memory = (atmospheres = null) => { const m = new Map(); if (atmospheres) m.set(ATMOSPHERE.storageKey, JSON.stringify({ version: 1, tracks: atmospheres })); return { getItem: k => m.get(k) ?? null, setItem: (k, v) => m.set(k, v), removeItem: k => m.delete(k) }; };
 let problems = 0;
 const fail = msg => { problems++; console.log(`FAIL ${msg}`); };
 
@@ -231,15 +236,50 @@ for (const track of ['2', '6', '12', '27']) {
   } catch (e) { fail(`preview of track ${track}: ${e.message}`); }
 }
 
+// ---- 3b. Stage 3: with a dark, cloudy atmosphere on every track, the clouds and the lighting change the track's sky and world, and leave alone
+// what is not the track's sky (a demo's slide page, the split screen's strips) and the overlays
+function slides() {
+  const spec = demoSpec('ordering', null), state = { ...base(), class: spec.class, engine: spec.engine, detail: spec.detail, humanSlot: 0, demo: { kind: 'ordering', spec, mode: spec.mode, page: 1, pictures: spec.pages.map(n => decodePcxMember(members.get(n))) } };
+  startRace(state, { ...loadTrack(dat, String(spec.track), spec.engine, 0), lion: lionBytes(members) }, spec.laps); beginIntro(state);
+  let bmc = bmcStart(parseBmc(members.get(`${spec.track}.BMC`) ?? new Uint8Array(0)));
+  return { name: `slides of track ${spec.track}`, state, input: () => { if (state.intro) return {}; const s = bmcStep(bmc); bmc = s.state; return s.controls.end ? {} : s.controls; } };
+}
+{
+  const dark = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9 }])); // @math every track night and cloudy
+  for (const [make, sky] of [[slides, false], [() => versus(1, 'race'), false], [() => race(7), true]]) { // @math a slides demo, the split screen, a race on a track with sky
+    const sc = make(), s = sc.state, on = createEnhancer({ storage: memory(dark) }), off = createEnhancer({ storage: memory(dark) });
+    on.configure(PRESETS.enhanced); off.configure({ ...PRESETS.enhanced, clouds: false, lighting: false });
+    const a = new Uint8ClampedArray(SIZE * 4), b = new Uint8ClampedArray(SIZE * 4), idx = new Uint8Array(SIZE), ref = new Uint8Array(SIZE); // @math four bytes a colour
+    let wrong = null, changed = 0, compared = 0;
+    for (let t = 0; t < Math.min(frames, 300) && !wrong; t++) { // @math long enough for the slides and the clouds to move
+      const input = sc.input(); if (input === null) break;
+      stepRace(s, input); on.afterTick(s); off.afterTick(s);
+      if (t % 29 !== 0) continue; // @math a sample now and then
+      drawEnhanced(off, sc, 1, idx, b); drawEnhanced(on, sc, 1, idx, a); drawOriginal(sc, ref); // at the tick, where the overlays (the overhead map's dots) are the reference renderer's
+      const { L, mask } = on.inspect(), palette = rgbaPalette(s.world.palette);
+      for (let i = 0; i < SIZE && !wrong; i++) {
+        const same = a[i * 4] === b[i * 4] && a[i * 4 + 1] === b[i * 4 + 1] && a[i * 4 + 2] === b[i * 4 + 2]; // @math four bytes a colour
+        if (mask[i] && [0, 1, 2].some(k => a[i * 4 + k] !== palette[ref[i] * 4 + k])) wrong = `tick ${t}: the overlay pixel ${i % WIDTH},${Math.floor(i / WIDTH)} changed`; // @math four bytes a colour, three compared
+        else if (!sky && L.kind[i] === KIND.sky && !same) wrong = `tick ${t}: the sky-row pixel ${i % WIDTH},${Math.floor(i / WIDTH)} (a slide's page or the strips' picture) changed`;
+        else if (sky && L.kind[i] === KIND.sky && !same) changed++;
+      }
+      compared++;
+    }
+    if (wrong) fail(`${sc.name}, clouds and lighting: ${wrong}`);
+    else if (sky && !changed) fail(`${sc.name}: the clouds and the lighting changed no pixel of the track's sky`);
+    else console.log(`ok   ${sc.name}: ${compared} pictures with a night and cloudy atmosphere: the overlays untouched${sky ? `, ${changed} sky pixels changed` : ', the sky rows (not the track\'s sky) untouched'}`);
+  }
+}
+
 // ---- 4. the draw time of each effect
 if (timing) {
   const device = (() => { try { return process.platform === 'darwin' ? execSync('sysctl -n hw.model', { encoding: 'utf8' }).trim() : os.hostname(); } catch { return os.hostname(); } })();
   console.log(`\ndraw time per frame on ${device}, ${os.cpus()[0].model}, node ${process.version}, about 5 pictures a tick (60 Hz over the 11.3 Hz ticks):`);
-  const configs = [['reference renderer', null], ['smooth motion', { ...PRESETS.original, smooth: true }], ['+ shadows', { ...PRESETS.original, smooth: true, shadows: true, sceneryShadows: true }], ['+ sun shadows', { ...PRESETS.original, smooth: true, sunShadows: true }], ['+ particles', { ...PRESETS.original, smooth: true, particles: true }], ['+ skid marks', { ...PRESETS.original, smooth: true, skidMarks: true }], ['+ fog', { ...PRESETS.original, smooth: true, fog: true }], ['Enhanced (all)', PRESETS.enhanced]];
-  for (const [label, cfg] of configs) {
+  const configs = [['reference renderer', null], ['smooth motion', { ...PRESETS.original, smooth: true }], ['+ shadows', { ...PRESETS.original, smooth: true, shadows: true, sceneryShadows: true }], ['+ sun shadows', { ...PRESETS.original, smooth: true, sunShadows: true }], ['+ particles', { ...PRESETS.original, smooth: true, particles: true }], ['+ skid marks', { ...PRESETS.original, smooth: true, skidMarks: true }], ['+ fog', { ...PRESETS.original, smooth: true, fog: true }], ['+ clouds', { ...PRESETS.original, smooth: true, clouds: true }], ['+ lighting (sunset)', { ...PRESETS.original, smooth: true, lighting: true }, { grade: 'sunset' }], ['Enhanced (all)', PRESETS.enhanced], ['Enhanced, sunset', PRESETS.enhanced, { grade: 'sunset' }]];
+  for (const [label, cfg, atmosphere] of configs) {
     const times = [];
     for (const race of [1, 2, 3, 4]) { // @math the four attract races
-      const sc = demo(race), s = sc.state, enh = createEnhancer({ storage: memory() }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4), palette = rgbaPalette(s.world.palette); // @math four bytes a colour
+      const sc = demo(race), s = sc.state, enh = createEnhancer({ storage: memory(atmosphere ? Object.fromEntries(raceTracks.map(t => [String(t), atmosphere])) : null) }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4), palette = rgbaPalette(s.world.palette); // @math four bytes a colour
       if (cfg) enh.configure(cfg);
       for (let t = 0; t < frames; t++) {
         const input = sc.input(); if (input === null) break;

@@ -13,6 +13,7 @@ import { createRacePreview, anchorStage } from './viewer-preview.js';
 import { driverFile, driverCount } from './game/drivers.js';
 import { normalize, applyPreset, change, loadSettings, saveSettings, anyEffect } from './enhance/settings.js';
 import { EFFECTS, LEVELS, PRESETS } from './enhance/config.js';
+import { loadAtmospheres } from './enhance/atmosphere.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
@@ -221,7 +222,7 @@ function previewTrack(entry) {
 // The enhancement preview of a track (docs/enhancements.md): a race on the track seen from the race camera, the reference renderer on the left
 // and the Enhanced presentation on the right, at a moment of the drive or playing; the effects, their levels and the sun can be tried here
 // and saved for the playtest page.
-const EFFECT_LABELS = { smooth: 'Smooth motion', shadows: 'Contact shadows', sceneryShadows: 'Scenery shadows', sunShadows: 'Sun shadows', particles: 'Particles', skidMarks: 'Skid marks', fog: 'Distance fog' };
+const EFFECT_LABELS = { smooth: 'Smooth motion', shadows: 'Contact shadows', sceneryShadows: 'Scenery shadows', sunShadows: 'Sun shadows', particles: 'Particles', skidMarks: 'Skid marks', fog: 'Distance fog', clouds: 'Clouds', lighting: 'Track lighting' };
 const LEVEL_LABELS = { shadowStrength: 'Shadow strength', fogStrength: 'Fog strength', particleAmount: 'Particle amount', sunAngle: 'Sun direction' };
 function rangeControl(label, value, change) {
   const input = el('input'); input.type = 'range'; input.min = 0; input.max = 1; input.step = 0.05; input.value = value; input.oninput = () => change(Number(input.value)); return field(label, input);
@@ -230,7 +231,8 @@ function previewRace(stem) {
   const dat = get('wacky.dat')?.data;
   if (!dat || !get(stem + '.gam')) { $('preview').replaceChildren(el('p', 'The race view runs the game on your WACKY.DAT: open the complete archive.', 'preview-error')); return; }
   let preview;
-  try { preview = createRacePreview(dat, stem); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
+  const atmospheres = loadAtmospheres(); // the tracks' atmospheres the track editor keeps (read here, never written)
+  try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name] }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
   const saved = loadSettings();
   let settings = state.gfx ??= anyEffect(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when it has any, else the Enhanced preset
   let moment = 140, layout = 'both', hud = true, level = 1, playing = false, acc = 0, last = 0, alpha = 1; // @math a moment after the fly-in and the countdown

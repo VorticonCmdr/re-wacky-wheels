@@ -53,13 +53,13 @@ export function castOf(r, P, drawn, ground) {
 // The silhouette of the record laid on the ground away from the sun. A picture is flat, but what it shows has depth: each drawn column is cast
 // as the band its line from the lowest to the highest opaque pixel sweeps when the picture is moved through its depth along the camera's view
 // (the drawn width times SUN.depth), the heights read off the picture at its distance, the ground taken as the camera sees it. `sun` is
-// { f, l }: the direction the shadows fall in the camera's terms. Writes L.cast and returns the box it touched.
+// { f, l, length }: the direction the shadows fall in the camera's terms and the length of a shadow per unit of height. Writes L.cast and returns the box it touched.
 export function castShadow(L, c, world, sun, width, height, box) {
   const { r, cols } = c, d = r.distance, ppu = pixelsPerUnit(d), A = cameraPoint(world, c.anchor, d), half = ((r.picture.w / ppu) * SUN.depth) / 2; // @math half the depth either side of the point
   for (let i = 0; i < cols.top.length; i++) {
     if (cols.top[i] < 0) continue;
     const u = (r.left + i - c.anchor) / ppu, zTop = (c.ground - (r.top + cols.top[i])) / ppu, zBottom = Math.max((c.ground - (r.top + cols.bottom[i] + 1)) / ppu, 0);
-    const at = (z, depth) => fromCamera(world, A.f + depth + z * SUN.length * sun.f, A.l + u + z * SUN.length * sun.l);
+    const at = (z, depth) => fromCamera(world, A.f + depth + z * sun.length * sun.f, A.l + u + z * sun.length * sun.l);
     const corners = [at(zBottom, -half), at(zTop, -half), at(zTop, half), at(zBottom, half)];
     if (corners.some(p => !p)) continue;
     const pts = corners.map(p => [p.column, p.bottom - 1]); // the row above the ground row, as the picture's bottom row is
@@ -70,10 +70,11 @@ export function castShadow(L, c, world, sun, width, height, box) {
   return box;
 }
 
-// The shadows' direction in the camera's terms for a sun at `angle` (a part of a turn) and the camera's heading.
-export function sunDirection(world, angle, heading) {
+// The shadows' direction in the camera's terms for a sun at `angle` (a part of a turn) and the camera's heading, with `length` the shadow of a
+// unit of height (SUN.length unless the track's atmosphere sets the sun's height).
+export function sunDirection(world, angle, heading, length = SUN.length) {
   const turn = models().view.turn, [f, l] = headingVector(world, Math.round(angle * turn) - heading);
-  return { f, l };
+  return { f, l, length };
 }
 
 // Softens the cast layer inside the box: a box blur of SUN.blur pixels, first along the rows, then down the columns.

@@ -22,7 +22,7 @@ const START = () => K({ headingAt: 120276, heading: 480, startSites: [132008, 13
 
 const OBJECT_BIAS = 1024; // @math the map-to-world origin of the object words (view.object-column-observed worldOffset)
 
-const upper = new Map();
+const upper = new WeakMap(); // by the archive's bytes: an archive nothing holds any more (the track editor's previews of edited tracks) is let go
 
 export function archiveMembers(dat) {
   if (!upper.has(dat)) upper.set(dat, new Map(parseDatDirectory(dat).map(e => [e.name.toUpperCase(), e.data])));

@@ -20,6 +20,7 @@ import {
   deleteWaypoint,
   routeSegment,
 } from './track-model.js';
+import { createAtmospherePanel } from './track-atmosphere.js';
 
 const $ = (id) => document.getElementById(id);
 const canvas = $('map'),
@@ -66,6 +67,12 @@ const hints = {
   start: 'Click or drag to move the start position.',
   pan: 'Drag to pan. Scroll to zoom.',
 };
+// The Atmosphere tab (track-atmosphere.js): the selected track's atmosphere and its race view.
+const atmosphere = createAtmospherePanel({
+  $,
+  context: () => ({ original: state.original, track: state.track }),
+  status: (message, error) => status(message, error),
+});
 function status(message, error = false) {
   $('status').textContent = message;
   $('status').classList.toggle('error', error);
@@ -155,6 +162,7 @@ function committed(before, label) {
     status(label);
     autosave();
     updateSaveState();
+    atmosphere.trackEdited();
   }
 }
 function edit(label, action) {
@@ -192,6 +200,7 @@ function undo(redo = false) {
   requestRender();
   updateSaveState();
   autosave();
+  atmosphere.trackEdited();
   status(`${redo ? 'Redid' : 'Undid'}: ${label}`);
 }
 function imageCanvas(img, transparent = -1, palette = img.palette) {
@@ -223,11 +232,19 @@ function selectTile(tile, switchTool = true) {
   updateInspector();
   requestRender();
 }
-function setTab(objects) {
-  $('tile-panel').hidden = objects;
-  $('object-panel').hidden = !objects;
-  $('tiles-tab').setAttribute('aria-selected', String(!objects));
-  $('objects-tab').setAttribute('aria-selected', String(objects));
+// The library's tabs: 'tiles', 'objects' or 'atmosphere' (the track's atmosphere and its race view, track-atmosphere.js).
+function setTab(name) {
+  const panels = {
+    tiles: 'tile-panel',
+    objects: 'object-panel',
+    atmosphere: 'atmosphere-panel',
+  };
+  for (const [tab, panel] of Object.entries(panels)) {
+    $(panel).hidden = tab !== name;
+    $(`${tab}-tab`).setAttribute('aria-selected', String(tab === name));
+  }
+  if (name === 'atmosphere') atmosphere.show();
+  else atmosphere.hide();
 }
 function buildPalette() {
   state.tiles = [];
@@ -363,11 +380,11 @@ function setTool(tool) {
   if (tool === 'route') $('layer-route').checked = true;
   if (tool === 'object') {
     $('layer-objects').checked = true;
-    setTab(true);
+    setTab('objects');
   }
   if (tool === 'start') $('layer-start').checked = true;
   if (['brush', 'rectangle', 'fill', 'eyedropper'].includes(tool))
-    setTab(false);
+    setTab('tiles');
   $('brush-size').disabled = tool !== 'brush';
   updateInspector();
   requestRender();
@@ -395,6 +412,7 @@ function selectTrack(stem) {
   updateHistory();
   updateInspector();
   updateSaveState();
+  atmosphere.setTrack(stem);
   for (const id of [
     'save-draft',
     'export-map',
@@ -1179,15 +1197,21 @@ function applyDraft(project) {
     state.tracks.has(project.selected) ? project.selected : state.track.stem
   );
   autosave();
+  const atmospheres = atmosphere.applyProject(project.atmosphere);
+  atmosphere.trackEdited();
   status(
-    `Restored ${prepared.length} edited track${prepared.length === 1 ? '' : 's'}.`
+    `Restored ${prepared.length} edited track${prepared.length === 1 ? '' : 's'}${atmospheres ? ` and ${atmospheres} track atmosphere${atmospheres === 1 ? '' : 's'}` : ''}.`
   );
 }
 function saveProject() {
   if (!state.original) return;
   finishGesture();
   download(
-    JSON.stringify(draftData(), null, 2),
+    JSON.stringify(
+      { ...draftData(), atmosphere: atmosphere.projectSection() }, // the tracks' atmospheres (not in the browser draft: they are kept as they change)
+      null,
+      2
+    ),
     'wacky-wheels-tracks.json',
     'application/json'
   );
@@ -1242,8 +1266,9 @@ $('next').onclick = () =>
       (state.stems.indexOf(state.track.stem) + 1) % state.stems.length
     ]
   );
-$('tiles-tab').onclick = () => setTab(false);
-$('objects-tab').onclick = () => setTab(true);
+$('tiles-tab').onclick = () => setTab('tiles');
+$('objects-tab').onclick = () => setTab('objects');
+$('atmosphere-tab').onclick = () => setTab('atmosphere');
 $('tile-search').oninput = $('used-only').onchange = updateTileVisibility;
 $('object-search').oninput = () => {
   const query = $('object-search').value.toLowerCase();

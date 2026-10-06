@@ -8,7 +8,7 @@
 //    WF or UNKNOWN claim, so any decode that runs it badges no stronger than that claim;
 //  - src/enhance/ (the Enhanced presentation, docs/enhancements.md) is outside THE RULE but has its own: its design numbers live
 //    in src/enhance/config.js only (other modules: 0, 1 and `// @math <reason>` lines), it cites no claims (K/UNKNOWN), it never
-//    assigns to the race `state`, never imports formats/hypotheses/, and only src/enhance/ itself, the playtest page (src/play.js) and the asset garage's previews (src/viewer.js, src/viewer-preview.js) import it.
+//    assigns to the race `state`, never imports formats/hypotheses/, and only src/enhance/ itself, the playtest page (src/play.js), the asset garage's previews (src/viewer.js, src/viewer-preview.js) and the track editor's Atmosphere tab (src/track-atmosphere.js) import it.
 // Usage: node tools/lint/constants.mjs [files or dirs...]   (default: the governed directories)
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, sep, dirname } from 'node:path';
@@ -19,7 +19,7 @@ import * as walk from 'acorn-walk';
 // expected(id) lets checks read a claim's value through K(); it is the only dynamic-id caller.
 const DYNAMIC_ID = ['src/verify/expect.js'];
 export const GOVERNED = ['src/formats', 'src/render', 'src/audio', 'src/game', 'src/verify/checks'];
-export const ENHANCE = 'src/enhance', ENHANCE_CONFIG = 'src/enhance/config.js', ENHANCE_USERS = ['src/play.js', 'src/viewer-preview.js', 'src/viewer.js'];
+export const ENHANCE = 'src/enhance', ENHANCE_CONFIG = 'src/enhance/config.js', ENHANCE_USERS = ['src/play.js', 'src/viewer-preview.js', 'src/viewer.js', 'src/track-atmosphere.js'];
 
 async function files(path) {
   const s = await stat(path).catch(() => null);

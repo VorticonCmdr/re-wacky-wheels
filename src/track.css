@@ -867,3 +867,46 @@ kbd {
     margin-top: -8px;
   }
 }
+
+.atmosphere-panel {
+  overflow: auto;
+  gap: 8px;
+  padding-bottom: 14px;
+}
+.atmo-preview {
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.atmo-preview canvas {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  image-rendering: pixelated;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.atmo-preview figcaption,
+.atmo-note {
+  font-size: 11px;
+  margin: 0;
+}
+.atmo-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.atmo-level {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.atmo-level input,
+.atmo-level select {
+  min-width: 0;
+  width: 100%;
+}

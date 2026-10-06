@@ -4,15 +4,18 @@
 // from the reconstructed modules (view.js, sky.js, floor.js, horizon.js, clock.js). `npm run lint` keeps the numbers of src/enhance in
 // this file: any other module of the directory may use only 0, 1 and lines tagged `// @math <reason>`.
 
-// The presets. Original is the reference renderer of the port, untouched; Enhanced turns every effect of the first milestone on.
-export const EFFECTS = ['smooth', 'shadows', 'sceneryShadows', 'sunShadows', 'particles', 'skidMarks', 'fog'];
+// The presets. Original is the reference renderer of the port, untouched; Enhanced turns every effect on (Stage 3 added the clouds and the
+// track lighting).
+export const EFFECTS = ['smooth', 'shadows', 'sceneryShadows', 'sunShadows', 'particles', 'skidMarks', 'fog', 'clouds', 'lighting'];
 export const PRESETS = {
-  original: { smooth: false, shadows: false, sceneryShadows: false, sunShadows: false, particles: false, skidMarks: false, fog: false },
-  enhanced: { smooth: true, shadows: true, sceneryShadows: true, sunShadows: true, particles: true, skidMarks: true, fog: true },
+  original: { smooth: false, shadows: false, sceneryShadows: false, sunShadows: false, particles: false, skidMarks: false, fog: false, clouds: false, lighting: false },
+  enhanced: { smooth: true, shadows: true, sceneryShadows: true, sunShadows: true, particles: true, skidMarks: true, fog: true, clouds: true, lighting: true },
 };
+// The switches that only change how the picture is coloured: switching them keeps the scene (the snapshots, particles and skid marks).
+export const LOOK_EFFECTS = ['clouds', 'lighting'];
 
 // The intensity controls of the page (each 0 to 1) and their defaults; `sunAngle` is the sun's direction in the world as a part of a turn
-// (the same for every track: the tracks carry no sun of their own).
+// (the game's tracks carry no sun: this one serves every track that has no sun in its atmosphere, ATMOSPHERE below).
 export const LEVELS = { shadowStrength: 1, fogStrength: 1, particleAmount: 1, sunAngle: 0.375 };
 export const LEVEL_STEPS = 40; // levels are kept in fortieths (the sliders move in twentieths, the sun in the menu in eighths)
 
@@ -146,4 +149,77 @@ export const CRT = {
 export const DISPLAY_MENU = {
   aspects: { wide: '16 BY 10', dos: '4 BY 3' },
   scalings: { fit: 'FIT', integer: 'INTEGER' },
+};
+
+// Stage 3 (docs/enhancements.md): the atmosphere of each track, set in the track editor and kept in this browser under `storageKey` by track
+// number, apart from the game files. A track with nothing stored has the defaults, which draw exactly as before Stage 3 apart from the
+// clouds: the sun of the game setting (SUN FROM) at the height of SUN.length, the fog colour taken from the horizon strip at the strength of
+// the game setting, and no lighting grade.
+// - `sunAngle`: null for the game setting, else a part of a turn; `sunHeight`: null for SUN.length, else 0 (a sun `sunElevation[0]` degrees
+//   above the horizon: long shadows) to 1 (`sunElevation[1]` degrees: short ones).
+// - `fogTint`: null for the strip's colour, else '#rrggbb'; `fog`: the fog's strength against the game setting, 0 to `fogMax`.
+// - `clouds`: how much of the cloud banks is cloud (0 none, the default about a fifth of their middle rows, 1 nearly all); `cloudSpeed`:
+//   how fast the wind moves them.
+// - `grade`: one of GRADES.names; `gradeStrength`: how much of it, 0 to 1.
+export const ATMOSPHERE = {
+  storageKey: 'wackywheels.atmosphere',
+  defaults: { sunAngle: null, sunHeight: null, fogTint: null, fog: 1, clouds: 0.35, cloudSpeed: 0.3, grade: 'none', gradeStrength: 1 },
+  fogMax: 2,
+  steps: 40, // levels kept in fortieths
+  sunElevation: [10, 70], // degrees
+};
+
+// The clouds: two banks of a cloud field over the track's sky (never the slides of a demo, never the split screen, whose sky rows are the
+// strips' picture), behind the horizon strip, the pictures and the overlays, in the manner of the clouds some of the game's own horizon
+// strips have (lit tops, shaded flat bases, a few dithered steps). The whole sky moves with the horizon strip as the car turns (the strip's
+// own scroll, without its wraps, so no seam), and the wind moves each bank across it.
+// - `texture`: the cloud field's size in texels, repeating both ways; `octaves`: the layers of value noise summed in it, the coarsest with
+//   `cells` cells across (fine enough that every bank's rows cross many clouds).
+// - per bank: `rows` the sky rows it lies in (its flat base at the second), `base` the rows over which its base fades in and `top` those over
+//   which its top fades out, `scale` the texels a screen pixel across and a row down, `wind` texels a second at full cloud speed, `cover` the
+//   field's coverage against the track's cloud amount, `opacity` the most a cloud hides of the sky, `light` how near white its lit colour is
+//   (against the sky's colour of that row), `shade` how far its shaded base goes from the lit colour toward the sky's.
+// - `soft`: the width of a cloud's edge in field values; `coverage` and `curve`: the part of the field that is cloud at a cover c is
+//   coverage x c ** curve (the field value clouds begin at is read off the field's own distribution), so the default amount gives about a
+//   fifth of a bank's middle rows and the full amount nearly all of them; `edge`: how far the field is lowered where a bank fades out (its
+//   top and base).
+// - `relief`: the rows above and below a pixel the field is compared over to tell a lit top from a shaded base.
+// - `brightSky`: the grey (0 to 1) of a sky row from which a bank's light reaches its full whiteness; a darker row (the red skies of some
+//   tracks) lights its clouds less, down to `dimLight` of it, so they keep the sky's colour. A bank's shaded base lies between its lit
+//   colour and the sky's (`shade` toward the sky), never darker than the sky.
+// - `levels`: how many steps of cover a pixel is drawn with and `lightLevels` of light, ordered dithering between them (the original skies
+//   are dithered ramps).
+export const CLOUDS = {
+  seed: 0x2c1d07,
+  texture: 256,
+  octaves: 4,
+  cells: 8,
+  layers: [
+    { rows: [62, 102], base: 3, top: 26, scale: [1.5, 2.8], wind: 7, cover: 0.9, opacity: 0.7, light: 0.72, shade: 0.22, seed: 1 }, // the far bank: small, flat puffs just above the strip
+    { rows: [14, 84], base: 4, top: 40, scale: [0.75, 1.3], wind: 14, cover: 1, opacity: 0.92, light: 0.9, shade: 0.3, seed: 2 }, // the near bank: bigger clouds higher up
+  ],
+  soft: 0.08,
+  coverage: 0.95,
+  curve: 1.44,
+  edge: 0.45,
+  relief: 3,
+  brightSky: 0.6,
+  dimLight: 0.35,
+  reliefGain: 3, // the light of a pixel: one half plus this times how much denser the field is below it than above
+  levels: 4,
+  lightLevels: 3,
+};
+
+// The track lighting: a colour grade over the finished picture (never the overlays, nor the sky rows of the slides and the split screen),
+// a gradient over the track's sky, and the clouds' light. Per grade: `gain`, `lift` (in 8-bit units) and `gamma` per component, applied as
+// ((c / 255) * gain + lift / 255) ** gamma; `saturation` against the grey of the result; `sky` the gradient the sky is mixed toward (`top`
+// at row 0, `bottom` at the horizon) by `amount`; `cloudLight` the clouds' light instead of the layers' own; `sprites` the part of the grade
+// the pictures (racers, objects, shots) get, so the things to drive around stay easy to see.
+export const GRADES = {
+  names: ['none', 'dawn', 'sunset', 'dusk', 'night', 'overcast'],
+  dawn: { gain: [1.04, 0.98, 0.95], lift: [12, 6, 14], gamma: [0.95, 1, 1.04], saturation: 0.9, sky: { top: [118, 132, 206], bottom: [255, 200, 168], amount: 0.5 }, cloudLight: 0.8, sprites: 0.6 },
+  sunset: { gain: [1.1, 0.86, 0.7], lift: [14, 2, 8], gamma: [0.94, 1.02, 1.1], saturation: 1.05, sky: { top: [72, 44, 124], bottom: [255, 146, 64], amount: 0.62 }, cloudLight: 0.7, sprites: 0.6 },
+  dusk: { gain: [0.74, 0.7, 0.88], lift: [8, 4, 20], gamma: [1.08, 1.1, 1], saturation: 0.8, sky: { top: [24, 22, 74], bottom: [178, 108, 140], amount: 0.62 }, cloudLight: 0.4, sprites: 0.55 },
+  night: { gain: [0.4, 0.46, 0.68], lift: [4, 6, 18], gamma: [1.12, 1.08, 1], saturation: 0.6, sky: { top: [4, 6, 22], bottom: [28, 38, 78], amount: 0.86 }, cloudLight: 0.18, sprites: 0.5 },
+  overcast: { gain: [0.92, 0.94, 0.98], lift: [12, 12, 14], gamma: [1, 1, 1], saturation: 0.62, sky: { top: [146, 152, 162], bottom: [204, 208, 214], amount: 0.62 }, cloudLight: 0.72, sprites: 0.75 },
 };

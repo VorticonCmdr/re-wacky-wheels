@@ -16,7 +16,7 @@ import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { loadHudArt } from './render/hud.js';
 import { createEnhancer } from './enhance/index.js';
 import { normalize, anyEffect } from './enhance/settings.js';
-import { EFFECTS, SHADOW } from './enhance/config.js';
+import { EFFECTS, LOOK_EFFECTS, SHADOW } from './enhance/config.js';
 import { turnDelta } from './enhance/motion.js';
 import { createLayers } from './enhance/scene.js';
 import { stampShadow, castShadow, sunDirection, blurCast } from './enhance/shadows.js';
@@ -63,11 +63,14 @@ function demoOf(track) {
   return null;
 }
 
-// The race preview of a track: `seek(tick)` runs it to a tick (from the start again when going back or when the effects change), `step()`
-// runs one more, `draw(...)` draws the reference and the enhanced picture of the moment.
-export function createRacePreview(dat, track) {
-  const members = archiveMembers(dat), bmc = members.get(`${track}.BMC`), hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
+// The race preview of a track: `seek(tick)` runs it to a tick (from the start again when going back or when an effect that keeps a scene
+// changes), `step()` runs one more, `draw(...)` draws the reference and the enhanced picture of the moment. `atmosphere(name)` gives the
+// track's atmosphere (createEnhancer's); `demoControls` false drives with the pilot even where the track has a demo recording (the track
+// editor's preview of an edited track, whose layout the recording does not fit).
+export function createRacePreview(dat, track, { atmosphere = null, demoControls = true } = {}) {
+  const members = archiveMembers(dat), bmc = demoControls ? members.get(`${track}.BMC`) : null, hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
   const recorded = bmc ? demoOf(track) : null, demo = recorded?.spec ?? null; // the demo's class, engine, laps and detail level (the detail sets the steering rate)
+  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${anyEffect(s)}`; // the clouds and the lighting only colour the picture (but with every effect off the enhancer takes no snapshot)
   let state = null, enh = null, inputs = null, switches = null, controls = null;
   const index = new Uint8Array(SIZE), ref = new Uint8Array(SIZE);
 
@@ -84,9 +87,9 @@ export function createRacePreview(dat, track) {
       if (s.controls.end) { controls = null; return pilot(state, memo); } // the recording is over: the pilot takes the wheel
       return s.controls;
     };
-    enh = createEnhancer({ storage: memoryStorage() });
+    enh = createEnhancer({ storage: memoryStorage(), atmosphere });
     enh.configure(settings);
-    switches = EFFECTS.map(k => settings[k]).join();
+    switches = sceneSwitches(settings);
   }
 
   const api = {
@@ -99,7 +102,7 @@ export function createRacePreview(dat, track) {
     // Runs the race to `target` passes (the intro's passes included) with the effects of `settings`.
     seek(target, settings) {
       const s = normalize(settings);
-      if (!state || api.count > target || EFFECTS.map(k => s[k]).join() !== switches) { fresh(s); api.count = 0; }
+      if (!state || api.count > target || sceneSwitches(s) !== switches) { fresh(s); api.count = 0; }
       else enh.configure(s); // the levels only: nothing to run again
       while (api.count < target) api.step();
     },

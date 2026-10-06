@@ -12,13 +12,15 @@ Open `track.html` through Vite, or follow **Track workshop** from the asset view
 6. Choose an **Object** from the palette, then click to place it. Drag existing markers to move them; the inspector exposes exact pixel coordinates and object type. Duplicate or delete the selection as needed. Existing unknown object fields survive edits.
 7. Use **Start** to move the start flag. Optional snapping places objects and waypoints at tile centers. Layer controls show/hide the grid, route, objects and start flag. On tablet-sized screens, **Details** opens these controls.
 
+8. Open the **Atmosphere** tab for how the playtest page's Enhanced graphics draw the track. You can set its lighting (dawn, sunset, dusk, night, overcast) and strength, its clouds and wind, its own sun direction and height, and its own fog colour and strength. The race view above shows the track as you are editing it, with that atmosphere. *Play* and *Moment* move the race, which the pilot drives along the AI route (draw at least one waypoint), and *Original* shows the original picture. Changes are kept in this browser at once and the playtest page uses them; *Reset to the defaults* removes them. The atmosphere is not part of the track's game files: it never changes the exported archive and has no undo. See docs/enhancements.md, Stage 3.
+
 Coordinates use original track pixels, with a 32-pixel tile size and 2,048-pixel map width/height. Object markers indicate the stored anchor, rather than predicting the game's projected sprite footprint. Tile properties and collision behavior come from the original mask files; the editor does not change those masks.
 
 ## Keep and export your work
 
 - **Undo/redo** stores up to 80 edits for each track, including resets and project restoration. Esc cancels an active gesture.
 - Browser drafts save after edits when local storage is available. Reopening the same original archive offers **Restore draft** or **Discard**. Resolve this choice before editing, so the recovered draft cannot be overwritten accidentally. Storage failures are reported; use **Save project** as a portable backup.
-- **Save project** downloads a JSON document containing all modified tracks. Use **Open project** with the same original archive to resume. Projects are validated completely before any edits are applied. Importing a project adds its changes to the current session; it does not clear other edited tracks.
+- **Save project** downloads a JSON document containing all modified tracks and every track atmosphere kept in this browser (opening it takes the atmospheres in too). Use **Open project** with the same original archive to resume. Projects are validated completely before any edits are applied. Importing a project adds its changes to the current session; it does not clear other edited tracks.
 - **Export edited DAT** downloads `WACKY-EDITED.DAT`, including changes across all edited tracks. It never writes to the originals. The DOS game loads tracks from its archive; loose `.m`/`.rd`/`.spw` files do not override it. To try the export in DOS, use a separate installation copy and name the edited archive `WACKY.DAT` there.
 - **Save track image** exports the current tile surface as a full-size PNG, without editor overlays.
 
@@ -26,7 +28,7 @@ Modified archive payloads are appended and their directory entries updated. This
 
 ## Current limits
 
-This is an editor for the documented track components, not a running racing game. Major route/layout changes need the `.pos` wrong-way progress grid and the `shrink*.pcx` thumbnail updated before playing in DOS. Their source versions are preserved; the POS layout has unexplained extra bytes. The editor does not regenerate these files, change tilesets or property masks, animate palette cycling, or edit uncertain `.sin` fields. It also does not test edited tracks inside DOS.
+This is an editor for the documented track components; its Atmosphere tab runs a race of the edited track in the browser, but the editor does not test it inside DOS. Major route/layout changes need the `.pos` wrong-way progress grid and the `shrink*.pcx` thumbnail updated before playing in DOS. Their source versions are preserved; the POS layout has unexplained extra bytes. The editor does not regenerate these files, change tilesets or property masks, animate palette cycling, or edit uncertain `.sin` fields. It also does not test edited tracks inside DOS.
 
 ## Shortcuts
 

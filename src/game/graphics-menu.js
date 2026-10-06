@@ -1,6 +1,6 @@
 // The menus of the page's display and Enhanced presentation (docs/enhancements.md), which the game does not have: GAME OPTIONS gets the item DISPLAY AND EFFECTS, which
-// opens a list in the game's menu style with the preset (Enter goes between ORIGINAL and ENHANCED), the effect switches in two lists (MOTION AND SHADOWS, PARTICLES AND
-// FOG), EFFECT LEVELS (the strengths and the sun) and DISPLAY OPTIONS (display-menu.js: the scaling, the shape, full screen and the CRT look, for the Original preset
+// opens a list in the game's menu style with the preset (Enter goes between ORIGINAL and ENHANCED), the effect switches in two lists (MOTION AND SHADOWS, SURFACE AND
+// SKY), EFFECT LEVELS (the strengths and the sun) and DISPLAY OPTIONS (display-menu.js: the scaling, the shape, full screen and the CRT look, for the Original preset
 // too). The menus only show what the page hands them in `settings.graphics` (the words of src/enhance/settings.js menuView) and return what Enter chose; the page
 // changes its graphics settings and hands the new words back. Every list keeps to six lines, so that its first bar stands below the menu picture's logo as the lists
 // of the game's menus the port models do (test/menu-bars.js).
@@ -11,7 +11,7 @@ export const GRAPHICS_MENU = {
   preset: 'PRESET',
   groups: [
     { id: 'gfxShadows', name: 'MOTION AND SHADOWS', effects: [['smooth', 'SMOOTH MOTION'], ['shadows', 'CONTACT SHADOWS'], ['sceneryShadows', 'SCENERY SHADOWS'], ['sunShadows', 'SUN SHADOWS']] },
-    { id: 'gfxParticles', name: 'PARTICLES AND FOG', effects: [['particles', 'PARTICLES'], ['skidMarks', 'SKID MARKS'], ['fog', 'DISTANCE FOG']] },
+    { id: 'gfxParticles', name: 'SURFACE AND SKY', effects: [['particles', 'PARTICLES'], ['skidMarks', 'SKID MARKS'], ['fog', 'DISTANCE FOG'], ['clouds', 'CLOUDS'], ['lighting', 'TRACK LIGHTING']] }, // the track's own atmosphere (its fog, clouds and lighting) is set in the track editor
   ],
   levelsItem: 'EFFECT LEVELS',
   levels: [['shadowStrength', 'SHADOWS'], ['fogStrength', 'FOG'], ['particleAmount', 'PARTICLES'], ['sunAngle', 'SUN FROM']],

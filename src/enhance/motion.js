@@ -23,7 +23,7 @@ export function capture(state, time = 0, sounds = null) {
   const heard = state.versus ? null : sounds;
   return {
     world: state.world, tick: state.tick, time,
-    seats: seatEntries(state).map(({ car, pre }) => (car ? { cx: pre?.cx ?? car.cx, cy: pre?.cy ?? car.cy, heading: pre?.heading ?? car.heading, tickHeading: pre?.heading ?? car.heading, dir: car.heading, px: car.px, py: car.py, horizon: car.horizon, surface: car.surface, speed: car.speed, jump: car.jump, special: car.special, specialValue: car.specialValue, spark: car.spark, sparkCount: car.sparkCount, skid: skidding(car, heard), crashed: Boolean(car.crashed || car.wrecked) } : null)),
+    seats: seatEntries(state).map(({ car, pre }) => (car ? { cx: pre?.cx ?? car.cx, cy: pre?.cy ?? car.cy, heading: pre?.heading ?? car.heading, tickHeading: pre?.heading ?? car.heading, dir: car.heading, px: car.px, py: car.py, horizon: car.horizon, sky: car.horizon, surface: car.surface, speed: car.speed, jump: car.jump, special: car.special, specialValue: car.specialValue, spark: car.spark, sparkCount: car.sparkCount, skid: skidding(car, heard), crashed: Boolean(car.crashed || car.wrecked) } : null)),
     racers: (state.ai?.racers ?? []).map(r => ({ x: r.x, y: r.y, crashed: Boolean(r.crashed) })),
     shots: (state.shots ?? []).map(s => (s.active ? { x: s.x, y: s.y } : null)),
   };
@@ -52,6 +52,19 @@ export function blendHorizon(a, b, t) {
   return h;
 }
 
+// The step of the horizon offset from one tick to the next, the short way round its period (the wraps 240 -> 80 and 0 -> 160 are no step).
+export function horizonStep(a, b) {
+  const [first, , third] = models().horizon, period = third - first;
+  let d = b - a;
+  if (d > period / 2) d -= period; else if (d < -period / 2) d += period; // @math half the period either way
+  return d;
+}
+
+// `sky`: how far the sky has turned (in horizon offsets) since the scene began, the strip's offset without its wraps: what the clouds move by.
+function carrySky(prev, cur) {
+  cur.seats.forEach((s, i) => { const p = prev.seats[i]; if (s && p) s.sky = p.sky + horizonStep(p.horizon, s.horizon); });
+}
+
 function pointBlend(p, c, t) {
   if (!p || !c) return c;
   const dx = wrap16(c.x - p.x), dy = wrap16(c.y - p.y);
@@ -64,7 +77,7 @@ function seatBlend(p, c, t) {
   const dx = wrap16(c.cx - p.cx), dy = wrap16(c.cy - p.cy), dh = turnDelta(p.heading, c.heading);
   if (Math.hypot(dx, dy) > MOTION.snapDistance || Math.abs(dh) > MOTION.snapTurn) return c; // a discontinuity of the view: shown at once
   const car = pointBlend({ x: p.px, y: p.py }, { x: c.px, y: c.py }, t);
-  return { ...c, cx: p.cx + dx * t, cy: p.cy + dy * t, heading: p.heading + dh * t, px: car.x, py: car.y, horizon: blendHorizon(p.horizon, c.horizon, t) };
+  return { ...c, cx: p.cx + dx * t, cy: p.cy + dy * t, heading: p.heading + dh * t, px: car.x, py: car.y, horizon: blendHorizon(p.horizon, c.horizon, t), sky: p.sky + (c.sky - p.sky) * t };
 }
 
 // The picture between two snapshots: t = 0 is `prev`, t = 1 is `cur`. Another world or an earlier tick is a new scene: `cur` alone.
@@ -103,7 +116,7 @@ export function createMotion() {
   const delay = { sum: 0, count: 0 };
   return {
     reset() { prev = null; cur = null; last = 0; ticked = false; },
-    tick(state, tickMs, sounds = null) { time += tickMs; prev = cur; cur = capture(state, time, sounds); if (!prev || prev.world !== cur.world || prev.tick > cur.tick) prev = cur; ticked = true; return { prev, cur }; },
+    tick(state, tickMs, sounds = null) { time += tickMs; prev = cur; cur = capture(state, time, sounds); if (!prev || prev.world !== cur.world || prev.tick > cur.tick) prev = cur; else carrySky(prev, cur); ticked = true; return { prev, cur }; },
     view(state, alpha, tickMs) {
       if (!cur || cur.world !== state.world) { cur = capture(state, time); prev = cur; }
       const t = Math.min(Math.max(alpha, 0), 1);

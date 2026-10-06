@@ -51,13 +51,16 @@
             <label class="check"><input type="checkbox" id="gfx-particles" /> Surface particles</label>
             <label class="check"><input type="checkbox" id="gfx-skidMarks" /> Skid marks</label>
             <label class="check"><input type="checkbox" id="gfx-fog" /> Distance fog</label>
+            <label class="check"><input type="checkbox" id="gfx-clouds" /> Clouds</label>
+            <label class="check"><input type="checkbox" id="gfx-lighting" /> Track lighting</label>
             <label>Shadows <input type="range" id="gfx-shadowStrength" min="0" max="1" step="0.05" /></label>
             <label>Fog <input type="range" id="gfx-fogStrength" min="0" max="1" step="0.05" /></label>
             <label>Particles <input type="range" id="gfx-particleAmount" min="0" max="1" step="0.05" /></label>
             <label>Sun direction <input type="range" id="gfx-sunAngle" min="0" max="1" step="0.05" /></label>
             <button id="gfx-reset" type="button">Reset graphics</button>
             <p id="gfx-stats" class="help"></p>
-            <p class="help">Original is the reference renderer. Enhanced keeps the original artwork and resolution and adds smooth motion between the game's 11 ticks a second, shadows, particles, skid marks and fog: presentation only, the race runs the same either way. The same settings are in the game's menu: GAME OPTIONS, DISPLAY AND EFFECTS.</p>
+            <p id="gfx-atmosphere" class="help"></p>
+            <p class="help">Original is the reference renderer. Enhanced keeps the original artwork and resolution and adds smooth motion between the game's 11 ticks a second, shadows, particles, skid marks, fog, clouds and track lighting: presentation only, the race runs the same either way. The same settings are in the game's menu: GAME OPTIONS, DISPLAY AND EFFECTS.</p>
           </fieldset>
           <p class="help">Arrows steer, Alt (or Up, A) accelerates, Down (or Z) brakes, Space is the hand brake turn, Ctrl fires a hog or drops the held item (not ported yet), R restarts the race.</p>
         </div>

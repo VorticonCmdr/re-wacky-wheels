@@ -121,7 +121,7 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts) {
   }
   for (const c of casters) stampShadow(L, c, width, height);
   if (casts.length) { // the sun shadows, softened
-    const sun = sunDirection(world, opts.sunAngle, camI.heading), box = { x0: width, x1: -1, y0: height, y1: -1 };
+    const sun = sunDirection(world, opts.sunAngle, camI.heading, opts.sunLength), box = { x0: width, x1: -1, y0: height, y1: -1 };
     for (const c of casts) castShadow(L, c, world, sun, width, height, box);
     blurCast(L, box, width, height, L.scratch);
   }

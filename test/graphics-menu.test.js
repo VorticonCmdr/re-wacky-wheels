@@ -23,7 +23,7 @@ test('the lists show the preset, the switches in two lists and the levels, in th
   const settings = { ...defaultSettings(1, true), graphics: menuView(applyPreset(resetSettings(), 'enhanced')) };
   const def = menuDef('graphics', settings);
   assert.match(def.items[0], /^PRESET +ENHANCED$/);
-  assert.deepEqual(def.items.slice(1), ['MOTION AND SHADOWS', 'PARTICLES AND FOG', GRAPHICS_MENU.levelsItem, 'DISPLAY OPTIONS', 'LEAVE THIS MENU']);
+  assert.deepEqual(def.items.slice(1), ['MOTION AND SHADOWS', 'SURFACE AND SKY', GRAPHICS_MENU.levelsItem, 'DISPLAY OPTIONS', 'LEAVE THIS MENU']);
   assert.deepEqual(def.actions, [{ graphics: { preset: true } }, { open: 'gfxShadows' }, { open: 'gfxParticles' }, { open: 'gfxLevels' }, { open: 'display' }, { back: true }]);
   const lists = EFFECT_LISTS.map(id => menuDef(id, settings));
   assert.deepEqual(lists.flatMap(l => l.actions.slice(0, -1).map(a => a.graphics.toggle)), EFFECTS); // every effect once, in the order of the panel

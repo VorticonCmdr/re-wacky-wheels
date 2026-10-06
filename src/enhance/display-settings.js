@@ -24,13 +24,13 @@ export const changeDisplay = (settings, key, value) => normalizeDisplay({ ...set
 // 320 x 200 canvas scaled by the browser as before.
 export const isPlain = settings => { const s = normalizeDisplay(settings), P = DISPLAY.plain; return s.aspect === P.aspect && s.scaling === P.scaling && !s.crt; };
 
-export function loadDisplay(storage = globalThis.localStorage) {
-  try { const kept = storage?.getItem(DISPLAY.storageKey); if (kept) return normalizeDisplay(JSON.parse(kept)); } catch { /* no storage or a broken entry: the defaults */ }
+export function loadDisplay(storage) { // `storage` defaults to the browser's, looked up inside the try (a browser may refuse it)
+  try { const kept = (storage === undefined ? globalThis.localStorage : storage)?.getItem(DISPLAY.storageKey); if (kept) return normalizeDisplay(JSON.parse(kept)); } catch { /* no storage or a broken entry: the defaults */ }
   return resetDisplay();
 }
 
-export function saveDisplay(settings, storage = globalThis.localStorage) {
-  try { storage?.setItem(DISPLAY.storageKey, JSON.stringify(normalizeDisplay(settings))); return true; } catch { return false; }
+export function saveDisplay(settings, storage) {
+  try { (storage === undefined ? globalThis.localStorage : storage)?.setItem(DISPLAY.storageKey, JSON.stringify(normalizeDisplay(settings))); return true; } catch { return false; }
 }
 
 // The words the game menu shows (src/game/display-menu.js lays them out): the shape, the scaling, full screen, the CRT switch and each level as a

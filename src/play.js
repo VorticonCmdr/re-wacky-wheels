@@ -13,6 +13,7 @@ import { createEnhancer } from './enhance/index.js';
 import { EFFECTS, LEVELS } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
 import { createDisplay } from './enhance/display.js';
+import { describeAtmosphere } from './enhance/atmosphere.js';
 import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from './enhance/display-settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
 import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } from './render/versus.js';
@@ -139,7 +140,7 @@ function startTrack() {
 function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusMode) }) {
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
   startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
-  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
+  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); showAtmosphere(); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
   if (state.cup && state.carry) { const car = { ...state.car, counter: state.carry.counter, held: state.carry.held }; state.car = car; state.player = { ...state.player, car }; } // the pickups go from one race of a cup to the next (obj1+0x2006a)
   rgba = rgbaPalette(state.world.palette);
   state.audio?.stopAll(); state.audio?.engineStart(); // a race starts with the engine running (obj1+0xd04)
@@ -572,6 +573,8 @@ function showGraphics() {
   if (!enh.active()) $('gfx-stats').textContent = 'The reference renderer draws the race.';
   if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's DISPLAY AND EFFECTS shows the same settings
 }
+// The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the clouds, the lighting and the fog draw this track with.
+function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
 function setGraphics(next, control) { enh.configure(next); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider)
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
 for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphics(change(enh.settings, k, e.target.checked), e.target));
