@@ -2,7 +2,7 @@
 // held items) drawn over the picture of BLANK.PCX.
 import { LAYOUT, FLOW, RACE, TAUNT } from '../game/versus-rules.js';
 import { drawText } from './text.js';
-import { drawDigits, drawHeld, drawTimer, drawSpeedometer, drawPlace, drawLapText, drawFigure } from './hud.js';
+import { drawDigits, drawHeld, drawTimer, drawSpeedometer, drawPlace, drawLapText, drawFigure, drawWrongWay } from './hud.js';
 
 const SCREEN = { width: 320, height: 200 }; // @math the VGA mode 13h screen the game draws on
 
@@ -53,14 +53,15 @@ export function flipViewport(fb, seat) {
   return fb;
 }
 
-// The two player race's HUD of both halves over the strips (versus.race-rules): the place digit, the speedometer, the timer, the figure of a lap and the lap text, each half 100 rows from the other.
-// `halves` is [{ timer, speed, place, lap, figure }, ...] for the players one and two, `gates` the race screen options.
+// The two player race's HUD of both halves over the strips (versus.race-rules): the place digit, the speedometer, the timer, the WRONG WAY sign (hud.wrong-way), the figure of a lap and the
+// lap text, each half 100 rows from the other. `halves` is [{ timer, speed, place, wrongWay, lap, figure }, ...] for the players one and two, `gates` the race screen options.
 export function drawRaceHud(fb, art, halves, gates) {
   const R = RACE().hud;
   halves.forEach((h, p) => {
     if (h.place) drawPlace(fb, art, h.place, { x: R.placeX, y: R.placeY[p], from: R.placeFrom });
     if (h.speed && gates.speedometer) drawSpeedometer(fb, art, h.speed, p * R.speedDy);
     if (h.timer && gates.timer) drawTimer(fb, art, h.timer, R.timerY[p]);
+    if (h.wrongWay !== null && h.wrongWay !== undefined) drawWrongWay(fb, art, h.wrongWay, p === 1);
     if (h.figure) drawFigure(fb, art, h.figure.draw, h.figure.entry, R.figureRows[p]);
     if (h.lap) drawLapText(fb, art, h.lap, R.lapY[p]);
   });

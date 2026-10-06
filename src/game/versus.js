@@ -21,6 +21,7 @@ import { spinOut, invertSteering } from './control.js';
 import { startFigure, stepFigure } from './figure.js';
 import { starterPass } from './start.js';
 import { framePeriod } from './clock.js';
+import { stepWrongWay } from './laps.js';
 export { swapSeat, carsBySeat, humanCompass };
 
 const MODE_RACING = 2, START = 10; // @math the race mode word 2 and the sound START (race.start-rules, audio.race-sounds)
@@ -105,6 +106,7 @@ function versusBlink(state) {
 function seatHud(state, racing) {
   const after = stepHud(state.hud, state.car, racing);
   state.hud = { ...after.hud, ...(racing ? {} : { ticks: 0 }), counter: state.car.counter };
+  if (state.versus.kind === 'race') state.laps = stepWrongWay(state.laps); // the WRONG WAY pass: the shoot-out skips it (hud.wrong-way)
 }
 
 function seatDraw(state, h, racing) {
@@ -201,10 +203,11 @@ export function stripValues(state) {
   return cars.map((c, n) => ({ name: driverName(slots[n]), ammo: c.counter, score: state.versus.scores[n], held: c.held, taunt: seats[n].tauntDraw }));
 }
 
-// What the two player race's HUD shows in each half (versus.race-rules): the timer (the first player's, the same in both), the speedometer's digits, the place, the lap text unless the figure runs, and the figure.
+// What the two player race's HUD shows in each half (versus.race-rules): the timer (the first player's, the same in both), the speedometer's digits, the place, the WRONG WAY sign's picture
+// (hud.wrong-way), the lap text unless the figure runs, and the figure.
 export function raceValues(state) {
   const seats = [holderOf(state, 0), holderOf(state, 1)], time = timerText(seats[0].hud.timerShown);
-  return seats.map(s => ({ timer: time, speed: speedDigits(s.hud.now ?? 0), place: s.place, lap: s.laps.shown && !s.figure ? lapText(s.laps.lap, state.total, false) : null, figure: s.figureDraw }));
+  return seats.map(s => ({ timer: time, speed: speedDigits(s.hud.now ?? 0), place: s.place, wrongWay: s.laps.wrongShown ?? null, lap: s.laps.shown && !s.figure ? lapText(s.laps.lap, state.total, false) : null, figure: s.figureDraw }));
 }
 
 // The message of a round's end as the box routine places it (obj1+0x1a414): a box of 8 columns a character plus 8 centred, from the row 92, with the text 4 in from its corner.

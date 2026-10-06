@@ -10,6 +10,8 @@ import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
 import { renderScene } from './render/scene.js';
 import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { createEnhancer } from './enhance/index.js';
+import { createBoot, stepBoot, stageView, noticeLines, introModel, fadedOut, fadeOutSteps } from './game/boot.js';
+import { loadBootArt, renderNotice as renderBootNotice, renderScene as renderBootScene, renderPicture as renderBootPicture, renderTitle as renderBootTitle } from './render/boot.js';
 import { EFFECTS, LEVELS } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
 import { createDisplay, overlayLayers } from './enhance/display.js';
@@ -130,7 +132,7 @@ function songFor(screen) {
   const c = state.cup; return raceSong(c ? c.cup : 1, c ? c.bonus : 0, c ? c.race : 1); // @math a race outside a cup is the first race of the Bronze cup
 }
 function followMusic() {
-  const a = state.audio; if (!a || state.screen === 'exit') return;
+  const a = state.audio; if (!a || state.screen === 'exit' || state.screen === 'boot') return; // the start-up screens start their songs themselves (boot.intro)
   if (state.screen === 'rostrum') { // the song of the rostrum plays once, and when it has ended the main menu's follows (obj1+0x1cad1, +0x1cb9f)
     if (state.musicName !== 'LEADRBRD' && state.musicName !== 'MAINMENU') { a.song('LEADRBRD', false, () => { state.musicName = 'MAINMENU'; a.song('MAINMENU', true); }); state.musicName = 'LEADRBRD'; }
     state.musicScreen = state.screen; return;
@@ -143,6 +145,38 @@ function followMusic() {
   if (name !== state.musicName) { a.song(name, true); state.musicName = name; }
   state.musicScreen = state.screen; state.musicRace = state.race;
   if (state.screen !== 'race') a.engineStop();
+}
+
+// ---- the start-up screens (boot.notice, boot.intro): the version notice, the Apogee scene, BEAVIS.PCX and the WINTRO cars, then the main menu; Enter, Space, a fire button or
+// Esc ends a screen where the game reads the keys
+function enterBoot() {
+  const members = archiveMembers(state.dat);
+  state.bootArt = loadBootArt(members); state.boot = createBoot(members); state.bootLines = noticeLines(state.boot.edition); state.bootKey = null;
+  state.screen = 'boot'; state.keys.clear(); state.audio?.stopAll(); state.audio?.engineStop(); state.musicName = null; state.musicScreen = null;
+  state.audio?.prefetch(introModel().song); state.audio?.prefetch(menuSong()); // the scene's song and the menu's are rendered while the notice shows
+}
+const bootPicture = (art, picture) => ({ notice: art.notice, scene: art.logo, picture: art.picture, title: art.title })[picture];
+function stepBootScreen(now) {
+  const a = state.audio, art = state.bootArt, view = stageView(state.boot.stage), shown = view ? bootPicture(art, view.picture) : null;
+  const out = stepBoot(state.boot, now, { key: state.bootKey, music: Boolean(a?.hasMusic()), songPlaying: Boolean(a?.songPlaying()), menuSong: menuSong(), fadeInSteps: fadeSteps(), fadeOutSteps: shown ? fadeOutSteps(shown.vga) : 0, fadeStepMs: FADE_STEP_MS, world: art.world });
+  state.bootKey = null; state.boot = out.boot;
+  for (const e of out.events) {
+    if (e.song) { a?.song(e.song.name, e.song.loop); state.musicName = e.song.name; } // the menu's song goes on into the menu
+    else a?.play({ id: e.sound, restart: e.sound === introModel().pass }); // a car's sound stops its last voice first (obj1+0x251d8)
+  }
+  if (state.boot.stage === 'done') { state.screen = 'menu'; state.menuAccumulator = 0; state.keys.clear(); state.menuDac = rgbaPalette(art.title.vga); } // the first main menu is drawn under the palette WINTRO left (boot.intro)
+}
+function drawBoot(now) {
+  const b = state.boot, art = state.bootArt, view = stageView(b.stage);
+  if (!view) return;
+  if (view.picture === 'notice') renderBootNotice(index, art, state.bootLines);
+  else if (view.picture === 'scene') renderBootScene(index, art, b.scene);
+  else if (view.picture === 'picture') renderBootPicture(index, art);
+  else renderBootTitle(index, art, b.stage === 'cars' ? b.cars : null);
+  const vga = bootPicture(art, view.picture).vga, step = Math.floor((now - (b.since ?? now)) / FADE_STEP_MS);
+  blit(rgbaPalette(view.palette === 'in' ? vga.map(v => Math.min(v, fadeLevel(step))) : view.palette === 'out' ? fadedOut(vga, step) : vga)); // the fades: up from black and down to black by 4 a retrace
+  $('readout').innerHTML = `<dt>Start-up</dt><dd>${b.stage}</dd>`;
+  $('badge').className = 'badge bad'; $('badge').textContent = `The start-up screens as read from the code (boot.notice, boot.intro): not compared with frames of the running game yet${b.extra ? '; the archive\'s TABLES.DAT, which the game shows before the Apogee scene, is left out' : ''}.`;
 }
 
 function startTrack() {
@@ -351,7 +385,7 @@ function drawMenu() {
   renderMenu(index, art, viewOf(state.menu));
   const title = bannerOfMenu(state.menu.id, state.menu.settings);
   if (title) { const b = bannerOf(title.text); drawBox(index, b.x, title.row, b.width, b.height, b.border, b.fill); drawText(index, state.hudArt.ofont, title.text, b.x + b.margin, title.row + b.margin); } // the engine menu's boxed title (menu.engine-banner)
-  blit(art.rgba);
+  blit(state.menuDac ?? art.rgba); // after the start-up the DAC still holds WINTRO's palette: the checkerboard's blues are light until another screen sets its own (boot.intro)
   $('readout').innerHTML = `<dt>Menu</dt><dd>${state.menu.id}</dd><dt>Selected</dt><dd>${menuDef(state.menu.id, state.menu.settings).items[state.menu.cursor - 1]}</dd>`;
   $('badge').className = 'badge bad';
   $('badge').textContent = 'Not observed yet and approximated here: the state the menu animations start in, whether a held key repeats, and Esc while the icons animate. SINGLE PLAYER RACING leads through the class, laps, engine and race type menus into the race (the vehicle screen, the cup board and the track preview are not ported: the track chosen on the page is used); the menus of GAME OPTIONS and COMM-BAT PLAY (as far as recorded) work, the other items say they are not ported yet.';
@@ -1121,6 +1155,8 @@ function drawRetry() {
 function frame(now) {
   if (!state.dat) return;
   followMusic();
+  if (state.menuDac && state.screen !== 'menu') state.menuDac = null; // any other screen sets a palette of its own; the menus after it fade in to CHECK's (boot.intro)
+  if (state.screen === 'boot') { stepBootScreen(now); state.last = now; if (state.screen === 'boot') drawBoot(now); requestAnimationFrame(frame); return; }
   if (state.screen === 'vehicle') { stepVehicleClock(now); state.last = now; if (state.screen === 'vehicle') drawVehicle(); requestAnimationFrame(frame); return; }
   if (state.screen === 'duckChooser') { stepDuckChooser(now); state.last = now; if (state.screen === 'duckChooser') drawDuckChooser(); requestAnimationFrame(frame); return; }
   if (state.screen === 'duckIntro') { state.last = now; drawDuckIntro(); requestAnimationFrame(frame); return; }
@@ -1175,7 +1211,7 @@ async function load(vfs) {
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
     state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
-    startTrack(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown
+    startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
   } catch (e) { state.dat = null; setMessage(`${e.message}`, true); }
 }
@@ -1202,6 +1238,7 @@ addEventListener('keydown', e => {
   state.audio?.unlock(); // browsers start the audio context with the first key
   if (e.target.tagName === 'SELECT' || !state.dat) return;
   if (e.code === 'Escape' && display.fullscreen()) return; // the browser's key for leaving full screen: should a browser also pass it on, it neither pauses the race nor gives up a link race
+  if (state.screen === 'boot') { const m = e.code === 'Escape' ? 'escape' : WAIT_KEYS.includes(e.code) ? 'fire' : null; if (m) { e.preventDefault(); if (!e.repeat) state.bootKey ??= m; } return; } // Enter, Space, the buttons and Esc (boot.notice)
   if (state.screen === 'race' && state.pause) { if (MENU_KEYS[e.code]) { e.preventDefault(); if (!state.pauseKey) state.pauseKey = MENU_KEYS[e.code]; } return; }
   if (state.screen === 'race' && state.demo) { if (e.code === 'Escape') state.demo.escape = true; else if (/^(Arrow|Enter|Space|Alt)/.test(e.code)) { state.keys.add(e.code); e.preventDefault(); } return; } // a demo race: Esc leaves, the arrows, Enter, Space and Alt turn the slides' pages
   if (state.screen === 'link') { e.preventDefault(); if (linkCtl().key(e) === 'leave') leaveLinkScreen(); return; }

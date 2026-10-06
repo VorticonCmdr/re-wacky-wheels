@@ -48,6 +48,7 @@ The body (fp of the pieces: `obj1+0x2677f fp=691125d5` call 0x24458; `obj1+0x267
 - Exits on Enter (`[0x28cce]`), fire word (`[0x28b40]`), Esc (`[0x28cd0]==1`) or when obj2+0x1e720 >= 0x7d0 (`obj1+0x24736..0x2479f`) (H). Next: intro. Skipped entirely? not shown; obj2+0x1ecbc!=0 skips the intro (obj1+0x2490f) - the flag's source (command line) not read.
 
 ### 2.2 Intro, `fn@0x248f4` .. 0x252d9 (`WW.EXE:obj1+0x248f4 fp=f5fc39f5`)
+> **Read in full 2026-10-06** (`boot.notice`, `boot.intro`, STATIC, the main session): item 3 below is not a separate animated routine but the Apogee scene of the intro routine itself: obj1+0x247b4 cuts APOG1.PCX into 60 tiles and fills the floor's tile table with them, and the race's floor renderer draws them while the camera drives and circles, with the ACTION.SP strip; the music in item 5 is the APOGEE song (once, from the scene's first pass) followed by the menu song from the end of the scene (`0x31dd4`/`0x31e24` are the voice calls of the car sound). WINTRO's animation is eight CARS.SP cars driving away. See the claims for the sites.
 Order read from the picture names (obj2 name offsets in the order they are loaded) (M for exact order, H for names):
 1. Optional external file `TABLES.DAT` (obj2+0x1f6c, existence test `0x170dc`; shown with `0x16f64`, 0xbb8-tick timeout, `obj1+0x249b0..0x24aa0`). Not in WACKY.DAT; presumably an Apogee/registered-user splash - L.
 2. `APOG1.PCX` (obj2+0x1f78; `WW.EXE:obj1+0x24ac1 fp=a66e91d4`): the Apogee logo screen (archive member 29614 bytes) - H. Skippable.

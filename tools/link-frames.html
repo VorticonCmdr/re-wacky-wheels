@@ -18,6 +18,7 @@ window.loadBoth = async () => {
   for (const id of ['a', 'b']) { const w = document.getElementById(id).contentWindow; w.requestAnimationFrame = () => 0; }
   for (const id of ['a', 'b']) document.getElementById(id).contentDocument.getElementById('local').click();
   await run(4000);
+  for (const w of ['a', 'b']) for (let i = 0; i < 20 && dbg(w).state.screen === 'boot'; i++) await press(w, 'Escape'); // Esc ends each start-up screen (boot.intro); the fades drop keys, so it is pressed until the menu shows
 };
 window.toItem = async (w, target) => { for (let i = 0; i < 8 && dbg(w).state.menu.cursor !== target; i++) await press(w, 'ArrowDown'); };
 // Both pages to WEBRTC LOCAL: page b first (it waits, so it is the host), then page a.

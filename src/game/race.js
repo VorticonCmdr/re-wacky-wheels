@@ -23,7 +23,7 @@ import { headOnRacer, wreckByRacer, animateCrashes } from './headon.js';
 import { lapWords, recordLap } from './timetrial.js';
 import { playerRef, refEntry, playerGeometry, playerRecord, PLAYER_SLOT } from './player-car.js';
 import { fallFrames } from './control.js';
-import { createLaps, stepLaps, gridValue, stepFinish, NO_KEYS, figureDriver } from './laps.js';
+import { createLaps, stepLaps, stepWrongWay, gridValue, stepFinish, NO_KEYS, figureDriver } from './laps.js';
 import { startFigure, stepFigure } from './figure.js';
 import { createAi, stepAi, progressAi, rankPlayer } from './ai.js';
 import { createHud, stepHud } from './hud.js';
@@ -257,7 +257,7 @@ function stepFrame(state, keys) {
     const idle = stepPlayer(state.player, input, state.world, { racing: false, racers, ...env });
     state.player = idle.player; state.car = state.player.car; state.sounds.push(...idle.sounds);
     fire(state, input, false);
-    const wait = stepHud(state.hud, state.car, false); state.hud = { ...wait.hud, ticks: 0, counter: state.car.counter }; drawEffects(state, false, false, !state.duck, state.start.mode === MODE_RACING); // the call that switches the mode word to the race is the last of the countdown's branch
+    const wait = stepHud(state.hud, state.car, false); state.hud = { ...wait.hud, ticks: 0, counter: state.car.counter }; if (!state.duck) state.laps = stepWrongWay(state.laps); drawEffects(state, false, false, !state.duck, state.start.mode === MODE_RACING); // the call that switches the mode word to the race is the last of the countdown's branch
     if (!state.duck) blinkPass(state); // the racers glance in the countdown too (the waiting pictures)
     return;
   }
@@ -275,7 +275,7 @@ function stepFrame(state, keys) {
   }
   updateShots(state);
   if (!state.duck) { // no laps, places or finish in the duck game (the progress routine is never called, duck.race-rules)
-  const at = { x: state.car.px, y: state.car.py }, lap = stepLaps(state.laps, gridValue(state.world.pos, at.x, at.y), state.world.pos.trailer, state.total); // the lookup is at the car record position
+  const at = { x: state.car.px, y: state.car.py }, lap = stepLaps(state.laps, gridValue(state.world.pos, at.x, at.y), state.world.pos.trailer, state.total, state.tick); // the lookup is at the car record position
   if (lap.laps.lap > state.laps.lap && lap.laps.lap === state.total) state.sounds.push({ id: BELL, guard: true }); // the last lap begins: the bell (obj1+0x2c8a)
   if (state.class === TRIAL && lap.laps.lap > state.laps.lap) { const timed = recordLap(state.lapTimes, state.lapStamp, lap.laps.lap, state.hud.ticks); state.lapTimes = timed.times; state.lapStamp = timed.stamp; } // the lap's time (race.time-trial)
   state.laps = lap.laps; for (const u of lap.unproven) state.unproven.add(u);
@@ -292,6 +292,7 @@ function stepFrame(state, keys) {
   }
   }
   const after = stepHud(state.hud, state.car, true, state.finished ? state.finalTicks : null); state.hud = { ...after.hud, counter: state.car.counter }; // the HUD routine follows the car step in a frame
+  if (!state.duck) state.laps = stepWrongWay(state.laps); // the HUD routine's WRONG WAY pass: the duck game skips it (hud.wrong-way)
   for (const u of after.unproven) state.unproven.add(u);
   stages(state);
   const headOn = state.touching !== undefined && !state.duck && !state.versus && state.ai && headOnRacer(state.car, state.ai.racers[state.touching], state.car.heading, { child: Boolean(state.child), pending: state.player.pending }); // a racer that faces the car at the full throttle wrecks it (race.head-on): the draw of the frame shows the flight

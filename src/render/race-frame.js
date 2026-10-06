@@ -31,7 +31,11 @@ export function drawRaceOverlays(state, index) {
   if (unseen.length) state.unproven.add(`the lap text glyphs ${unseen.join(' ')} (from the character map, not seen on screen)`);
   if (!gates.speedometer || !gates.timer) state.unproven.add('the SPEEDOMETER and CLOCK DISPLAY switches hiding the HUD');
   if (state.duck) renderHud(index, state.hudArt, { duck: { ammo: counterDigits(state.hud.counter), score: counterDigits(state.duck.score), timer: timerText(Math.max(duckRules().timer - state.hud.ticks, 0)) }, name: driverName(state.humanSlot ?? PLAYER_SLOT), held: state.car.held }); // the duck game's HUD (duck.hud)
-  else if (!state.demo) renderHud(index, state.hudArt, { banner: counterDigits(state.hud.counter), name: driverName(state.humanSlot ?? PLAYER_SLOT), figure: state.figureDraw, lap: text, place: state.place, held: state.car.held, speed: gates.speedometer ? speedDigits(state.hud.shown) : null, timer: gates.timer && !state.finished ? timerText(state.hud.timerShown) : null });
+  else if (!state.demo) {
+    const wrongWay = state.laps.wrongShown ?? null; // the demos (the mode word not 0) never draw the sign (hud.wrong-way)
+    if (wrongWay !== null) state.unproven.add('the WRONG WAY sign (hud.wrong-way: read from the code, not compared with the running game)');
+    renderHud(index, state.hudArt, { banner: counterDigits(state.hud.counter), name: driverName(state.humanSlot ?? PLAYER_SLOT), figure: state.figureDraw, lap: text, place: state.place, held: state.car.held, speed: gates.speedometer ? speedDigits(state.hud.shown) : null, timer: gates.timer && !state.finished ? timerText(state.hud.timerShown) : null, wrongWay });
+  }
   else {
     if (state.demo.mode === demoModel().modes.attract) { renderHud(index, state.hudArt, { banner: counterDigits(state.hud.counter), name: driverName(state.humanSlot ?? PLAYER_SLOT), place: state.place, held: state.car.held, timer: gates.timer && !state.finished ? timerText(state.hud.timerShown) : null }); drawDemoText(index, state.hudArt.ofont); } // the attract mode's banner and, with the CLOCK DISPLAY switch on, the timer, without the speedometer and the lap text (demo.flow; a DOS screen of the track 4 demo with the clock on shows 00:00:0)
     drawDemoLogo(index, state.hudArt.ofont);

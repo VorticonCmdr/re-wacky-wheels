@@ -49,7 +49,7 @@ export function raceAi(state, racing, humanPoints) {
 
 // The laps of the viewer (obj1+0x2b44 for a human): the lap word and the ranking keys from the grid value under the car; a lap that reaches the laps word starts the figure.
 export function seatLaps(state) {
-  const car = state.car, lap = stepLaps(state.laps, gridValue(state.world.pos, car.px, car.py), state.world.pos.trailer, state.total);
+  const car = state.car, lap = stepLaps(state.laps, gridValue(state.world.pos, car.px, car.py), state.world.pos.trailer, state.total, state.tick);
   state.laps = lap.laps;
   if (lap.started) state.figure = startFigure(figureDriver());
   state.figureDraw = null; // the reaction figure: one call a frame while it runs, drawn from the call's picture

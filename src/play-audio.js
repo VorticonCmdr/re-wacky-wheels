@@ -10,7 +10,7 @@ const centsToRate = cents => 2 ** (cents / 1200); // @math 1200 cents are an oct
 const SAMPLES = 1, SPEAKER = 2, NO_EFFECTS = 3, ADLIB = 1, MIDI = 2, NO_MUSIC = 3; // the items of the page's sound device lists (game/sound-devices.js)
 
 export function createAudio(members) {
-  let ctx = null, effects = null, music = null, engineVoice = null, song = null, playing = null, devices = defaultDevices(), speakerBank = null;
+  let ctx = null, effects = null, music = null, engineVoice = null, song = null, playing = null, devices = defaultDevices(), speakerBank = null, active = false; // active: a song asked for that has not ended (the library's is-playing)
   const buffers = new Map(), numbers = new Array(soundCount()).fill(null), voices = new Set(), songCache = new Map();
   const volumes = { ...soundVolumes(), engine: engineSound().volume }; // the effects, music and engine levels (the volume screen changes them)
   const worker = new Worker(new URL('./audio-worker.js', import.meta.url), { type: 'module' });
@@ -71,7 +71,7 @@ export function createAudio(members) {
     source.start(); voices.add(voice); if (number !== null) numbers[number] = voice;
     return voice;
   }
-  const halt = () => { song = null; if (api.current) { try { api.current.stop(); } catch { /* done */ } api.current = null; } }; // the song stops, what plays is kept for a change of the music device
+  const halt = () => { song = null; active = false; if (api.current) { try { api.current.stop(); } catch { /* done */ } api.current = null; } }; // the song stops, what plays is kept for a change of the music device
   function stop(voice) { try { voice.source.stop(); } catch { /* already stopped */ } voices.delete(voice); voice.end = 0; }
 
   const api = {
@@ -97,6 +97,7 @@ export function createAudio(members) {
       const e = typeof event === 'number' ? { id: event } : event, s = soundOf(e.id, e.quack);
       if (e.quack && devices.effects === SPEAKER) return; // the duck game's quacks are digital samples: with the PC speaker the game's play routine returns silent (audio.digital-flag)
       if (e.guard && this.isPlaying(s.number)) return;
+      if (e.restart && ctx && numbers[s.number]) stop(numbers[s.number]); // the site stops the sound's own voice before it plays it again (boot.intro's cars)
       start(s.member, s.number, s.priority, e.cents ?? 0);
     },
     isPlaying(number) { if (!ctx) return false; const v = numbers[number]; return Boolean(v && alive(v)); },
@@ -113,7 +114,7 @@ export function createAudio(members) {
       halt();
       playing = { name, loop, then };
       if (devices.music === NO_MUSIC) return;
-      const wanted = ++ticket, kind = devices.music === MIDI ? 'mid' : 'klm', cacheKey = `${kind}:${name}`; song = wanted;
+      const wanted = ++ticket, kind = devices.music === MIDI ? 'mid' : 'klm', cacheKey = `${kind}:${name}`; song = wanted; active = true;
       if (!songCache.has(cacheKey)) {
         songCache.set(cacheKey, new Promise((resolve, reject) => {
           const id = ++ticket; waiting.set(id, { resolve, reject });
@@ -122,12 +123,16 @@ export function createAudio(members) {
         }));
       }
       const result = await songCache.get(cacheKey);
-      if (!result || song !== wanted) return;
+      if (song !== wanted) return;
+      if (!result) { active = false; return; }
       const frames = result.samples.length / result.channels, b = context().createBuffer(result.channels, frames, result.sampleRate);
       for (let ch = 0; ch < result.channels; ch++) { const out = b.getChannelData(ch); for (let i = 0; i < frames; i++) out[i] = result.samples[i * result.channels + ch]; }
-      const source = ctx.createBufferSource(); source.buffer = b; source.loop = loop; source.connect(music); source.onended = () => { if (this.current === source && then) then(); }; source.start(); this.current = source;
+      const source = ctx.createBufferSource(); source.buffer = b; source.loop = loop; source.connect(music); source.onended = () => { if (this.current === source) { active = false; if (then) then(); } }; source.start(); this.current = source;
     },
     songStop() { playing = null; halt(); },
+    // Is a song playing (obj1+0x32160 as the intro asks it)? One asked for counts until it ends, also while it is being rendered; a context the browser keeps suspended plays nothing.
+    songPlaying: () => active && !(ctx && ctx.state === 'suspended'),
+    hasMusic: () => devices.music !== NO_MUSIC,
     // Renders a song ahead of its use (the cup's race songs while the card shows).
     prefetch(name) { // the song of the current music device, rendered ahead
       const kind = devices.music === MIDI ? 'mid' : 'klm', key = `${kind}:${name}`, data = members.get(`${name}.${kind === 'mid' ? 'MID' : 'KLM'}`);

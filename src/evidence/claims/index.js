@@ -1,6 +1,7 @@
 // Every claim module, listed explicitly so the registry loads identically in node and the browser.
 // test/evidence.test.js fails if a file in this directory is missing here.
 import audio from './audio.js';
+import boot from './boot.js';
 import cfg from './cfg.js';
 import dat from './dat.js';
 import drive from './drive.js';
@@ -22,4 +23,4 @@ import voc from './voc.js';
 import wf from './wf.js';
 import wwExe from './ww-exe.js';
 
-export default [...le, ...wwExe, ...dat, ...pcx, ...track, ...gam, ...terrain, ...statics, ...sprites, ...exes, ...audio, ...cfg, ...voc, ...wf, ...port, ...race, ...drive, ...items, ...effects, ...versus, ...duck];
+export default [...le, ...wwExe, ...dat, ...pcx, ...track, ...gam, ...terrain, ...statics, ...sprites, ...exes, ...audio, ...cfg, ...voc, ...wf, ...port, ...race, ...drive, ...items, ...effects, ...versus, ...duck, ...boot];

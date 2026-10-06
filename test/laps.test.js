@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gridValue, createLaps, stepLaps, lapsTotal, isFinished } from '../src/game/laps.js';
+import { gridValue, createLaps, stepLaps, stepWrongWay, lapsTotal, isFinished } from '../src/game/laps.js';
 import { counterDigits, lapText } from '../src/game/hud.js';
 import { slotOf, drawText } from '../src/render/text.js';
-import { renderHud } from '../src/render/hud.js';
+import { renderHud, drawWrongWay } from '../src/render/hud.js';
 
+const clear = { wrong: 0, wrongSince: 0, wrongNext: 0, wrongShown: null }; // the WRONG WAY sign's words while it is off (hud.wrong-way)
 const pos = () => { const grid = new Uint16Array(64 * 64); grid[2 * 64 + 3] = 5; return { grid, trailer: 27 }; };
 
 test('the grid value is the cell at row and column of the offset from 0x400 shifted by 5, and 0 outside the square', () => {
@@ -19,9 +20,9 @@ test('the grid value is the cell at row and column of the offset from 0x400 shif
 test('a lap is counted when the value goes from the trailer to 1', () => {
   let laps = { lap: 0, prev: 20, flag: 0, shown: false };
   for (const v of [24, 27]) laps = stepLaps(laps, v, 27, 6).laps;
-  assert.deepEqual(laps, { lap: 0, prev: 27, flag: 0, shown: false, key1: 27, key2: 27 });
+  assert.deepEqual(laps, { lap: 0, prev: 27, flag: 0, shown: false, key1: 27, key2: 27, ...clear });
   laps = stepLaps(laps, 1, 27, 6).laps;
-  assert.deepEqual(laps, { lap: 1, prev: 1, flag: 0, shown: true, key1: 1025, key2: 28 }); // lap x trailer + value
+  assert.deepEqual(laps, { lap: 1, prev: 1, flag: 0, shown: true, key1: 1025, key2: 28, ...clear }); // lap x trailer + value
   laps = stepLaps(laps, 2, 27, 6).laps;
   assert.equal(laps.lap, 1);
 });
@@ -36,10 +37,10 @@ test('the value 0 changes nothing and is listed as unproven', () => {
 test('crossing the line backwards sets the flag and the next forward crossing is cancelled', () => {
   let laps = { lap: 2, prev: 1, flag: 0, shown: true };
   const back = stepLaps(laps, 27, 27, 6);
-  assert.deepEqual(back.laps, { lap: 2, prev: 27, flag: 1, shown: true, key1: 1051, key2: 54 }); // the lap less 1 while the flag is set
+  assert.deepEqual(back.laps, { lap: 2, prev: 27, flag: 1, shown: true, key1: 1051, key2: 54, ...clear }); // the lap less 1 while the flag is set
   assert.ok(back.unproven.length > 0);
   const forward = stepLaps(back.laps, 1, 27, 6);
-  assert.deepEqual(forward.laps, { lap: 2, prev: 1, flag: 0, shown: true, key1: 2049, key2: 55 });
+  assert.deepEqual(forward.laps, { lap: 2, prev: 1, flag: 0, shown: true, key1: 2049, key2: 55, ...clear });
   laps = stepLaps(forward.laps, 27, 27, 6).laps;
   assert.equal(stepLaps(stepLaps(laps, 1, 27, 6).laps, 2, 27, 6).laps.lap, 2);
 });
@@ -115,4 +116,53 @@ test('the lap text glyphs not seen on the screen are listed', async () => {
   assert.deepEqual(unseenGlyphs('LAST LAP!'), []);
   assert.deepEqual(unseenGlyphs('LAP 10'), ['1', '0']);
   assert.deepEqual(unseenGlyphs('LAP 3'), ['3']);
+});
+
+// The WRONG WAY sign (hud.wrong-way): the human's update turns it on and off, the HUD routine flips its picture once a call.
+test('a falling value turns the sign on with the counter as its stamp, and it starts on the first picture', () => {
+  const on = stepLaps({ lap: 1, prev: 12, flag: 0, shown: true, ...clear, wrongNext: 1 }, 11, 27, 6, 40).laps;
+  assert.deepEqual([on.wrong, on.wrongSince, on.wrongNext], [1, 40, 0]);
+  const again = stepLaps(on, 10, 27, 6, 47).laps; // still falling: the stamp and the picture word are kept
+  assert.deepEqual([again.wrong, again.wrongSince], [1, 40]);
+  assert.equal(stepWrongWay(again).wrongShown, 0);
+});
+
+test('a backward crossing of the line sets the flag but neither shows nor clears the sign', () => {
+  const back = stepLaps({ lap: 2, prev: 1, flag: 0, shown: true, ...clear }, 27, 27, 6, 5).laps;
+  assert.deepEqual([back.flag, back.wrong], [1, 0]);
+  const kept = stepLaps({ lap: 2, prev: 1, flag: 0, shown: true, ...clear, wrong: 1, wrongSince: 3 }, 27, 27, 6, 5).laps;
+  assert.deepEqual([kept.flag, kept.wrong, kept.wrongSince], [1, 1, 3]);
+});
+
+test('the sign goes off at a rising value, at a forward crossing, or after 10 frames on the same value', () => {
+  const sign = { lap: 1, prev: 12, flag: 0, shown: true, ...clear, wrong: 1, wrongSince: 100 };
+  assert.equal(stepLaps(sign, 13, 27, 6, 101).laps.wrong, 0);
+  assert.equal(stepLaps({ ...sign, prev: 27 }, 1, 27, 6, 101).laps.wrong, 0);
+  assert.equal(stepLaps(sign, 12, 27, 6, 109).laps.wrong, 1); // 9 frames
+  assert.equal(stepLaps(sign, 12, 27, 6, 110).laps.wrong, 0); // 10 frames
+  assert.equal(stepLaps(sign, 0, 27, 6, 500).laps.wrong, 1); // off the course nothing changes
+});
+
+test('the HUD routine alternates the two pictures once a call while the sign is on and shows none when it is off', () => {
+  let laps = { ...clear, wrong: 1 };
+  const shown = [];
+  for (let k = 0; k < 4; k++) { laps = stepWrongWay(laps); shown.push(laps.wrongShown); }
+  assert.deepEqual(shown, [0, 1, 0, 1]);
+  assert.equal(stepWrongWay({ ...laps, wrong: 0 }).wrongShown, null);
+});
+
+test('the sign is drawn from LAP.SP 0x2cdc or 0x322c at (120, 182), zero transparent, the second player 100 rows higher', () => {
+  const lap = new Uint8Array(0x4c56), icons = new Uint8Array(0x15c6), genef = new Uint8Array(0x3964), ofont = new Uint8Array(0x403c);
+  lap.fill(9, 0x2cdc, 0x2cdc + 80 * 17); lap.fill(6, 0x322c, 0x322c + 80 * 17); lap[0x2cdc] = 0;
+  const fb = new Uint8Array(320 * 200).fill(3);
+  renderHud(fb, { lap, icons, genef, ofont }, { wrongWay: 0 });
+  assert.equal(fb[182 * 320 + 120], 3); // the zero pixel in the corner
+  assert.equal(fb[183 * 320 + 120], 9);
+  assert.equal(fb[198 * 320 + 199], 9);
+  assert.equal(fb[199 * 320 + 199], 3);
+  assert.equal(fb[182 * 320 + 200], 3);
+  const split = new Uint8Array(320 * 200);
+  drawWrongWay(split, { lap }, 1, true);
+  assert.equal(split[82 * 320 + 120], 6);
+  assert.equal(split[182 * 320 + 120], 0);
 });

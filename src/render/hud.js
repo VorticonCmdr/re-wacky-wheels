@@ -6,6 +6,7 @@ import { K } from '../evidence/k.js';
 import { drawText, nameAt } from './text.js';
 import { HUD as DUCK, PICTURES } from '../game/duck-rules.js';
 import { minimapRect } from '../game/minimap.js';
+import { WRONG_WAY } from '../game/laps.js';
 
 const SPEED = () => K({ samples: 6, placeRect: [25, 12, 22, 29], placeFrameBytes: 0x27e, placeFramesAt: 0, placeFrameSize: [22, 29], speedRect: [0, 181, 42, 19], panelAt: 0xccc, panelSize: [42, 19], digitsAt: 0xfea, digitBytes: 0x96, digitSize: [10, 15], digitColumns: [3, 15], digitRow: 2, hudBase: 0x8426, placeWord: 0x84bc, speedShownWord: 0x8438, speedTargetWord: 0x8436, riseStep: 2, fallStep: 4, rising: 3, falling: 3, numbers: [52, 38, 60, 60, 32, 62] }, 'hud.place-speed-observed');
 const BANNER = () => K({ records: 4, pictures: [{ at: 0x377c, size: [38, 41], where: [17, 6], exclude: [25, 12, 22, 29] }, { at: 0x3d92, size: [65, 19], where: [68, 6], exclude: [118, 11, 10, 9] }, { at: 0x4265, size: [61, 19], where: [146, 6], exclude: [181, 11, 20, 9] }], digitsAt: 0x46ec, digitBytes: 90, digitSize: [10, 9], row: 11, startDigit: [118], counterPlaces: [181, 191], counters: [7, 0, 42, 99], startDigitShown: 3, overwrittenWord: 5, counterWord: 0x847a, startWord: 0x847c }, 'hud.banner-observed');
@@ -75,6 +76,13 @@ export function drawHeld(fb, art, kind, place = null) { // `place` { x, y } move
   blit(fb, art.icons, H.at + H.frameBytes * (kind - H.item), H.size, place?.x ?? H.x, place?.y ?? H.y, false);
 }
 
+// The WRONG WAY sign (hud.wrong-way): the first or second of the two 80 x 17 LAP.SP pictures (`picture` 0 or 1), zero pixels transparent, at (120, 182); the second player's
+// sign of a split screen 100 rows higher.
+export function drawWrongWay(fb, art, picture, second = false) {
+  const W = WRONG_WAY();
+  blit(fb, art.lap, W.pictures[picture], W.size, W.x, W.y - (second ? W.splitOffset : 0), false);
+}
+
 // Zero padded decimal digits of the count label's pictures (LAP.SP, 10 x 9, opaque), side by side from (x, y) `advance` columns apart.
 export function drawDigits(fb, art, digits, x, y, advance) {
   const B = BANNER();
@@ -102,8 +110,8 @@ export function drawDuckBanner(fb, art, ammo, score) {
 }
 
 // The HUD of a frame: { figure ({ draw, entry } or null), banner ([tens, units] of the count label or null), name (draw the driver's name), lap (the lap text or null), place (1 to 8 or
-// null), speed ([tens, units] or null), timer (text or null) }, drawn in the order of the game's HUD routine: the panel before the place digit, whose box it leaves free, the
-// timer before the figure and the lap text.
+// null), speed ([tens, units] or null), timer (text or null), wrongWay (the WRONG WAY sign's picture, 0 or 1, or null) }, drawn in the order of the game's HUD routine: the panel
+// before the place digit, whose box it leaves free, the timer and the sign before the figure and the lap text.
 export function renderHud(fb, art, hud) {
   if (hud.duck) { // the duck game's HUD: no speedometer, place digit, lap text or figure (duck.hud)
     drawDuckBanner(fb, art, hud.duck.ammo, hud.duck.score);
@@ -118,6 +126,7 @@ export function renderHud(fb, art, hud) {
   if (hud.speed) drawSpeedometer(fb, art, hud.speed);
   if (hud.held) drawHeld(fb, art, hud.held);
   if (hud.timer) drawTimer(fb, art, hud.timer);
+  if (hud.wrongWay !== null && hud.wrongWay !== undefined) drawWrongWay(fb, art, hud.wrongWay); // after the counters, before the figure (obj1+0x1b077 to +0x1b15a)
   if (hud.figure) drawFigure(fb, art, hud.figure.draw, hud.figure.entry); // the figure and the lap text come last in the HUD routine, over the timer (figure.rules)
   if (hud.lap) drawLapText(fb, art, hud.lap);
 }
