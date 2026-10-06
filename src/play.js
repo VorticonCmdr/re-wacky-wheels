@@ -8,7 +8,10 @@ import { openPicked } from './vfs/picker.js';
 import { withSteps } from './evidence/k.js';
 import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
 import { renderScene } from './render/scene.js';
-import { drawRaceFrame } from './render/race-frame.js';
+import { drawRaceFrame, drawRaceOverlays, sceneSky } from './render/race-frame.js';
+import { createEnhancer } from './enhance/index.js';
+import { EFFECTS, LEVELS } from './enhance/config.js';
+import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
 import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } from './render/versus.js';
 import { stripValues, swapSeat } from './game/versus.js';
@@ -79,11 +82,14 @@ const $ = id => document.getElementById(id);
 const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuHeld: null, menuHeldCode: null, menuAccumulator: 0, menuArt: null, hudArt: null, hud: createHud(), laps: null, total: 0, finished: false, finalTicks: 0, mov: null, figure: null, figureDraw: null, ai: null, place: 8, dat: null, world: null, car: null, camera: null, keys: new Set(), pause: null, pauseKey: null, pauseAccumulator: 0, tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
+const enh = createEnhancer(); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer
 
 function setMessage(text, bad = false) { const m = $('message'); m.textContent = text; m.style.color = bad ? 'var(--bad)' : ''; m.hidden = !text; }
 
 // ---- sound (audio.race-sounds): the sounds the race frames ask for, the engine and the songs of the screens
+let tickSounds = []; // the last tick's sounds, for the enhanced presentation's skid marks (playSounds empties the state's list)
 function playSounds() {
+  tickSounds = state.sounds ?? [];
   const a = state.audio;
   if (!a) { state.sounds = []; return; }
   const L = state.linkPlay, own = L ? { car: L.seat === 0 ? state.car : state.seat2.car, player: L.seat === 0 ? state.player : state.seat2.player, slot: L.slots[L.seat] } : { car: state.car, player: state.player, slot: state.humanSlot }; // in a link race the own car is the player's seat
@@ -128,7 +134,7 @@ function startTrack() {
 function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusMode) }) {
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
   startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
-  state.accumulator = 0; state.pause = null; beginIntro(state); // the camera's fly-in before the countdown (race.intro)
+  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
   if (state.cup && state.carry) { const car = { ...state.car, counter: state.carry.counter, held: state.carry.held }; state.car = car; state.player = { ...state.player, car }; } // the pickups go from one race of a cup to the next (obj1+0x2006a)
   rgba = rgbaPalette(state.world.palette);
   state.audio?.stopAll(); state.audio?.engineStart(); // a race starts with the engine running (obj1+0xd04)
@@ -434,6 +440,7 @@ function drawVolume() {
 }
 
 function chooseItem(action) {
+  if (action.graphics) { const g = action.graphics, s = enh.settings; setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return; } // GAME OPTIONS > ENHANCED GRAPHICS (graphics-menu.js): the same settings as the panel's
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
   if ('duo' in action && state.linkPlay) { linkMode(action.duo); return; } // the host's choice of the link race
   if (action.race === 1 && state.linkPlay) { hostStart(action.settings.flow); return; }
@@ -483,33 +490,87 @@ function stepPauseClock(now) {
 const sceneA = new Uint8Array(320 * 200), sceneB = new Uint8Array(320 * 200); // @math the screen picture of each viewer
 // The split screen (versus.layout): the first viewer's picture below, the second's 100 rows higher, the strips over them, the message of a round's end over both.
 function drawVersus() {
-  const mode = state.menu.settings.detail.split, V = state.versus;
+  const mode = state.menu.settings.detail.split;
   renderScene(state, sceneA, mode);
   swapSeat(state); renderScene(state, sceneB, mode); swapSeat(state);
   composeSplit(sceneA, sceneB, index);
-  drawStrips(index, state.hudArt, stripValues(state), { shoot: V.kind === 'shootout' }); // the shoot-out's SCORE words; the race's strips are blank there
-  if (V.kind === 'race') drawRaceHud(index, state.hudArt, raceValues(state), hudGates(state.menu.settings));
-  carsOf(state).forEach((c, n) => { if (c.inverted !== 0) flipViewport(index, n); }); // a car hit by an inverting shot sees its half upside down (versus.layout)
-  if (V.message) drawMessage(index, state.hudArt.ofont, messageAt(V.message.text));
-  if (state.pause) renderMenuOverlay(index, state.menuArt, pauseView(state.pause));
+  versusOverlays(state, index);
   blit(raceRgba());
-  const [a, b] = [state.car, state.seat2.car];
+  versusReadout();
+}
+// Everything the split screen draws over the two viewers, from the state `s` (the race's, or the enhanced presentation's copy of it).
+function versusOverlays(s, fb) {
+  const V = s.versus;
+  drawStrips(fb, state.hudArt, stripValues(s), { shoot: V.kind === 'shootout' }); // the shoot-out's SCORE words; the race's strips are blank there
+  if (V.kind === 'race') drawRaceHud(fb, state.hudArt, raceValues(s), hudGates(state.menu.settings));
+  carsOf(s).forEach((c, n) => { if (c.inverted !== 0) flipViewport(fb, n); }); // a car hit by an inverting shot sees its half upside down (versus.layout)
+  if (V.message) drawMessage(fb, state.hudArt.ofont, messageAt(V.message.text));
+  if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause));
+}
+function versusReadout() {
+  const V = state.versus, [a, b] = [state.car, state.seat2.car];
   $('readout').innerHTML = `<dt>Tick</dt><dd>${state.tick}</dd><dt>Score</dt><dd>${V.scores.join(' : ')} of ${V.hits}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`;
   $('badge').className = 'badge bad'; $('badge').textContent = 'Not compared with the running game beyond the first frame of a round: the two player shoot-out as read from the code (versus.shootout-rules).';
 }
 
 function draw() {
+  if (enh.active()) { drawEnhanced(); return; }
   if (state.linkPlay && state.versus) { drawLinkRace(); return; }
   if (state.versus) { drawVersus(); return; }
   const mode = Number($('detail').value);
   state.detail = mode; drawRaceFrame(state, index);
   if (state.pause) renderMenuOverlay(index, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
   blit(raceRgba());
+  raceReadout();
+}
+function raceReadout() {
   const c = state.car, row = (k, v) => `<dt>${k}</dt><dd>${v}</dd>`;
   $('readout').innerHTML = row('Tick', state.tick) + row('Throttle', c.throttle) + row('Speed', c.speed) + row('Camera', `${c.cx}, ${c.cy}`) + row('Heading', c.heading);
   $('badge').className = state.unproven.size ? 'badge bad' : 'badge';
   $('badge').textContent = state.unproven.size ? `Not proven yet and approximated here: ${[...state.unproven].join(', ')}.` : 'Every rule used so far is proven (the sky, the horizon, the floor, the straight road, the objects, the player car, the speedometer, the timer, the top banner, the driver name, the laps, the lap text and the reaction figure); the minimap, the held item, the finish and what follows it, the AI cars, pickups and sound are not ported yet.';
 }
+
+// The race screens through the Enhanced presentation (src/enhance): the picture between the last two ticks, the effects on the world's
+// pixels, the same overlays as the reference renderer drawn from the presented state. `alpha` is how far the clock is toward the next tick.
+let gfxShown = 0;
+function drawEnhanced() {
+  const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data;
+  if (state.versus && !state.linkPlay) {
+    enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays });
+    ctx.putImageData(image, 0, 0); versusReadout();
+  } else {
+    const L = state.linkPlay && state.versus ? state.linkPlay : null;
+    if (!L) state.detail = Number($('detail').value);
+    const P = enh.drawSingle(state, alpha, { index, out, palette, cap, mode: state.detail, sky: sceneSky(state), seat: L ? L.seat : 0, overlays: (s, fb) => {
+      if (L) { const cars = carsOf(s); s.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(s.ai ? s.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; } // the link race's overlay map: the other human, then the computer racers
+      drawRaceOverlays(s, fb);
+      if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
+    } });
+    if (!state.minimap && P.minimap) state.minimap = P.minimap; // the overhead map's picture and rectangle are kept from the race's first frame (hud.minimap-draw)
+    ctx.putImageData(image, 0, 0);
+    if (L) { const [a, b] = carsOf(state); $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`; $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE; } else raceReadout();
+  }
+  const now = performance.now();
+  if (now - gfxShown > 500) { gfxShown = now; const s = enh.stats(); $('gfx-stats').textContent = `${enh.settings.smooth ? `Smooth motion shows the race ${Math.round(s.delay)} ms behind its last tick (mean). ` : ''}Draw ${s.ms.toFixed(1)} ms a frame, ${s.particles} particles, ${s.marks} skid mark segments.`; } // @math twice a second
+}
+
+// The graphics panel: the preset, the effect switches, the levels and the reset, kept in this browser apart from the game's own settings.
+const LEVEL_KEYS = Object.keys(LEVELS);
+function showGraphics() {
+  const s = enh.settings;
+  $('gfx-preset').value = s.preset;
+  for (const k of EFFECTS) $(`gfx-${k}`).checked = s[k];
+  for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
+  $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !s.sunShadows;
+  if (!enh.active()) $('gfx-stats').textContent = 'The reference renderer draws the race.';
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's ENHANCED GRAPHICS shows the same settings
+}
+function setGraphics(next, control) { enh.configure(next); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider)
+$('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
+for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphics(change(enh.settings, k, e.target.checked), e.target));
+for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
+$('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
+showGraphics();
 
 // ---- the vehicle screen in front of the setup menus (menu.vehicle-screen)
 function enterVehicle(first) {
@@ -552,8 +613,11 @@ const isTrial = () => classOf(state.menu.settings.flow.class).class === trialCla
 const WAIT_KEYS = ['Enter', 'Space', 'AltLeft', 'AltRight', 'ControlLeft', 'ControlRight', 'ArrowUp', 'KeyA']; // the keys that end the card and the leaderboard: Enter, Space and the buttons of the player
 
 // The race's palette: the track's, with the DAC entries the palette cycler has rewritten (palette.cycle-rules).
+const fadeNow = () => (state.fadeIn ? fadeLevel(Math.floor(((performance.now()) - (state.fadeIn.since ?? performance.now())) / FADE_STEP_MS)) : null);
+const fadeCap = () => { const level = fadeNow(); return level === null ? 255 : Math.min((level << 2) | (level >> 4), 255); }; // @math the fade's 6-bit level widened to 8 bits: the brightest an effect's colour may be
 function raceRgba() {
-  if (state.fadeIn) { const level = fadeLevel(Math.floor(((performance.now()) - (state.fadeIn.since ?? performance.now())) / FADE_STEP_MS)); return rgbaPalette(state.world.palette.map(v => Math.min(v, level))); } // the first frame of a demo race fades in (demo.fade-in)
+  const level = fadeNow();
+  if (level !== null) return rgbaPalette(state.world.palette.map(v => Math.min(v, level))); // the first frame of a demo race fades in (demo.fade-in)
   const entries = shownCycle(state)?.entries;
   if (!entries?.size) return rgba;
   const out = Uint8ClampedArray.from(rgba);
@@ -561,7 +625,7 @@ function raceRgba() {
   return out;
 }
 
-function snapshotScreen() { state.snapshot = { index: index.slice(), rgba: raceRgba() }; }
+function snapshotScreen() { state.snapshot = { index: index.slice(), rgba: raceRgba(), image: enh.active() ? Uint8ClampedArray.from(image.data) : null }; } // the enhanced picture as it was shown
 
 // A cup from the menu: Bronze (the cup board is not ported), regular or bonus pack races, three tries.
 function beginCup(cup = 1) { state.cup = startCup(cup, state.menu.settings.flow.races === 2); state.totals = null; state.tries = 3; state.slots = null; state.carry = { counter: 0, held: 0 }; enterCard(); } // a new cup starts with nothing held (obj1+0x83a7)
@@ -998,7 +1062,8 @@ function stepRetryClock(now) {
 function drawRetry() {
   index.set(state.snapshot.index);
   renderMenuOverlay(index, state.menuArt, choiceView(state.retry));
-  blit(state.snapshot.rgba);
+  if (state.snapshot.image) { enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: fb => renderMenuOverlay(fb, state.menuArt, choiceView(state.retry)) }); ctx.putImageData(image, 0, 0); }
+  else blit(state.snapshot.rgba);
   $('badge').className = 'badge bad'; $('badge').textContent = 'The menu of a race that was not won in the first three places (obj1+0x219cd): not compared with a frame of the running game; SAVE AND QUIT is left out.';
 }
 
@@ -1040,6 +1105,7 @@ function frame(now) {
   const frame_ms = frameMs();
   while (state.accumulator >= frame_ms && !state.result) {
     if (tickOnce() === false) { state.accumulator = Math.min(state.accumulator, 2 * frame_ms); break; } // a link race waiting for the other player does not run ahead when the input comes
+    enh.afterTick(state, { sounds: tickSounds }); // the enhanced presentation's snapshot of the completed tick
     state.accumulator -= frame_ms;
   }
   draw();
@@ -1056,7 +1122,7 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices() }); // the keyboard layout and the sound devices of this browser (keys.js, sound-devices.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings) }); // the keyboard layout, the sound devices and the graphics settings of this browser (keys.js, sound-devices.js, enhance/settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); $('stage').hidden = false; setMessage('');
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
@@ -1141,4 +1207,4 @@ addEventListener('keyup', e => { state.keys.delete(e.code); if (e.code === state
 addEventListener('blur', () => { state.keys.clear(); state.menuHeld = null; state.menuHeldCode = null; }); // a key released while the page is not focused would stay down
 
 // `play.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
-if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };
+if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };

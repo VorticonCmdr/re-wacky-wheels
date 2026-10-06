@@ -46,6 +46,12 @@ function pictureOf(world, value, which, track) {
 }
 
 const flat = (bytes, width, height, x, y) => ({ bytes, width, height, x, y });
+
+// The first frame of the picture `which` ('first': the wheel dust, 'second': the pit state's picture) of the surface `value` on the track, when the loader read it for the track, else null.
+export function surfacePicture(world, value, which, track) {
+  const p = pictureOf(world, value, which, track);
+  return p && p.flag === GROUND().loaded ? { bytes: world.effects.subarray(p.offset, p.offset + p.width * p.height), width: p.width, height: p.height } : null;
+}
 const effectBytes = (world, p, counter) => (p.flag === GROUND().loaded ? world.effects.subarray(p.offset + counter * p.stride, p.offset + counter * p.stride + p.width * p.height) : null);
 
 // The choice of a picture (obj1+0x14ee5 to +0x14f6e, +0x15090 to +0x1511a) and the frame counter it moves: a flag byte of 3 keeps the car's last record and id.
@@ -164,6 +170,9 @@ export function stepEffects(car0, ctx) {
   if (!(SWITCH().holdIdle && ctx.switching && car.flameStage === 0)) advanceFlame(car);
   return { car, sounds, up, hidden, pit, after, unproven, crash, cracked, lifeLost, entry };
 }
+
+// The column a spark word draws its picture at, from the entry's left column (effects.sparks): the side of the car the spark is on.
+export const sparkShift = word => SPARKS().shifts[word];
 
 // The sparks of the car's entry (obj1+0x152f2): the picture of the frame the spark counter names at the side the word names, and the counter on by one after the draw (the end of the 4 frames clears the word).
 export function stepSparks(car0, world, entry) {

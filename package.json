@@ -27,6 +27,7 @@
     "check:duck": "node scripts/check-duck.js",
     "check:versus": "node scripts/check-versus.js",
     "check:link": "node scripts/check-link.js",
+    "check:enhance": "node scripts/check-enhance.js",
     "dev:lan": "vite --host 0.0.0.0",
     "serve:lan": "node tools/lan-server.mjs"
   },

@@ -5,7 +5,10 @@
 //  - src/game/** uses only PROVEN/STATIC claims and never imports formats/hypotheses/;
 //  - nothing under src/ refers to analysis/;
 //  - every module in src/formats/hypotheses/ calls noteStep('<claim>') inside a function, naming a
-//    WF or UNKNOWN claim, so any decode that runs it badges no stronger than that claim.
+//    WF or UNKNOWN claim, so any decode that runs it badges no stronger than that claim;
+//  - src/enhance/ (the Enhanced presentation, docs/enhancements.md) is outside THE RULE but has its own: its design numbers live
+//    in src/enhance/config.js only (other modules: 0, 1 and `// @math <reason>` lines), it cites no claims (K/UNKNOWN), it never
+//    assigns to the race `state`, never imports formats/hypotheses/, and only src/enhance/ itself, the playtest page (src/play.js) and the asset garage's previews (src/viewer.js, src/viewer-preview.js) import it.
 // Usage: node tools/lint/constants.mjs [files or dirs...]   (default: the governed directories)
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, sep, dirname } from 'node:path';
@@ -16,6 +19,7 @@ import * as walk from 'acorn-walk';
 // expected(id) lets checks read a claim's value through K(); it is the only dynamic-id caller.
 const DYNAMIC_ID = ['src/verify/expect.js'];
 export const GOVERNED = ['src/formats', 'src/render', 'src/audio', 'src/game', 'src/verify/checks'];
+export const ENHANCE = 'src/enhance', ENHANCE_CONFIG = 'src/enhance/config.js', ENHANCE_USERS = ['src/play.js', 'src/viewer-preview.js', 'src/viewer.js'];
 
 async function files(path) {
   const s = await stat(path).catch(() => null);
@@ -29,7 +33,7 @@ async function files(path) {
 export async function lintSource(source, file, claims) {
   const rel = relative(process.cwd(), file).split(sep).join('/');
   const governed = GOVERNED.some(d => rel === d || rel.startsWith(d + '/'));
-  const inGame = rel.startsWith('src/game/'), problems = [], lines = source.split('\n');
+  const inGame = rel.startsWith('src/game/'), inEnhance = rel.startsWith(`${ENHANCE}/`), problems = [], lines = source.split('\n');
   const report = (node, msg) => problems.push(`${rel}:${node.loc.start.line}:${node.loc.start.column + 1} ${msg}`);
   const comments = [];
   let ast;
@@ -56,6 +60,7 @@ export async function lintSource(source, file, claims) {
   walk.fullAncestor(ast, (node, _state, ancestors) => {
     if (node.type === 'CallExpression' && node.callee.type === 'Identifier' && (node.callee.name === 'K' || node.callee.name === 'UNKNOWN')) {
       const name = node.callee.name, idArg = node.arguments[name === 'K' ? 1 : 0];
+      if (inEnhance) return report(node, `src/enhance cites no claims (${name}): it reads reconstructed values through the modules that own them`);
       if (idArg?.type !== 'Literal' || typeof idArg.value !== 'string') {
         if (!DYNAMIC_ID.includes(rel)) report(node, `${name}() needs a string-literal claim id`);
         return;
@@ -73,9 +78,18 @@ export async function lintSource(source, file, claims) {
       else marked = true;
     }
     if (node.type === 'Literal' && typeof node.value === 'string' && /(^|\/)analysis\//.test(node.value) && rel.startsWith('src/')) report(node, 'src/ never reads analysis/');
-    if ((node.type === 'ImportDeclaration' || node.type === 'ImportExpression' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') && node.source?.type === 'Literal' && inGame) {
+    if ((node.type === 'ImportDeclaration' || node.type === 'ImportExpression' || node.type === 'ExportNamedDeclaration' || node.type === 'ExportAllDeclaration') && node.source?.type === 'Literal' && typeof node.source.value === 'string') {
       const target = relative(process.cwd(), resolve(dirname(file), node.source.value)).split(sep).join('/');
-      if (target.startsWith('src/formats/hypotheses/')) report(node, 'src/game may not import formats/hypotheses/');
+      if ((inGame || inEnhance) && target.startsWith('src/formats/hypotheses/')) report(node, `${inGame ? 'src/game' : 'src/enhance'} may not import formats/hypotheses/`);
+      if (target.startsWith(`${ENHANCE}/`) && !inEnhance && !ENHANCE_USERS.includes(rel)) report(node, 'only the pages import src/enhance: the reconstructed renderer and the game never depend on the enhanced presentation');
+    }
+    if (inEnhance && (node.type === 'AssignmentExpression' || node.type === 'UpdateExpression' || (node.type === 'UnaryExpression' && node.operator === 'delete'))) {
+      let target = node.type === 'AssignmentExpression' ? node.left : node.argument;
+      while (target?.type === 'MemberExpression') target = target.object;
+      if (target?.type === 'Identifier' && target.name === 'state') report(node, 'src/enhance never writes the race state: rendering consumes it');
+    }
+    if (inEnhance && rel !== ENHANCE_CONFIG && node.type === 'Literal' && typeof node.value === 'number' && node.value !== 0 && node.value !== 1 && !tags.has(node.loc.start.line)) {
+      report(node, `numeric literal ${node.raw} in src/enhance outside config.js without @math (the design numbers live in ${ENHANCE_CONFIG})`);
     }
     if (!governed || !(node.type === 'Literal' && (typeof node.value === 'number' || typeof node.value === 'bigint'))) return;
     if (node.value === 0 || node.value === 1) return; // @math the two literals THE RULE allows

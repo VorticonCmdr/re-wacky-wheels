@@ -8,6 +8,7 @@ const CLAMP = () => K({ limit: 4095 }, 'terrain.clamp');
 const MAP = () => K({ rows: 64, columns: 64, tileBytes: 1024, tableCells: 128, mapOrigin: 32 }, 'm.read');
 const SPLIT = () => K({ count: 54, size: 32, columns: 10 }, 'tiles.sheet-split');
 const SDX = () => K({ resultOffset: 124264, tableOffset: 82424, recordBytes: 302, dwordAt: 288, wordAt: 292, carPointerOffset: 120240 }, 'terrain.sdx-index');
+const SPECIAL = () => K({ boost: 2, wall: 3, stopped: 5, pit: [6, 15], fall: 10, terrainWord: 0x1e568, carWord: 0x56 }, 'terrain.special-values');
 const FRACTION_BITS = 16; // @math the fraction is a 16.16 fixed-point number (car.speed-observed: 30146 is 0.46)
 
 // The terrain value at a world position (x is the column, y the row): the tile of the cell, the mask pixel of the tile at the position's offset in it, and the
@@ -21,6 +22,9 @@ export function terrainAt(world, x, y) {
   const entry = world.sin[id].kept, dv = new DataView(entry.buffer, entry.byteOffset, entry.byteLength);
   return dv.getUint32(mask === 0 ? T.maskZeroOffset : T.maskOneOffset, true);
 }
+
+// The surface values the game code treats specially (terrain.special-values): the boost strip, the wall, the surface a stopped car sinks into, the pit state's surfaces and the fall.
+export const specialSurfaces = () => { const S = SPECIAL(); return { boost: S.boost, wall: S.wall, stopped: S.stopped, pit: S.pit, fall: S.fall }; };
 
 // The two numbers of the surface's SDX record: the fraction (dword +0x120) and the steering calls before a slide (dword +0x124).
 export function surfaceRecord(world, value) {

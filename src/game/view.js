@@ -6,6 +6,9 @@ const MODEL = () => K({ fixedBits: 16, tan: 37837, center: 160, maxColumn: 319, 
 
 const s16 = v => (v << 16) >> 16; // @math the low 16 bits as a signed word
 
+// The view model's values for code that projects with them outside this module (the page's enhanced presentation, src/enhance).
+export const viewModel = () => MODEL();
+
 // The integer square root of obj1+0x149b0: the floor root, plus one when the remainder reaches the root less one.
 export function isqrt(n) {
   if (n <= 1) return n;

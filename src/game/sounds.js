@@ -18,6 +18,7 @@ export function soundOf(number, quack = false) {
   return { number: n, name: S.names[n], member: quack ? GLANCE().quack : `${S.names[n]}${S.suffix}`, priority }; // the duck game plays the quack for a driver's voice (duck.glance)
 }
 export const soundCount = () => SOUNDS().names.length;
+export const soundNumber = name => SOUNDS().names.indexOf(name); // the number of a named sound (SKID, SPLASH, ...), -1 for none
 export const driverVoice = slot => slot; // @math the numbers 0 to 7 are the drivers' own voices
 
 // The engine's pitch in cents for a speed word (every frame).

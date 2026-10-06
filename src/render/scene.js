@@ -33,21 +33,22 @@ const COUNTDOWN = createStart().mode; // the mode of the countdown
 const SHOWN_AHEAD = 1; // @math the draw of a pass shows the state after the step before it
 
 // The racers of the draw: the computer racers, the ducks, or in a split game the other human. Returns the list of draw records.
-function racerList(state, view, camera) {
+function racerList(state, view, camera, frames = null) {
+  const heading = frames?.heading ?? camera.heading; // the heading the racers' direction frames are chosen by
   if (state.versus) {
-    const racers = viewRacers(state), frames = racers.map((r, n) => (r.human ? (r.crashed && !r.gone ? { bytes: crashBytes(state.world, r.crashPic) } : (r.blink?.shown ?? (idleFrame(state.tick, r.mode) ?? null))) : n === 0 ? null : (r.blink?.shown ?? (r.hit === 1 ? r.hitSpin : idleFrame(state.tick, r.mode))))); // the computer racers of a two player race wait with the idle pictures of the start
-    return racerRecords(state.world, view, camera, racers, camera.heading, viewSlots(state), frames, r => r.gone === true);
+    const racers = viewRacers(state), pictures = racers.map((r, n) => (r.human ? (r.crashed && !r.gone ? { bytes: crashBytes(state.world, r.crashPic) } : (r.blink?.shown ?? (idleFrame(state.tick, r.mode) ?? null))) : n === 0 ? null : (r.blink?.shown ?? (r.hit === 1 ? r.hitSpin : idleFrame(state.tick, r.mode))))); // the computer racers of a two player race wait with the idle pictures of the start
+    return racerRecords(state.world, view, camera, racers, heading, viewSlots(state), pictures, r => r.gone === true);
   }
   if (!state.ai) return [];
   const counting = state.start.mode === COUNTDOWN; // the countdown's images show the next pass's glance picture (SHOWN_AHEAD), the racing frames this pass's
   const waiting = state.ai.racers.map((r, n) => (n === 0 ? null : r.crashed && r.crashShown !== false ? { bytes: crashBytes(state.world, r.crashPic) } : state.intro ? null : (counting ? r.blink?.ahead : r.blink?.shown) ?? (r.hit === 1 ? r.hitSpin : null))); // the waiting pictures are the racers' glances (blink.js), none in the intro; a racer wrecked by a head-on shows its crash pictures (race.head-on)
-  return racerRecords(state.world, view, camera, state.ai.racers, camera.heading, state.slots, state.duck ? duckFrames(state) : waiting, state.duck ? (r => gone(r) || skipped(r)) : crashGone);
+  return racerRecords(state.world, view, camera, state.ai.racers, heading, state.slots, state.duck ? duckFrames(state) : waiting, state.duck ? (r => gone(r) || skipped(r)) : crashGone);
 }
 
 // The human in the intro (race.intro): the camera is not on its car, so it is the racer 0 of the draw list at its place in the world, with the frame its compass word 0 picks for the camera's sector
 // (a grab of the running game: the list has the racers 0 to 7 and no record of the own car).
-function introHuman(state, view, camera) {
-  const r = racerRecord(state.world, view, camera, { x: state.car.px, y: state.car.py, compass: 0, n: 0 }, camera.heading, state.slots[0], frameTable()); // @math the human's compass word is 0 at the start
+function introHuman(state, view, camera, frames = null) {
+  const r = racerRecord(state.world, view, camera, { x: state.car.px, y: state.car.py, compass: 0, n: 0 }, frames?.heading ?? camera.heading, state.slots[0], frameTable()); // @math the human's compass word is 0 at the start
   return r ? [r] : [];
 }
 
@@ -58,16 +59,27 @@ function ownRecord(state) {
   return state.car.wreckShown < SHOOT().wreck.pictures ? { ...record, frame: crashBytes(state.world, state.car.wreckShown), after: [] } : { ...record, skip: true, after: [] };
 }
 
+// The camera the frame is drawn from: a frame that ends with the answer to a touch is drawn from the car as the move left it (a grab of the running game at a touch: the camera before the answer).
+export function sceneCamera(state) {
+  const pre = state.beforeAnswer;
+  return { x: pre?.cx ?? state.car.cx, y: pre?.cy ?? state.car.cy, heading: pre?.heading ?? state.car.heading };
+}
+
+// The draw list of the frame for `camera`, in the order the frame routine queues the things (obj1+0x34e1 to +0x34ff): the racers, the objects, the own car, the starter, the shots; the sort leaves things
+// of one distance in this order. `frames.heading` chooses the racers' direction frames by another heading than the camera's (the page's enhanced presentation keeps them on the tick's while it draws
+// between ticks); by default it is the camera's.
+export function sceneRecords(state, camera, frames = null) {
+  const objects = state.player.objects.map((o, i) => ({ ...o, consumed: state.player.taken?.includes(i) ? 0 : o.consumed, frame: objectFrame(state.world, o.id, state.tick, state.animOffset) })), view = viewSetup(state.world, camera);
+  const starter = state.duck || state.versus?.kind === 'shootout' || state.lionShown === false ? null : starterRecord(state.world, view, camera, state.world.start, stepStart(state.start).start.lion); // no starter in the duck game (duck.race-rules) or the shoot-out; its picture is the one of the next frame, like the waiting pictures (SHOWN_AHEAD)
+  return [...(state.intro ? introHuman(state, view, camera, frames) : []), ...racerList(state, view, camera, frames), ...objectRecords(state.world, view, camera, objects), ...(state.intro ? [] : [ownRecord(state)]), ...(starter ? [starter] : []), ...shotRecords(state.world, view, camera, state.shots)];
+}
+
 // `sky(fb)` draws the sky and the horizon (the demo's own pictures); the default is the track's.
 export function renderScene(state, fb, mode, sky = null) {
-  const pre = state.beforeAnswer; // a frame that ends with the answer to a touch is drawn from the car as the move left it (a grab of the running game at a touch: the camera before the answer)
-  const camera = { x: pre?.cx ?? state.car.cx, y: pre?.cy ?? state.car.cy, heading: pre?.heading ?? state.car.heading };
+  const camera = sceneCamera(state);
   fb.fill(0);
   if (sky) sky(fb); else { renderSky(state.world.sky, fb); renderHorizon(state.world.par, state.car.horizon, fb); }
   renderFloor(state.world, camera, mode, fb);
-  const objects = state.player.objects.map((o, i) => ({ ...o, consumed: state.player.taken?.includes(i) ? 0 : o.consumed, frame: objectFrame(state.world, o.id, state.tick, state.animOffset) })), view = viewSetup(state.world, camera);
-  const starter = state.duck || state.versus?.kind === 'shootout' || state.lionShown === false ? null : starterRecord(state.world, view, camera, state.world.start, stepStart(state.start).start.lion); // no starter in the duck game (duck.race-rules) or the shoot-out; its picture is the one of the next frame, like the waiting pictures (SHOWN_AHEAD)
-  // the order the frame routine queues the things in (obj1+0x34e1 to +0x34ff): the racers, the objects, the own car, the starter, the shots; the sort leaves things of one distance in this order
-  drawList(fb, [...(state.intro ? introHuman(state, view, camera) : []), ...racerList(state, view, camera), ...objectRecords(state.world, view, camera, objects), ...(state.intro ? [] : [ownRecord(state)]), ...(starter ? [starter] : []), ...shotRecords(state.world, view, camera, state.shots)]);
+  drawList(fb, sceneRecords(state, camera));
   return fb;
 }

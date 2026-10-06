@@ -54,4 +54,4 @@ HTT/HI and OTT/TIM share layouts; each extension has its own entry. The FX conta
 
 The wiki credits Phil Carter and Klas Arvidsson for track/BMC reverse engineering, and Malvineous for KLM. Source links in every entry preserve attribution and allow checking incomplete details.
 
-The page's own features that the game does not have are described apart from the formats: [comm-bat.md](comm-bat.md) (COMM-BAT PLAY over WebRTC) and [enhancements.md](enhancements.md) (the proposed graphics roadmap).
+The page's own features that the game does not have are described apart from the formats: [comm-bat.md](comm-bat.md) (COMM-BAT PLAY over WebRTC) and [enhancements.md](enhancements.md) (the graphics roadmap; its first milestone, the Enhanced preset, is in the playtest page).

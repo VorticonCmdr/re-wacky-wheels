@@ -900,3 +900,6 @@ audio {
     animation:none
   }
 }
+
+.compare-legend { display:grid; grid-template-columns:1fr 1fr; font-family:var(--mono); font-size:10px; letter-spacing:.08em; color:var(--muted); padding:6px 0 }
+.compare-legend[hidden] { display:none }

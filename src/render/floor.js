@@ -7,6 +7,9 @@ import { K } from '../evidence/k.js';
 
 const MODEL = () => K({ columns: 320, steps: 70, angleBias: 160, wrap: 1920, bottomRow: 199, trigEntryBytes: 8, fixedBits: 16, groupDwords: 70, ndistDwordBytes: 4, mapRows: 64, mapColumns: 64, mapOrigin: 32, tileShift: 5, tileMask: 31, tileBytes: 1024, sheetCount: 54, sheetSize: 32, sheetColumns: 10, columnSteps: [1, 2, 4], resetTo: 0, gamPrefix: 'A_', width: 320, height: 200 }, 'floor.model');
 
+// The floor model's values for code that casts the same rays outside this module (the page's enhanced presentation, src/enhance).
+export const floorModel = () => MODEL();
+
 // camera: {x, y, heading}; mode: 1 (high), 2 (medium) or 3 (low) detail; fb: Uint8Array(320 x 200).
 export function renderFloor(world, camera, mode, fb) {
   const F = MODEL(), step = F.columnSteps[mode - 1], half = F.trigEntryBytes / 2, lowMask = F.tileMask; // @math the second dword of a TRIG entry is half an entry on

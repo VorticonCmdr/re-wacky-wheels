@@ -3,6 +3,9 @@ import { K } from '../evidence/k.js';
 
 const MODEL = () => K({ width: 320, skyRows: 110, horizonRow: 110, horizonRows: 20, parRowPixels: 1280, pixelsPerByte: 4, parBytes: 25600, offsetMax: 240, observedFrom: 52 }, 'sky.model');
 
+// The sky model's values for code that draws the strip outside this module (the page's enhanced presentation, src/enhance).
+export const skyModel = () => MODEL();
+
 // Rows 0 to 109 of the 320 x 200 picture `sky` (palette indexes) go to the same rows of fb.
 export function renderSky(sky, fb) {
   const S = MODEL();

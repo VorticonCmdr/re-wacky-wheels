@@ -14,7 +14,15 @@ import { minimapOn, minimapPicture, minimapRace, minimapDots, minimapAllowed } f
 import { speedDigits, timerText, hudGates, counterDigits, lapText, unseenGlyphs } from '../game/hud.js';
 
 export function drawRaceFrame(state, index) {
-  renderScene(state, index, state.detail, state.demo?.pictures ? fb => drawDemoSky(fb, state.demo.pictures[state.demo.page - 1]) : null); // the page picture is the slide's sky and horizon (demo.flow)
+  renderScene(state, index, state.detail, sceneSky(state));
+  drawRaceOverlays(state, index);
+}
+
+// The sky of the frame: the page picture is the slide's sky and horizon (demo.flow); null for the track's own.
+export const sceneSky = state => (state.demo?.pictures ? fb => drawDemoSky(fb, state.demo.pictures[state.demo.page - 1]) : null);
+
+// Everything the race frame draws over the scene: the overhead map, the HUD or the demo's banner and logo, the finish labels, the message and the crack.
+export function drawRaceOverlays(state, index) {
   if (minimapAllowed({ duck: state.duck, demo: state.demo, slides: demoModel().modes.slides }) && minimapOn(state.menu.settings)) { // the overhead map: the picture of the race, its rectangle kept from the first frame, the racers' dots (hud.minimap-draw)
     if (!state.minimap) { const race = minimapRace({ cup: state.cup, demo: state.demo?.spec, track: state.world.name }); state.minimap = { picture: minimapPicture(archiveMembers(state.dat), race), saved: null }; if (!race.known) state.unproven.add('the overhead map\'s picture in the page\'s free race (the game has none: it takes the Bronze cup\'s picture of the track\'s place)'); }
     if (state.minimap.picture) drawMinimap(index, state.minimap, minimapDots([{ x: state.car.px, y: state.car.py }, ...(state.minimapOthers ?? (state.ai ? state.ai.racers.slice(1) : []))], state.world.mapxy)); // `minimapOthers`: the page's link race lists the other human and the computer racers itself

@@ -52,6 +52,9 @@ export const idleRef = (state, slot = null, ahead = 0) => (state.versus?.kind ==
 // The bytes of the member the starter's pictures are cut from (race.start-rules).
 export const lionBytes = members => members.get(RULES().member);
 
+// The world point the starter's record is projected from (starterRecord): the start point moved by the lion's offsets.
+export const starterPoint = anchor => ({ x: anchor.x + RULES().lionDx, y: anchor.y + RULES().lionDy });
+
 // The picture bytes of the starter's frame `lion` (a piece of GENEF.SP, race.start-rules).
 export function lionFrame(world, lion) {
   const R = RULES(), C = R.cut, at = C.lights * C.lightBytes + C.tiles * C.tileBytes + lion * C.frameBytes;

@@ -93,6 +93,16 @@ Records contain no asset bytes (`validateObs` rejects long strings and byte-like
 
 Parsers whose correctness rests only on `WF` claims or leads live in `src/formats/hypotheses/`.
 
+### Enhancement constants
+
+The Enhanced presentation ([enhancements.md](enhancements.md)) is the page's own addition, not a reconstruction, so its numbers are not evidence and get no claims. Lint keeps them apart:
+
+- **Design values live in one file.** Shadow opacity, fog strength, particle sizes and lifetimes, the presets and the discontinuity limits of smooth motion are all in `src/enhance/config.js`. Each is commented as a design choice. Any other module in `src/enhance/` may use only 0, 1 and literals on lines tagged `// @math <reason>`.
+- **No claims.** `src/enhance/` never calls `K()` or `UNKNOWN()`. It reads the reconstructed values it shares with the game, such as the screen size, the view model, the turn, the horizon bounds, the tick period, the effect pictures, the spark sides, the special surface values and the SKID sound, through accessors exported by the modules that own them (`viewModel`, `skyModel`, `floorModel`, `horizonBounds`, `frameMs`, `surfacePicture`, `sparkShift`, `starterPoint`, `specialSurfaces`, `soundNumber`). `src/enhance/models.js` reads them once, because each accessor validates its claim on every call. A game number is therefore never restated as a design value.
+- **No writes to the race.** `src/enhance/` may not assign to `state` (lint). It draws from shallow copies of the state. `npm run check:enhance` hashes the simulation after every tick under three conditions: no draw, the reference draw, and the enhanced draw. All three must match.
+- **One-way dependency.** Only the pages import `src/enhance/`: the playtest page (`src/play.js`) and the asset garage's previews (`src/viewer.js`, `src/viewer-preview.js`). The reconstructed renderer, the game and the checks never depend on it, and the Original preset draws through the reference renderer unchanged.
+- **No hypotheses.** `src/enhance/` may not import `src/formats/hypotheses/`. Its particles and skid marks use only classifications the game itself makes (an effect picture a surface has, the pit state, the spark word, the skid states and the SKID sound, the special surface values); it never gives a surface a meaning the disassembly has not shown.
+
 ## Layout
 
 | Path | Content |

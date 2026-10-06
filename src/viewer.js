@@ -9,10 +9,14 @@ import { spriteSheet, spriteSheetLayout } from './sprite-sheet.js';
 import { parseGam, parseRoute, parseSpawns, composeTrack } from './tracks.js';
 import { decodeVoc, decodePcSpeaker, encodeWav } from './audio.js';
 import { numericValues, inspectData, b800Cells } from './data-formats.js';
+import { createRacePreview, anchorStage } from './viewer-preview.js';
+import { driverFile, driverCount } from './game/drivers.js';
+import { normalize, applyPreset, change, loadSettings, saveSettings, anyEffect } from './enhance/settings.js';
+import { EFFECTS, LEVELS, PRESETS } from './enhance/config.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
-const state = { gamePalette: false, entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
+const state = { trackView: 'map', anchorView: false, gfx: null, gamePalette: false, entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function category(e) {
   const ext = extension(e.name);
@@ -103,7 +107,9 @@ function previewPcx(entry) {
 }
 function previewRaw(entry) {
   const horizon = extension(entry.name) === 'par', layout = horizon ? { width: 1280, height: 20, frames: 1, certainty: 'Observed in the running game: a 1280 × 20 panorama of which the game shows a 320-pixel window (horizon.render-observed)' } : spriteLayout(entry.name, entry.data, state.catalog);
-  let w = layout.width, h = layout.height, frame = 0, offset = 0, column = !horizon, key = defaultPalette(), transparent = !horizon, animate = false, last = 0;
+  let w = layout.width, h = layout.height, frame = 0, offset = 0, column = !horizon, key = defaultPalette(), transparent = !horizon, animate = false, last = 0, sunAngle = (state.gfx ?? loadSettings()).sunAngle;
+  const tables = get('trig.dat') && get('view') ? { trig: get('trig.dat').data, view: get('view').data } : null;
+  let rule = ['cars.sp', ...Array.from({ length: driverCount() }, (_, slot) => driverFile(slot).toLowerCase())].includes(entry.name) ? 'racer' : 'scenery'; // the race sizes a car's contact shadow by its picture, scenery by its footprint
   const c = canvas(w, h); controls();
   const frameSlider = el('input'); frameSlider.type = 'range'; frameSlider.min = 0; frameSlider.step = 1;
   const frameLabel = el('span', undefined, 'frame-label');
@@ -120,12 +126,13 @@ function previewRaw(entry) {
   function count() { return Math.max(1, Math.ceil((entry.data.length - offset) / (w * h))); }
   function draw() {
     frame = Math.min(frame, count() - 1); frameSlider.max = count() - 1; frameSlider.value = frame;
-    paint(c, rawFrame(entry.data, w, h, frame, offset, column), palette(key), transparent ? 0 : -1);
+    if (state.anchorView && !horizon && tables) drawAnchor(c, rawFrame(entry.data, w, h, frame, offset, column), w, h, displayPalette(palette(key)), sunAngle, rule);
+    else paint(c, rawFrame(entry.data, w, h, frame, offset, column), palette(key), transparent ? 0 : -1);
     frameLabel.textContent = `${frame + 1} / ${count()} frames`;
     updateSheetInfo();
-    if (zoom.value !== 'fit') c.style.width = w * Number(zoom.value) + 'px';
+    if (zoom.value !== 'fit') c.style.width = c.width * Number(zoom.value) + 'px';
   }
-  const zoom = selectControl('Zoom', [['fit', 'Fit'], [1, '1×'], [2, '2×'], [4, '4×'], [8, '8×']], horizon ? 1 : 8, v => { c.style.width = v === 'fit' ? '' : w * Number(v) + 'px'; c.style.maxWidth = v === 'fit' ? '100%' : 'none'; });
+  const zoom = selectControl('Zoom', [['fit', 'Fit'], [1, '1×'], [2, '2×'], [4, '4×'], [8, '8×']], horizon ? 1 : 8, v => { c.style.width = v === 'fit' ? '' : c.width * Number(v) + 'px'; c.style.maxWidth = v === 'fit' ? '100%' : 'none'; });
   c.style.width = w * Number(zoom.value) + 'px'; c.style.maxWidth = 'none';
   numberControl('Width', w, 1, 2048, n => { w = n; frame = 0; draw(); });
   numberControl('Height', h, 1, 2048, n => { h = n; frame = 0; draw(); });
@@ -135,6 +142,11 @@ function previewRaw(entry) {
   checkControl('Column-major', column, v => { column = v; draw(); }); checkControl('Transparent index 0', transparent, v => { transparent = v; draw(); });
   field('Frame', frameSlider); $('controls').append(frameLabel); frameSlider.oninput = () => { frame = Number(frameSlider.value); draw(); };
   checkControl('Animate · 8 fps', false, v => { animate = v; });
+  if (!horizon && tables) { // the enhancement preview of the sprite's ground anchor and shadows
+    checkControl('Ground anchor and shadows', state.anchorView, v => { state.anchorView = v; draw(); });
+    rangeControl('Sun direction', sunAngle, v => { sunAngle = v; draw(); });
+    selectControl('Contact shadow', [['racer', 'Racer rule · picture width'], ['scenery', 'Scenery rule · footprint']], rule, v => { rule = v; draw(); });
+  }
   if (!horizon) {
     selectControl('Sprite sheet columns', [[0, 'Auto'], [1, '1 · vertical strip'], [4, '4'], [8, '8'], [16, '16']], 0, value => { sheetColumns = Number(value); updateSheetInfo(); });
     field('Sprite sheet', sheetInfo);
@@ -161,8 +173,29 @@ function previewRaw(entry) {
   if (!horizon && !state.catalog.some(s => s.name === entry.name)) detail('For uncatalogued files, frame layout is inferred. Mixed-size sheets need manual width, height and byte-offset adjustments.');
 }
 
+// The sprite frame stood where the race draws the player's car on a plain ground, with its contact shadow and its sun shadow (viewer-preview.js),
+// cut to the frame and its shadows; red marks the ground row, under the lowest opaque row, and cyan the footprint the contact shadow is sized by.
+function drawAnchor(c, img, w, h, pal, sunAngle, rule) {
+  const cm = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cm[x * h + y] = img.indices[y * w + x];
+  const stage = anchorStage({ trig: get('trig.dat').data, view: get('view').data }, cm, w, h, pal, { sunAngle, rule });
+  const margin = Math.max(w, h), x0 = Math.max(stage.left - margin, 0), y0 = Math.max(stage.top - margin, 0), x1 = Math.min(stage.left + w + margin, 320), y1 = Math.min(stage.row + margin, 200); // @math the screen
+  const cw = x1 - x0, ch = y1 - y0, crop = new Uint8ClampedArray(cw * ch * 4); // @math four bytes a colour
+  for (let y = 0; y < ch; y++) crop.set(stage.rgba.subarray(((y0 + y) * 320 + x0) * 4, ((y0 + y) * 320 + x1) * 4), y * cw * 4); // @math the screen's rows, four bytes a colour
+  c.width = cw; c.height = ch;
+  const ctx = c.getContext('2d'); ctx.putImageData(new ImageData(crop, cw, ch), 0, 0);
+  const a = stage.anchor;
+  if (!a) return;
+  ctx.fillStyle = '#ff5a5a'; ctx.fillRect(0, stage.row - y0, cw, 1); // the ground row
+  ctx.fillStyle = '#5ae0ff'; ctx.fillRect(stage.left + a.minX - x0, stage.top + a.low + 1 - y0, a.maxX - a.minX + 1, 1); // the footprint under the lowest opaque row
+  ctx.globalAlpha = 0.2; ctx.fillRect(stage.left + a.minX - x0, stage.top + a.low + 1 - a.band - y0, a.maxX - a.minX + 1, a.band); ctx.globalAlpha = 1; // @math the band the footprint is read from
+}
+
 function previewTrack(entry) {
-  const stem = entry.name.split('.')[0], map = get(stem + '.m'), gam = get(stem + '.gam');
+  const stem = entry.name.split('.')[0];
+  controls(); selectControl('View', [['map', 'Track map'], ['race', 'Race view · Original and Enhanced']], state.trackView, v => { state.trackView = v; selectEntry(entry); });
+  if (state.trackView === 'race') { previewRace(stem); return; }
+  const map = get(stem + '.m'), gam = get(stem + '.gam');
   let base, config;
   if (map && gam) { config = parseGam(gam.data); base = composeTrack(map.data, image(config.tiles[0]), image(config.tiles[1])); }
   else {
@@ -185,6 +218,70 @@ function previewTrack(entry) {
   detail(`64 × 64 tiles · ${segments.length} AI segments · ${objects.length} objects. Yellow = AI route; coral = objects; white ring = start. World origin is upper left.`);
   if (config) detail(`Tilesets: ${config.tiles.join(', ')} · sky: ${config.sky} · palette cycling: ${config.cycling ? 'enabled in original game (static preview here)' : 'off'}.`);
 }
+// The enhancement preview of a track (docs/enhancements.md): a race on the track seen from the race camera, the reference renderer on the left
+// and the Enhanced presentation on the right, at a moment of the drive or playing; the effects, their levels and the sun can be tried here
+// and saved for the playtest page.
+const EFFECT_LABELS = { smooth: 'Smooth motion', shadows: 'Contact shadows', sceneryShadows: 'Scenery shadows', sunShadows: 'Sun shadows', particles: 'Particles', skidMarks: 'Skid marks', fog: 'Distance fog' };
+const LEVEL_LABELS = { shadowStrength: 'Shadow strength', fogStrength: 'Fog strength', particleAmount: 'Particle amount', sunAngle: 'Sun direction' };
+function rangeControl(label, value, change) {
+  const input = el('input'); input.type = 'range'; input.min = 0; input.max = 1; input.step = 0.05; input.value = value; input.oninput = () => change(Number(input.value)); return field(label, input);
+}
+function previewRace(stem) {
+  const dat = get('wacky.dat')?.data;
+  if (!dat || !get(stem + '.gam')) { $('preview').replaceChildren(el('p', 'The race view runs the game on your WACKY.DAT: open the complete archive.', 'preview-error')); return; }
+  let preview;
+  try { preview = createRacePreview(dat, stem); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
+  const saved = loadSettings();
+  let settings = state.gfx ??= anyEffect(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when it has any, else the Enhanced preset
+  let moment = 140, layout = 'both', hud = true, level = 1, playing = false, acc = 0, last = 0, alpha = 1; // @math a moment after the fly-in and the countdown
+  const c = canvas(640, 200), ctx = c.getContext('2d'); c.style.width = '100%'; c.style.maxWidth = 'none'; // the screens as large as the preview allows
+  const left = new Uint8ClampedArray(320 * 200 * 4), right = new Uint8ClampedArray(320 * 200 * 4); // @math the two screens
+  const legend = el('div', undefined, 'compare-legend'); legend.append(el('span', 'ORIGINAL · reference renderer'), el('span', 'ENHANCED')); c.parentElement.append(legend);
+  const momentSlider = el('input'), momentLabel = el('span', undefined, 'frame-label'), stats = el('span', undefined, 'frame-label');
+  momentSlider.type = 'range'; momentSlider.min = 0; momentSlider.max = 2400; momentSlider.step = 1; momentSlider.value = moment; // @math about three and a half minutes of passes
+  function draw() {
+    const s = preview.draw({ alpha: playing ? alpha : 1, hud, detail: level }, left, right);
+    const both = layout === 'both';
+    c.width = both ? 640 : 320; // @math one or two screens
+    if (layout !== 'enhanced') ctx.putImageData(new ImageData(left, 320, 200), 0, 0); // @math the screen
+    if (layout !== 'original') ctx.putImageData(new ImageData(right, 320, 200), both ? 320 : 0, 0); // @math the screen
+    legend.hidden = !both;
+    momentLabel.textContent = `pass ${moment} · ${(moment * preview.tickMs / 1000).toFixed(1)} s`; // @math milliseconds in a second
+    stats.textContent = anyEffect(settings) ? `${s.particles} particles · ${s.marks} skid mark segments · enhanced draw ${s.last.toFixed(1)} ms` : 'every effect off: the reference renderer';
+  }
+  function seek() { try { preview.seek(moment, settings); draw(); } catch (e) { status(e.message, true); } }
+  function set(next) { // the settings, and every control showing them
+    settings = state.gfx = normalize(next); presetSelect.value = settings.preset;
+    for (const k of EFFECTS) boxes[k].checked = settings[k];
+    for (const k of Object.keys(LEVELS)) ranges[k].value = String(settings[k]);
+    seek();
+  }
+  controls();
+  selectControl('Compare', [['both', 'Original | Enhanced'], ['enhanced', 'Enhanced only'], ['original', 'Original only']], layout, v => { layout = v; draw(); });
+  field('Moment', momentSlider); $('controls').append(momentLabel);
+  momentSlider.oninput = () => { moment = Number(momentSlider.value); playing = false; playBox.checked = false; seek(); };
+  const playBox = checkControl('Play', false, v => { playing = v; acc = 0; last = performance.now(); });
+  selectControl('Detail', [[1, 'High'], [2, 'Medium'], [3, 'Low']], level, v => { level = Number(v); draw(); });
+  checkControl('HUD', hud, v => { hud = v; draw(); });
+  const presetSelect = selectControl('Preset', [['original', 'Original'], ['enhanced', 'Enhanced'], ['custom', 'Custom']], settings.preset, v => set(applyPreset(settings, v)));
+  presetSelect.querySelector('option[value=custom]').disabled = true;
+  const boxes = Object.fromEntries(EFFECTS.map(k => [k, checkControl(EFFECT_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
+  const ranges = Object.fromEntries(Object.keys(LEVELS).map(k => [k, rangeControl(LEVEL_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
+  const use = el('button', 'Use these in the game'); use.onclick = () => { if (saveSettings(settings)) status('Saved: the playtest page draws with these graphics settings from now on.'); else status('This browser does not let the page keep settings.', true); }; field('Playtest', use);
+  const load = el('button', 'Load the game\'s'); load.onclick = () => set(loadSettings()); field('Settings', load);
+  field('Effects', stats);
+  function tick(time) {
+    if (playing) {
+      acc += Math.min(time - last, 250); last = time; // @math at most a quarter second at a time
+      while (acc >= preview.tickMs) { preview.step(); moment++; acc -= preview.tickMs; }
+      momentSlider.value = moment; alpha = acc / preview.tickMs; draw();
+    }
+    state.raf = requestAnimationFrame(tick);
+  }
+  seek(); state.raf = requestAnimationFrame(tick);
+  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels and the sun direction apply at once, and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
+}
+
 function previewPos(entry) {
   const c = canvas(64, 64); let offset = 0;
   function draw() { const values = numericValues(entry.data, 2, false, offset).slice(0, 4096), max = Math.max(...values, 1), rgba = new Uint8ClampedArray(4096 * 4); values.forEach((v, i) => { const t = v / max; rgba.set([t * 255, 60 + t * 150, 180 - t * 90, 255], i * 4); }); c.getContext('2d').putImageData(new ImageData(rgba, 64, 64), 0, 0); }

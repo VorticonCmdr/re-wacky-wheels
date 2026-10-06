@@ -20,3 +20,8 @@ dt { color: var(--dim); } dd { margin: 0; text-align: right; }
 .badge.bad { border-color: var(--bad); color: var(--bad); }
 .help { color: var(--dim); margin: 0; }
 [hidden] { display: none !important; }
+.graphics { display: grid; gap: 6px; margin: 0; padding: 8px 10px 10px; border: 1px solid var(--dim); border-radius: 6px; }
+.graphics legend { padding: 0 4px; color: var(--dim); }
+.graphics label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.graphics label.check { justify-content: flex-start; }
+.graphics input[type="range"] { width: 140px; }
