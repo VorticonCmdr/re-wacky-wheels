@@ -16,7 +16,7 @@ export function normalizeAtmosphere(input = {}) {
   if (isNumber(a.sunHeight)) out.sunHeight = level(a.sunHeight);
   if (typeof a.fogTint === 'string' && HEX.test(a.fogTint)) out.fogTint = a.fogTint.toLowerCase();
   if (isNumber(a.fog)) out.fog = level(a.fog, ATMOSPHERE.fogMax);
-  for (const k of ['clouds', 'cloudSpeed', 'gradeStrength', 'range', 'water']) if (isNumber(a[k])) out[k] = level(a[k]);
+  for (const k of ['clouds', 'cloudSpeed', 'gradeStrength', 'range', 'water', 'relief']) if (isNumber(a[k])) out[k] = level(a[k]);
   if (typeof a.grade === 'string' && GRADES.names.includes(a.grade)) out.grade = a.grade;
   if (typeof a.rangeShape === 'string' && RANGE.names.includes(a.rangeShape)) out.rangeShape = a.rangeShape;
   return out;
@@ -71,6 +71,7 @@ export function describeAtmosphere(atmosphere) {
   if (a.clouds !== D.clouds || a.cloudSpeed !== D.cloudSpeed) parts.push(a.clouds === 0 ? 'no clouds' : `clouds ${pct(a.clouds)}`);
   if (a.range !== D.range || a.rangeShape !== D.rangeShape) parts.push(a.range === 0 ? 'no far range' : `far ${a.rangeShape} ${pct(a.range)}`);
   if (a.water !== D.water) parts.push(a.water === 0 ? 'still water' : `water moving ${pct(a.water)}`);
+  if (a.relief !== D.relief) parts.push(a.relief === 0 ? 'no relief' : `relief ${pct(a.relief)}`);
   if (a.sunAngle !== D.sunAngle || a.sunHeight !== D.sunHeight) parts.push('its own sun');
   if (a.fogTint !== D.fogTint || a.fog !== D.fog) parts.push('its own fog');
   return parts.length ? parts.join(', ') : 'the defaults';

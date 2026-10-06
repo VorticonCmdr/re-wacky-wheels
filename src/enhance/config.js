@@ -117,15 +117,22 @@ export const TIMING_FRAMES = 120;
 //   where a pixel does not cover whole screen pixels; 'integer' uses whole screen pixels for every row (and for every column when the pixels
 //   are square), so all rows are the same height (and with square pixels all columns the same width).
 // - `window`: the largest picture beside the panel when not in full screen (the page's 960 pixels), and the gap kept below it.
-// - `plain`: square pixels and fit, with no CRT look, are the page as it was: the browser scales the canvas itself, without WebGL.
+// - `plain`: square pixels and fit, with no CRT look and the HUD in the picture, are the page as it was: the browser scales the canvas itself,
+//   without WebGL.
 // - The defaults are 4:3 (the maintainer's choice, 2026-10-06: the shape the game had on a monitor), fit, and the CRT look off with its
 //   curvature off.
+// - `huds`: how the race screens' overlays (the HUD, the overhead map, the labels and messages, the split screen's strips, the in-race menu)
+//   reach the screen. 'picture' as part of the picture (as the page always did); 'crisp' as a layer of their own over the picture after the
+//   CRT look (no scanlines, glow or vignette on them; the curvature's shape kept), each pixel drawn sharp; 'smooth' the same layer enlarged
+//   four times by Scale2x twice (the edge-preserving pixel-art scaler of AdvanceMAME) before it is scaled to the screen, so its letters'
+//   diagonals are smooth on a dense screen. The overlays keep their pixels' places either way.
 export const DISPLAY = {
   aspects: { wide: 1.6, dos: 4 / 3 },
   scalings: ['fit', 'integer'],
+  huds: ['picture', 'crisp', 'smooth'],
   window: { maxWidth: 960, gutter: 16 },
-  plain: { aspect: 'wide', scaling: 'fit' },
-  defaults: { aspect: 'dos', scaling: 'fit', crt: false, scanlines: 0.5, glow: 0.25, curvature: 0 },
+  plain: { aspect: 'wide', scaling: 'fit', hud: 'picture' },
+  defaults: { aspect: 'dos', scaling: 'fit', crt: false, scanlines: 0.5, glow: 0.25, curvature: 0, hud: 'picture' },
   storageKey: 'wackywheels.display',
   levelSteps: 20, // the CRT levels are kept in twentieths (the sliders' steps)
   closeUp: { width: 240, height: 150, zoom: 4, at: [0.5, 0.78], everyMs: 100 }, // the panel's close-up: its size in CSS pixels, how many times it enlarges the screen's pixels, the point of the picture it looks at (parts of the width and height: the own car's road) and how often it is redrawn
@@ -150,6 +157,7 @@ export const CRT = {
 export const DISPLAY_MENU = {
   aspects: { wide: '16 BY 10', dos: '4 BY 3' },
   scalings: { fit: 'FIT', integer: 'INTEGER' },
+  huds: { picture: 'PICTURE', crisp: 'CRISP', smooth: 'SMOOTH' },
 };
 
 // Stage 3 (docs/enhancements.md): the atmosphere of each track, set in the track editor and kept in this browser under `storageKey` by track
@@ -164,9 +172,10 @@ export const DISPLAY_MENU = {
 // - `grade`: one of GRADES.names; `gradeStrength`: how much of it, 0 to 1.
 // - `range`: how tall the far range behind the horizon strip is (0 none, 1 RANGE's `rows` of its shape); `rangeShape`: one of RANGE.names.
 // - `water`: how strongly the water and the red liquid move (0 still, as the game draws them).
+// - `relief`: how strongly the track lighting shows the relief of the ground and the pictures (RELIEF; 0 none).
 export const ATMOSPHERE = {
   storageKey: 'wackywheels.atmosphere',
-  defaults: { sunAngle: null, sunHeight: null, fogTint: null, fog: 1, clouds: 0.35, cloudSpeed: 0.3, grade: 'none', gradeStrength: 1, range: 0.5, rangeShape: 'hills', water: 1 },
+  defaults: { sunAngle: null, sunHeight: null, fogTint: null, fog: 1, clouds: 0.35, cloudSpeed: 0.3, grade: 'none', gradeStrength: 1, range: 0.5, rangeShape: 'hills', water: 1, relief: 0.7 },
   fogMax: 2,
   steps: 40, // levels kept in fortieths
   sunElevation: [10, 70], // degrees
@@ -286,6 +295,33 @@ export const WATER = {
   highlight: 0.7,
   red: { speed: 0.35, line: 0.9, glow: [255, 160, 48] },
   similar: 40,
+};
+
+// The relief: the track lighting lights the ground and the pictures by the slopes of height maps, from the track's sun (its direction and
+// height, or the game setting's and SUN.length's). The maps are enhancement art, never read from the game: maps the player made and imported
+// in the asset garage (relief-store.js) where there are some, else maps made here from the original pictures (the generated relief).
+// - the ground's generated map, per tile texel: the texel's brightness times `detail` (the texture's own grain, bricks and ripples), plus
+//   `wall` on the wall surface (terrain.special-values), so walls stand up with lit and shaded edges (at most 1); liquids lie flat at `liquid`
+//   and keep their own light.
+// - the pictures' generated map, per drawn pixel: a rounded body (the pixel's distance to the picture's edge, up to `round` pixels, eased)
+//   mixed with the pixel's brightness, `spriteDetail` of it.
+// - heights are 0 to 1 and stand `depth` world units (ground) or `spriteDepth` pixels (pictures) at 1; a slope's normal is lit by the sun:
+//   the ground as ambient plus diffuse light against a flat ground's (`ambient` of it ambient), the pictures by how far their normal leans
+//   toward the sun against a flat picture's (times `spriteGain`); `occlusion` darkens a texel lower than its neighbours (the mean of the four
+//   at `reach` texels); the light stays within `range`, and the track's relief level mixes it in.
+export const RELIEF = {
+  detail: 0.5,
+  wall: 0.5,
+  liquid: 0,
+  depth: 16,
+  round: 4,
+  spriteDetail: 0.35,
+  spriteDepth: 4,
+  ambient: 0.4,
+  spriteGain: 0.9,
+  occlusion: 0.5,
+  reach: 2,
+  range: [0.55, 1.45],
 };
 
 // The track lighting: a colour grade over the finished picture (never the overlays, nor the sky rows of the slides and the split screen),

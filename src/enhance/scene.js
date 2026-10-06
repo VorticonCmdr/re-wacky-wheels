@@ -11,14 +11,15 @@ import { starterPoint } from '../game/start.js';
 import { drawFloor, layerTemplate, projectFine, roundWord, KIND } from './project.js';
 import { stampShadow, casterOf, castOf, castShadow, sunDirection, blurCast } from './shadows.js';
 import { waterShader, sunGlitter } from './water.js';
+import { groundLight, pictureLight, screenSun, paletteLuma } from './relief.js';
 import { models } from './models.js';
 
 // The layers beside an indexed picture: the kind and the distance of every pixel, the contact shadows, the sun shadows and the skid marks
-// on the ground, the liquid under a floor pixel and its light (water.js), and a scratch buffer for the blur.
+// on the ground, the liquid under a floor pixel and its light (water.js), the relief's light (relief.js), and a scratch buffer for the blur.
 export function createLayers(size) {
-  return { kind: new Uint8Array(size), depth: new Float32Array(size), shade: new Float32Array(size), cast: new Float32Array(size), mark: new Float32Array(size), wet: new Uint8Array(size), wave: new Float32Array(size), scratch: new Float32Array(size) };
+  return { kind: new Uint8Array(size), depth: new Float32Array(size), shade: new Float32Array(size), cast: new Float32Array(size), mark: new Float32Array(size), wet: new Uint8Array(size), wave: new Float32Array(size), relief: new Float32Array(size).fill(1), scratch: new Float32Array(size) };
 }
-export const LAYER_KEYS = ['kind', 'depth', 'shade', 'cast', 'mark', 'wet', 'wave'];
+export const LAYER_KEYS = ['kind', 'depth', 'shade', 'cast', 'mark', 'wet', 'wave', 'relief'];
 
 // The horizon strip at a pixel offset (sky.js draws it in steps of four pixels: `offset` x pixelsPerByte).
 function drawHorizonFine(par, offset, fb) {
@@ -55,11 +56,12 @@ function refine(r, world, camF, camI, a) {
   return clip ? { ...r, ...clip } : null;
 }
 
-// blitRecord of render/sprites.js, writing the kind and the distance of every pixel. Returns null for a picture with no opaque pixel, else
+// blitRecord of render/sprites.js, writing the kind and the distance of every pixel (and, with `collect`, listing each pixel it draws and the
+// source byte it read in collect.drawn and collect.sources, counting them in collect.count). Returns null for a picture with no opaque pixel, else
 // { foot, cols }: the footprint the scenery shadows use (the leftmost and rightmost opaque columns of the `band` part of the picture's rows
 // above its lowest opaque row, and how many rows that row stands above the picture's bottom: a bouncing object's frame), and for each drawn
 // column the highest and lowest opaque picture row (-1 for none), the silhouette the sun shadows cast.
-function blitLayers(fb, L, rec, band, width, height) {
+function blitLayers(fb, L, rec, band, width, height, collect = null) {
   const { picture } = rec, rowMin = new Int16Array(picture.h).fill(width), rowMax = new Int16Array(picture.h).fill(-1);
   const cols = { top: new Int16Array(rec.width).fill(-1), bottom: new Int16Array(rec.width).fill(-1) };
   let low = -1;
@@ -74,7 +76,7 @@ function blitLayers(fb, L, rec, band, width, height) {
         if (j > low) low = j;
         if (cols.top[i] < 0) cols.top[i] = j;
         cols.bottom[i] = j;
-        if (x >= 0 && x < width && y >= 0 && y < height) { const o = y * width + x; fb[o] = pixel; L.kind[o] = KIND.sprite; L.depth[o] = rec.distance; }
+        if (x >= 0 && x < width && y >= 0 && y < height) { const o = y * width + x; fb[o] = pixel; L.kind[o] = KIND.sprite; L.depth[o] = rec.distance; if (collect) { collect.drawn[collect.count] = o; collect.sources[collect.count++] = source; } }
       }
       source += picture.deltas[at++];
     }
@@ -85,21 +87,24 @@ function blitLayers(fb, L, rec, band, width, height) {
   return { foot: { minX, maxX, lift: picture.h - 1 - low }, cols };
 }
 
-// blitFlat of render/sprites.js with the layers (the effects drawn after the own car stand at its distance).
-function blitFlatLayers(fb, L, d, distance, width, height) {
+// blitFlat of render/sprites.js with the layers (the effects drawn after the own car stand at its distance; `flat` their relief's light).
+function blitFlatLayers(fb, L, d, distance, width, height, flat = false) {
   for (let i = 0; i < d.width; i++) {
     const x = d.x + i;
     for (let j = 0; j < d.height; j++) {
       const y = d.y + j, pixel = d.bytes[i * d.height + j];
-      if (pixel !== 0 && x >= 0 && x < width && y >= 0 && y < height) { const o = y * width + x; fb[o] = pixel; L.kind[o] = KIND.sprite; L.depth[o] = distance; }
+      if (pixel !== 0 && x >= 0 && x < width && y >= 0 && y < height) { const o = y * width + x; fb[o] = pixel; L.kind[o] = KIND.sprite; L.depth[o] = distance; if (flat) L.relief[o] = 1; }
     }
   }
 }
 
 // Draws the viewer's world into `fb` (indexed) and `L` (kind, depth, contact and sun shadows, skid marks, liquids). `P` is the present state with the viewer's seat swapped in,
 // `fine` the blend with fractions, `seat` the viewer's seat, `mode` the detail level, `sky` the demo's sky (or null), `opts` the settings
-// (`water`: null, or the track's liquids (water.js liquidsOf), its water's strength and whether the game cycles its water's palette).
+// (`water`: null, or the track's liquids (water.js liquidsOf), its water's strength and whether the game cycles its water's palette; `relief`:
+// null, or { ground (relief.js groundRelief), sun (sunVector), length (the sun's shadow length), strength, frameHeights(frame) (the
+// player's map of a picture's frame by its bytes, or null) }).
 // Returns the camera the frame was drawn from (with fractions) for the particles.
+const collect = { drawn: new Int32Array(models().floor.width * models().floor.height), sources: new Int32Array(models().floor.width * models().floor.height), count: 0 }; // the pixels of the picture being drawn, for its relief
 export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts) {
   const S = models().sky, width = S.width, height = fb.length / width, world = P.world, own = fine.seats[seat];
   const camI = sceneCamera(P), camF = opts.subPixel && own ? { x: own.cx, y: own.cy, heading: camI.heading } : camI;
@@ -107,20 +112,25 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts) {
   fb.fill(0); L.kind.set(template.kind); L.depth.set(template.depth); L.shade.fill(0); L.cast.fill(0); L.mark.fill(0); L.wet.fill(0);
   if (sky) sky(fb); else { renderSky(world.sky, fb); drawHorizonFine(world.par, own ? own.horizon : P.car.horizon, fb); }
   const W = opts.water, liquid = W ? { texels: W.liquids.texels, wet: L.wet, wave: L.wave, shade: waterShader(world, { time: opts.now, strength: W.strength, beach: W.beach, glitter: sunGlitter(sunDirection(world, opts.sunAngle, camI.heading), new Float32Array(width)) }) } : null;
-  drawFloor(world, camF, mode, fb, liquid);
+  const R = opts.relief, relief = R ? { out: L.relief, light: groundLight(world, R.ground, { sun: R.sun, strength: R.strength }) } : null;
+  if (R) L.relief.fill(1);
+  drawFloor(world, camF, mode, fb, { liquid, relief });
   const records = [];
   for (const r of sceneRecords(P, camI, own ? { heading: own.tickHeading } : null)) { // the racers' direction frames stay on the tick's heading
     const a = camF !== camI ? anchorOf(r, P, fine, seat) : null, moved = a ? refine(r, world, camF, camI, a) : r;
     if (moved) records.push(moved);
   }
   const casters = [], casts = [], ground = playerGeometry(world).top + world.carShape[0].h; // the own car's ground row: the row-table bottom of its distance, before the jiggle and the jump
+  const lightPictures = R ? { sun: screenSun(sunDirection(world, opts.sunAngle, camI.heading), R.length), luma: paletteLuma(world) } : null;
   for (const r of sortDrawList(records)) {
     if (!r.skip) {
-      const drawn = blitLayers(fb, L, r, opts.band, width, height), c = casterOf(r, P, drawn?.foot, ground, opts);
+      if (R) collect.count = 0;
+      const drawn = blitLayers(fb, L, r, opts.band, width, height, R ? collect : null), c = casterOf(r, P, drawn?.foot, ground, opts);
+      if (R) pictureLight(L.relief, { drawn: collect.drawn, sources: collect.sources, count: collect.count, fb, width, luma: lightPictures.luma, sun: lightPictures.sun, strength: R.strength, heights: R.frameHeights?.(r.frame) ?? null });
       if (c) casters.push(c);
       if (opts.sunShadows) { const s = castOf(r, P, drawn, ground); if (s) casts.push(s); }
     }
-    if (r.after) for (const d of r.after) blitFlatLayers(fb, L, d, r.distance, width, height);
+    if (r.after) for (const d of r.after) blitFlatLayers(fb, L, d, r.distance, width, height, Boolean(R));
   }
   for (const c of casters) stampShadow(L, c, width, height);
   if (casts.length) { // the sun shadows, softened

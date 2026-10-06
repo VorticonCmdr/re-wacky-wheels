@@ -11,7 +11,10 @@
 //  4. the asset garage's race preview runs, draws, and reaches the same tick going back and forward;
 //  4b. Stage 3: the sky's layers (the clouds and the far range), the track lighting and the moving water change the track's sky and world
 //     but never a demo's slide page, the split screen's strips or the overlays; the sky's layers alone change only the sky and the strip's
-//     sky-coloured pixels, and the water alone only the liquid pixels of the ground;
+//     sky-coloured pixels, the water alone only the liquid pixels of the ground, the relief alone only the ground and the pictures, and a
+//     relief map of the player's for the cars only the pictures' pixels;
+//  4c. the HUD layer: the enhancer's world and overlay layers give the very same picture as its draw without them, the overlays' layer
+//     holds exactly the masked pixels, and the reference renderer's layers put back together are its picture;
 //  5. with --time, the mean and 95th percentile draw time of each effect on the demos, on this machine.
 // usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time]
 import { readFile } from 'node:fs/promises';
@@ -41,6 +44,9 @@ import { KIND } from '../src/enhance/project.js';
 import { ATMOSPHERE } from '../src/enhance/config.js';
 import { decodePcxMember } from '../src/formats/pcx.js';
 import { stripSkyIndices } from '../src/enhance/clouds.js';
+import { overlayLayers } from '../src/enhance/display.js';
+import { createReliefProvider } from '../src/enhance/relief-store.js';
+import { SENTINEL } from '../src/enhance/composite.js';
 
 const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const dat = path ? new Uint8Array(await readFile(path)) : await (await openGameFolder()).open('WACKY.DAT');
@@ -273,13 +279,14 @@ function slides() {
   }
   // One effect alone, on the race view's pilot (it drives the computer cars' route, over the bridges and the lakes): the sky's layers change
   // only the sky and the strip's pixels in its sky's indices, the water only the ground's liquid pixels; each changes some.
-  for (const [track, label, key, own] of [[3, 'the sky layers', 'clouds', (L, i, idx, w) => L.kind[i] === KIND.sky || (L.kind[i] === KIND.horizon && stripSkyIndices(w)[(Math.floor(i / WIDTH) - 110) * 256 + idx[i]] === 1)], [7, 'the water', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0], [6, 'the red liquid', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0]]) { // @math tracks with a sun in the strip, a lake, the red liquid; the strip's first row and 256 index flags a row
-    const atmo = { [track]: { range: 1, rangeShape: 'mountains', clouds: 0.9, water: 1 } }, base = { ...PRESETS.enhanced, lighting: false, clouds: false, water: false, [key]: true };
-    const pOn = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false }), pOff = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false });
+  const carsMap = createReliefProvider(() => dat).set([{ member: 'CARS.SP', kind: 'sprites', width: 38, height: 28, offset: 0, frames: Math.floor(members.get('CARS.SP').length / 1064), columnMajor: true, heights: Uint8Array.from({ length: Math.floor(members.get('CARS.SP').length / 1064) * 1064 }, (_, i) => (Math.floor((i % 1064) / 28) * 255) / 37) }]); // @math a map of the player's for CARS.SP: 38 x 28 frames (1064 bytes, column-major) rising from left to right
+  for (const [track, label, key, own, offRelief = null, onRelief = null] of [[3, 'the sky layers', 'clouds', (L, i, idx, w) => L.kind[i] === KIND.sky || (L.kind[i] === KIND.horizon && stripSkyIndices(w)[(Math.floor(i / WIDTH) - 110) * 256 + idx[i]] === 1)], [7, 'the water', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0], [6, 'the red liquid', 'water', (L, i) => L.kind[i] === KIND.floor && L.wet[i] !== 0], [4, 'the relief', 'lighting', (L, i) => L.kind[i] === KIND.floor || L.kind[i] === KIND.sprite], [1, 'a relief map for the cars', 'relief map', (L, i) => L.kind[i] === KIND.sprite, null, carsMap]]) { // @math tracks with a sun in the strip, a lake, the red liquid, any track; the strip's first row and 256 index flags a row
+    const atmo = { [track]: { range: 1, rangeShape: 'mountains', clouds: 0.9, water: 1, relief: 1 } }, map = key === 'relief map', base = { ...PRESETS.enhanced, lighting: map, clouds: false, water: false, ...(map ? {} : { [key]: true }) };
+    const pOn = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false, relief: onRelief }), pOff = createRacePreview(dat, String(track), { atmosphere: n => atmo[n] ?? null, demoControls: false, relief: offRelief });
     const o = new Uint8ClampedArray(SIZE * 4), a = new Uint8ClampedArray(SIZE * 4), b = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
     let wrong = null, changed = 0;
     for (let pass = 150; pass <= 1200 && !wrong; pass += 75) { // @math a moment every 75 passes of the pilot's drive
-      pOn.seek(pass, base); pOff.seek(pass, { ...base, [key]: false });
+      pOn.seek(pass, base); pOff.seek(pass, map ? base : { ...base, [key]: false });
       pOff.draw({ alpha: 1, hud: true }, o, b); pOn.draw({ alpha: 1, hud: true }, o, a);
       const { L, mask } = pOn.enhancer.inspect(), w = pOn.race.world, idx = new Uint8Array(SIZE);
       pOn.enhancer.drawSingle(pOn.race, 1, { index: idx, out: new Uint8ClampedArray(SIZE * 4), palette: rgbaPalette(w.palette), mode: 1, sky: sceneSky(pOn.race), overlays: (p, fb) => drawRaceOverlays({ ...p, demo: null }, fb) }); // @math four bytes a colour: the indexed picture of the same moment
@@ -292,6 +299,46 @@ function slides() {
     if (wrong) fail(`track ${track}, ${label} alone: ${wrong}`);
     else if (!changed) fail(`track ${track}: ${label} changed no pixel`);
     else console.log(`ok   track ${track}, ${label} alone: ${changed} pixels changed, all of them its own`);
+  }
+}
+
+// ---- 3c. the HUD layer (the display's own layer of the overlays): the same picture with and without layers, the overlays' layer exactly the
+// overlay pixels, the world's layer the picture elsewhere; and for the reference renderer, its layers put back together are its picture. The
+// split screen is drawn once with the first car upside down, the case where the overlays flip a viewer's half.
+{
+  const layers = () => ({ world: new Uint8ClampedArray(SIZE * 4), hud: new Uint8ClampedArray(SIZE * 4) }); // @math four bytes a colour
+  for (const make of [() => race(7), () => versus(1, 'race'), slides]) { // @math a race, the split screen, a slides demo
+    const sc = make(), s = sc.state, enh = createEnhancer({ storage: memory() }), idx = new Uint8Array(SIZE), a = new Uint8ClampedArray(SIZE * 4), b = new Uint8ClampedArray(SIZE * 4), L2 = layers(); // @math four bytes a colour
+    enh.configure(PRESETS.enhanced);
+    let wrong = null, compared = 0, hudPixels = 0;
+    for (let t = 0; t < Math.min(frames, 260) && !wrong; t++) { // @math long enough for the HUD to change
+      const input = sc.input(); if (input === null) break;
+      stepRace(s, input); enh.afterTick(s);
+      if (t % 37 !== 0) continue; // @math a sample now and then
+      const flip = sc.split && t % 74 === 0, car = sc.split ? carsBySeat(s)[0] : null, inverted = car?.inverted; // @math every other sample upside down
+      if (flip) car.inverted = 1;
+      const palette = rgbaPalette(s.world.palette), draw = (out, lay) => (sc.split ? enh.drawSplit(s, 0.5, { index: idx, out, palette, mode: s.menu.settings.detail.split, overlays: versusOverlays, layers: lay }) : enh.drawSingle(s, 0.5, { index: idx, out, palette, mode: s.detail, sky: sceneSky(s), overlays: (p, fb) => drawRaceOverlays(p, fb), layers: lay }));
+      draw(a, null); draw(b, L2);
+      const { mask } = enh.inspect();
+      for (let i = 0; i < SIZE && !wrong; i++) {
+        const o = i * 4, same = (x, y) => x[o] === y[o] && x[o + 1] === y[o + 1] && x[o + 2] === y[o + 2]; // @math four bytes a colour
+        if (!same(a, b)) wrong = `tick ${t}: the picture with layers differs at ${i % WIDTH},${Math.floor(i / WIDTH)}`;
+        else if ((L2.hud[o + 3] !== 0) !== Boolean(mask[i])) wrong = `tick ${t}: the overlays' layer at ${i % WIDTH},${Math.floor(i / WIDTH)} disagrees with the mask`; // @math the alpha byte
+        else if (mask[i] ? !same(L2.hud, a) : !same(L2.world, a)) wrong = `tick ${t}: a layer's colour differs from the picture at ${i % WIDTH},${Math.floor(i / WIDTH)}`;
+        if (mask[i]) hudPixels++;
+      }
+      if (!wrong && !sc.split) { // the reference renderer's layers, put back together
+        const scene = new Uint8Array(SIZE), whole = new Uint8Array(SIZE), sentinel = new Uint16Array(SIZE).fill(SENTINEL), R = layers();
+        renderScene(s, scene, s.detail, sceneSky(s)); whole.set(scene); drawRaceOverlays(s, whole); drawRaceOverlays(s, sentinel);
+        overlayLayers(R, { under: scene, index: whole, sentinel, blank: SENTINEL, palette });
+        for (let i = 0; i < SIZE && !wrong; i++) { const o = i * 4, src = R.hud[o + 3] ? R.hud : R.world, p = whole[i] * 4; if ([0, 1, 2].some(k => src[o + k] !== palette[p + k])) wrong = `tick ${t}: the reference renderer's layers put together differ at ${i % WIDTH},${Math.floor(i / WIDTH)}`; } // @math four bytes a colour, three compared
+      }
+      if (flip) car.inverted = inverted;
+      compared++;
+    }
+    if (wrong) fail(`${sc.name}, HUD layer: ${wrong}`);
+    else if (!hudPixels) fail(`${sc.name}, HUD layer: no overlay pixel in ${compared} pictures`);
+    else console.log(`ok   ${sc.name}: ${compared} pictures with the HUD as a layer: the same picture, ${hudPixels} overlay pixels in the overlays' layer`);
   }
 }
 

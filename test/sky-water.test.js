@@ -146,7 +146,7 @@ test('the floor with the liquid hook is the same picture, and marks exactly the 
   const texels = Uint8Array.from({ length: 108 * 1024 }, () => (random() < 0.3 ? 1 + Math.floor(random() * 2) : 0)); // @math some texels water or red
   for (const mode of [1, 2, 3]) {
     const camera = { x: 1500.25, y: 2700.75, heading: 777 }, L = createLayers(SIZE), calls = []; // @math any camera
-    const a = drawFloor(w, camera, mode, new Uint8Array(SIZE)), b = drawFloor(w, camera, mode, new Uint8Array(SIZE), { texels, wet: L.wet, wave: L.wave, shade: (kind, x, y, c, k) => { calls.push(kind); return kind / 4; } }); // @math a light that tells the kinds apart
+    const a = drawFloor(w, camera, mode, new Uint8Array(SIZE)), b = drawFloor(w, camera, mode, new Uint8Array(SIZE), { liquid: { texels, wet: L.wet, wave: L.wave, shade: (kind, x, y, c, k) => { calls.push(kind); return kind / 4; } } }); // @math a light that tells the kinds apart
     assert.deepEqual(b, a, `mode ${mode}`);
     assert.ok(calls.length > 0 && calls.every(k => k === 1 || k === 2));
     for (let i = 0; i < SIZE; i++) if (L.wet[i]) assert.equal(L.wave[i], L.wet[i] / 4); // @math the light of its kind

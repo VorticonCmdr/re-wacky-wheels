@@ -2,8 +2,8 @@
 // page's GAME OPTIONS > DISPLAY OPTIONS menus. The WebGL pass itself runs only in a browser (checked there, see the docs).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { pictureRect, windowSpace, scanlineFade, beamMean, crtUniforms, createDisplay } from '../src/enhance/display.js';
-import { normalizeDisplay, isPlain, resetDisplay, changeDisplay, loadDisplay, saveDisplay, displayView, nextAspect, nextScaling, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from '../src/enhance/display-settings.js';
+import { pictureRect, windowSpace, scanlineFade, beamMean, crtUniforms, createDisplay, overlayLayers, scale2x } from '../src/enhance/display.js';
+import { normalizeDisplay, isPlain, resetDisplay, changeDisplay, loadDisplay, saveDisplay, displayView, nextAspect, nextScaling, nextHud, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from '../src/enhance/display-settings.js';
 import { DISPLAY, CRT, EFFECTS } from '../src/enhance/config.js';
 import { normalize as normalizeGraphics, presetOf } from '../src/enhance/settings.js';
 import { DISPLAY_MENU } from '../src/game/display-menu.js';
@@ -97,11 +97,13 @@ test('DISPLAY OPTIONS is a line of DISPLAY AND EFFECTS, before LEAVE THIS MENU, 
 test('the display lists show the page\'s words in the menu font and hand Enter\'s choice to the page', () => {
   const settings = { ...defaultSettings(1, true), display: displayView({ ...resetDisplay(), aspect: 'dos', crt: true }, { fullscreen: true }) };
   const def = menuDef('display', settings);
-  assert.deepEqual(def.items, ['SCALING'.padEnd(17) + 'FIT', 'ASPECT'.padEnd(14) + '4 BY 3', 'FULL SCREEN'.padEnd(17) + 'ON ', 'CRT LOOK'.padEnd(17) + 'ON ', 'CRT LEVELS', 'LEAVE THIS MENU']); // @math the width less the words' lengths
+  assert.deepEqual(def.items, ['SCALING'.padEnd(17) + 'FIT', 'ASPECT'.padEnd(14) + '4 BY 3', 'FULL SCREEN'.padEnd(17) + 'ON ', 'CRT LOOK'.padEnd(17) + 'ON ', 'CRT AND HUD', 'LEAVE THIS MENU']); // @math the width less the words' lengths
   assert.deepEqual(def.actions.slice(0, 4), [{ display: { scaling: true } }, { display: { aspect: true } }, { display: { fullscreen: true } }, { display: { crt: true } }]);
   const levels = menuDef('crtLevels', settings);
   assert.deepEqual(levels.items.slice(0, 3), ['SCANLINES'.padEnd(18) + '50', 'GLOW'.padEnd(18) + '25', 'CURVATURE'.padEnd(17) + 'OFF']); // @math the defaults in percent, the curvature off
-  assert.deepEqual(levels.actions.slice(0, 4), [...CRT_LEVELS.map(k => ({ display: { level: k } })), { display: { defaultLevels: true } }]);
+  assert.deepEqual(levels.items.slice(3), ['HUD'.padEnd(13) + 'PICTURE', 'DEFAULT LEVELS', 'LEAVE THIS MENU']); // @math the width less the word's length
+  assert.deepEqual(levels.actions.slice(0, 5), [...CRT_LEVELS.map(k => ({ display: { level: k } })), { display: { hud: true } }, { display: { defaultLevels: true } }]);
+  assert.equal(menuDef('crtLevels', { ...settings, display: displayView({ ...resetDisplay(), hud: 'smooth' }, { crtReady: false }) }).items[3], 'HUD'.padEnd(13) + 'PICTURE'); // @math no WebGL 2: the HUD stays in the picture
   const none = menuDef('display', { ...settings, display: displayView({ ...resetDisplay(), crt: true }, { crtReady: false }) });
   assert.equal(none.items[3], 'CRT LOOK'.padEnd(16) + 'NONE'); // @math no WebGL 2: no CRT look
   for (const items of [def.items, levels.items, none.items, menuDef('display', defaultSettings(1, true)).items]) { items.forEach(drawable); assert.ok(items.every(t => t.length <= DISPLAY_MENU.width)); assert.ok(layoutOf('sub', items).y0 >= gameTopBar()); }
@@ -116,6 +118,9 @@ test('the lines change the settings: the scaling and the shape go round, the CRT
   assert.equal(nextScaling(s).scaling, 'integer'); assert.equal(nextScaling(nextScaling(s)).scaling, 'fit');
   assert.equal(nextAspect(s).aspect, 'wide'); assert.equal(nextAspect(nextAspect(s)).aspect, 'dos');
   assert.equal(toggleCrt(s).crt, true);
+  assert.deepEqual([nextHud(s).hud, nextHud(nextHud(s)).hud, nextHud(nextHud(nextHud(s))).hud], ['crisp', 'smooth', 'picture']);
+  assert.equal(normalizeDisplay({ hud: 'toString' }).hud, 'picture');
+  assert.ok(isPlain({ aspect: 'wide', scaling: 'fit', crt: false }) && !isPlain({ aspect: 'wide', scaling: 'fit', crt: false, hud: 'crisp' }), 'a HUD layer needs the graphics card');
   const seq = [s]; for (let k = 0; k < 4; k++) seq.push(cycleCrtLevel(seq.at(-1), 'scanlines')); // @math four presses
   assert.deepEqual(seq.map(x => x.scanlines), [0.5, 0.75, 1, 0, 0.25]);
   assert.equal(displayView(changeDisplay(s, 'glow', 0)).levels.glow, 'OFF');
@@ -146,6 +151,8 @@ test('the display: the page as it was never asks for a WebGL context; the defaul
     page.display.configure({ ...plain, crt: true });
     assert.equal(page.display.stats().mode, 'plain', 'the CRT look cannot be shown: the page keeps its layout'); assert.equal(page.asked(), 0);
     assert.equal(page.source.style.width, '');
+    page.display.configure({ ...plain, hud: 'smooth' });
+    assert.equal(page.display.stats().mode, 'plain', 'a HUD layer that cannot be shown: the page keeps its layout'); assert.equal(page.asked(), 0); assert.equal(page.display.hudLayer(), false);
     page.display.configure(resetDisplay()); // the default, 4:3
     assert.equal(page.display.stats().mode, 'css'); assert.equal(page.asked(), 1); assert.equal(page.changes(), 1); // tried once, the page told
     assert.ok(page.source.style.width.endsWith('px'));
@@ -159,5 +166,22 @@ test('the display: the page as it was never asks for a WebGL context; the defaul
     has.display.configure({ ...plain, crt: true });
     assert.equal(has.asked(), 1); assert.equal(has.display.crtReady(), false); assert.equal(has.display.stats().mode, 'plain'); // tried, failed, back to the page as it was
     assert.match(has.display.stats().failure, /WebGL 2/);
+    has.display.configure({ ...plain, hud: 'crisp' });
+    assert.equal(has.display.stats().mode, 'plain', 'nor a HUD layer'); assert.equal(has.display.hudLayer(), false);
   } finally { has.restore(); }
+});
+
+test('the HUD layer: the world under the overlays and the overlays alone, from indexed pictures; Scale2x keeps straight edges and smooths diagonals', () => {
+  const palette = new Uint8ClampedArray(1024); palette.set([10, 20, 30, 255], 4); palette.set([200, 100, 50, 255], 8); // @math 256 colours of four bytes; colour 1 the world, colour 2 an overlay
+  const under = new Uint8Array(4).fill(1), index = Uint8Array.from([1, 2, 1, 2]), sentinel = Uint16Array.from([0x100, 2, 0x100, 0x100]); // @math four pixels: the second and fourth carry colour 2, only the second drawn by the overlays
+  const layers = overlayLayers({ world: new Uint8ClampedArray(16), hud: new Uint8ClampedArray(16) }, { under, index, sentinel, blank: 0x100, palette }); // @math four pixels of four bytes
+  assert.deepEqual([...layers.world], [10, 20, 30, 255, 10, 20, 30, 255, 10, 20, 30, 255, 200, 100, 50, 255]); // @math the world under the overlay; the fourth pixel is the world's own colour 2
+  assert.deepEqual([...layers.hud], [0, 0, 0, 0, 200, 100, 50, 255, 0, 0, 0, 0, 0, 0, 0, 0]); // @math the overlay alone, nothing (premultiplied) elsewhere
+  const O = [255, 255, 255, 255], _ = [0, 0, 0, 0], img = (rows) => Uint8ClampedArray.from(rows.flat(2)); // @math an opaque and a transparent pixel
+  const line = scale2x(img([[O, O, O], [O, O, O], [_, _, _]]), 3, 3); // @math a straight edge
+  assert.deepEqual([...line.subarray(4 * 6 * 3, 4 * 6 * 4)], [...img([[O, O, O, O, O, O]])]); // @math the edge's last row stays whole
+  assert.deepEqual([...line.subarray(4 * 6 * 4, 4 * 6 * 5)], [...img([[_, _, _, _, _, _]])]); // @math and the row below it empty
+  const diagonal = scale2x(img([[O, _], [O, O]]), 2, 2); // @math a step
+  assert.deepEqual([...diagonal.subarray(4 * 4 * 1 + 4 * 2, 4 * 4 * 1 + 4 * 3)], O); // @math the corner of the step is filled in, as EPX does
+  assert.deepEqual([...diagonal.subarray(4 * 2, 4 * 4)], [..._, ..._]); // @math the top right pixel's top half stays empty
 });

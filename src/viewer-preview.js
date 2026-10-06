@@ -67,7 +67,7 @@ function demoOf(track) {
 // changes), `step()` runs one more, `draw(...)` draws the reference and the enhanced picture of the moment. `atmosphere(name)` gives the
 // track's atmosphere (createEnhancer's); `demoControls` false drives with the pilot even where the track has a demo recording (the track
 // editor's preview of an edited track, whose layout the recording does not fit).
-export function createRacePreview(dat, track, { atmosphere = null, demoControls = true } = {}) {
+export function createRacePreview(dat, track, { atmosphere = null, demoControls = true, relief = null } = {}) {
   const members = archiveMembers(dat), bmc = demoControls ? members.get(`${track}.BMC`) : null, hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
   const recorded = bmc ? demoOf(track) : null, demo = recorded?.spec ?? null; // the demo's class, engine, laps and detail level (the detail sets the steering rate)
   const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${anyEffect(s)}`; // the sky's layers, the lighting and the water only colour the picture (but with every effect off the enhancer takes no snapshot)
@@ -87,7 +87,7 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
       if (s.controls.end) { controls = null; return pilot(state, memo); } // the recording is over: the pilot takes the wheel
       return s.controls;
     };
-    enh = createEnhancer({ storage: memoryStorage(), atmosphere });
+    enh = createEnhancer({ storage: memoryStorage(), atmosphere, relief });
     enh.configure(settings);
     switches = sceneSwitches(settings);
   }

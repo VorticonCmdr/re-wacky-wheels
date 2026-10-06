@@ -5,7 +5,8 @@ Status: built in the playtest page:
 - skid marks and sun shadows from Stage 2, and the enhancement previews of the asset garage (the viewer), see [skid marks, sun shadows and the viewer's previews](#skid-marks-sun-shadows-and-the-viewers-previews);
 - the display options and the CRT look of Stage 1 (scaling, the 4:3 shape, full screen, scanlines, glow and curvature), see [display options and the CRT look](#display-options-and-the-crt-look);
 - from Stage 3, each track's atmosphere, clouds in the sky and track lighting, with an atmosphere preview in the track editor, see [Stage 3 as built](#stage-3-as-built-track-atmosphere-clouds-and-lighting);
-- then a far range of hills or mountains behind the horizon strip and the moving water, see [the far range and the moving water](#the-far-range-and-the-moving-water).
+- then a far range of hills or mountains behind the horizon strip and the moving water, see [the far range and the moving water](#the-far-range-and-the-moving-water);
+- then the relief lighting from height maps, with the player's own maps imported in the asset garage, and the HUD layer of Stage 1, see [the relief and the HUD layer](#the-relief-and-the-hud-layer).
 
 Everything else in this document is a proposal.
 
@@ -32,6 +33,8 @@ Enhancement configuration needs an explicit home and documented distinction from
 Offer integer nearest-neighbor scaling for crisp pixels, alongside a fit-to-window option. Provide clearly labeled aspect-ratio choices and fullscreen controls. Show the selected behavior in a small preview so users can choose between sharp edges and filling the display.
 
 A later independent HUD layer could improve text readability on high-density screens while keeping the world pixelated. It must preserve original HUD placement in Original mode and remain usable in split screen.
+
+Built: the HUD layer ([below](#the-relief-and-the-hud-layer)), for the Original and the Enhanced graphics.
 
 ### Smooth camera and object movement
 
@@ -88,6 +91,8 @@ Animation should add life without obscuring racers or making static collision bo
 ### Track-specific lighting
 
 Introduce warm sunsets, cool night scenes or overcast moods through controlled color grading and sky choices. Protect HUD colors and important gameplay cues. Stronger lighting could use separately authored normal or height maps for tiles and sprites; these would be enhancement assets, not fields inferred from the original formats.
+
+Built: the grades (Stage 3) and the relief from height maps ([below](#the-relief-and-the-hud-layer)): the player's own maps where they imported some, else maps made from the pictures; neither is read from the game's formats.
 
 ## Stage 4: sharper rendering and artwork
 
@@ -280,13 +285,13 @@ Built 2026-10-06 on the first milestone. Both effects are part of the Enhanced p
 Built 2026-10-06 (Stage 1 apart from the HUD layer): `src/enhance/display.js` (the layout and the WebGL pass), `src/enhance/display-settings.js` (the settings, kept in this browser under `wackywheels.display`), the menus in `src/game/display-menu.js`.
 
 **Using it.**
-- In the game's menus: GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS. Its list has SCALING (FIT or INTEGER), ASPECT (16 BY 10 or 4 BY 3), FULL SCREEN, CRT LOOK and CRT LEVELS (SCANLINES, GLOW, CURVATURE, DEFAULT LEVELS). A level goes up a quarter with Enter, from 100 to OFF.
+- In the game's menus: GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS. Its list has SCALING (FIT or INTEGER), ASPECT (16 BY 10 or 4 BY 3), FULL SCREEN, CRT LOOK and CRT LEVELS (SCANLINES, GLOW, CURVATURE, DEFAULT LEVELS). A level goes up a quarter with Enter, from 100 to OFF. (Since the HUD layer the last item is CRT AND HUD, with a HUD line: [below](#the-relief-and-the-hud-layer).)
 - In the panel: the *Display* fieldset has the same settings, a *Full screen* button, *Reset display*, and a close-up of the screen's own pixels around the car, enlarged four times. Double-clicking the picture also toggles full screen. The menu and the panel always show the same settings.
 - Full screen is not stored: browsers enter it only from a key or a click.
 
 **What it changes.** The page still draws every screen into its 320 x 200 canvas exactly as before. The display only decides how that canvas reaches the screen, so it applies to the Original and Enhanced presets alike and to every screen (menus, cards, races, the split screen).
 - **The defaults:** 4:3, fit, and the CRT look off with its curvature off: the maintainer's choice (2026-10-06), the shape the game had on a monitor. They are drawn by the WebGL pass below, so a first visit makes a WebGL context.
-- **Square pixels, fit and no CRT look are the page as it was:** the browser scales the canvas itself, as before (nearest pixel, at most 960 CSS pixels wide, whatever the window's height), and the page makes no WebGL context; it is made the first time another setting or full screen needs it.
+- **Square pixels, fit and no CRT look (and, since the HUD layer, the HUD in the picture) are the page as it was:** the browser scales the canvas itself, as before (nearest pixel, at most 960 CSS pixels wide, whatever the window's height), and the page makes no WebGL context; it is made the first time another setting or full screen needs it.
 - **Any other setting, or full screen:** a second canvas the size of the screen's own pixels takes the canvas's place. A WebGL 2 shader fills it from the picture. The canvas is hidden but still drawn as before, so `wackyDebug` and the checks read the same picture.
 - **Without WebGL 2:** the browser scales the canvas to the chosen shape and size, by the nearest pixel (at 4:3 the rows are then of uneven height). The CRT look is not available, and the menu's CRT LOOK says NONE.
 
@@ -328,7 +333,7 @@ Built 2026-10-06 (Stage 1 apart from the HUD layer): `src/enhance/display.js` (t
 #### The menus and the logo
 
 The menu picture's logo ends on row 75. Every menu of the game the port models (`menu.tree-observed`, `menu.famous-menus`) starts its first bar at row 76 or below: the longest are the nine-line main menu, in its own layout, and the six-line lists of FAMOUS DRIVERS. That is not a rule shown for the whole game: the phone book of seven items that MAKE CALL opens ([leads/menus.md](leads/menus.md)) is not modelled, and where it stands is not read. The page's own lists are held to the modelled menus' row.
-- Every list the page's menus reach keeps to that (`test/menu-logo.test.js`), so none has more than six lines: GAME OPTIONS (its page items are KEYS AND SOUND, which opens KEYBOARD CONTROLS and SOUND DEVICES, and DISPLAY AND EFFECTS), DISPLAY AND EFFECTS with its two lists of switches, EFFECT LEVELS, DISPLAY OPTIONS and CRT LEVELS, and a player's key list, which has its six keys and no LEAVE THIS MENU (Esc goes back, as from the game's setup lists).
+- Every list the page's menus reach keeps to that (`test/menu-logo.test.js`), so none has more than six lines: GAME OPTIONS (its page items are KEYS AND SOUND, which opens KEYBOARD CONTROLS and SOUND DEVICES, and DISPLAY AND EFFECTS), DISPLAY AND EFFECTS with its two lists of switches, EFFECT LEVELS, DISPLAY OPTIONS and CRT LEVELS (CRT AND HUD since the HUD layer, still six lines), and a player's key list, which has its six keys and no LEAVE THIS MENU (Esc goes back, as from the game's setup lists).
 - How it came about: DISPLAY OPTIONS was first tried as an eighth GAME OPTIONS item, whose first bar covered rows 64 to 75. That showed three earlier lists over the logo: GAME OPTIONS (7 lines), EFFECTS (8) and the key lists (7). On 2026-10-06 they were split as above.
 - Still over the logo: the key lists' boxed title (SETUP.EXE's PLAYER 1 KEYBOARD CONTROLS), which stands at the engine menu title's distance above the first bar, on rows 54 to 69 (before the split 48 to 63; docs/TODO.md).
 
@@ -350,7 +355,7 @@ Built 2026-10-06: from Stage 3, each track's atmosphere (the per-track metadata 
 - **Defaults:**
   - The Enhanced preset now includes the clouds, so every track shows some by default. Turn the *Clouds* switch off to remove them, or set a track's clouds to 0 in the editor.
   - Settings stored before Stage 3 keep their preset: an Enhanced player stays Enhanced.
-  - The lighting has no effect until a track is given a grade.
+  - The lighting has no effect until a track is given a grade. (Since the relief it lights the slopes of every track by default: [below](#the-relief-and-the-hud-layer).)
 
 **The atmosphere and where it is kept.**
 - **Store:** each track's atmosphere is kept in this browser under `wackywheels.atmosphere`, by track number, apart from the game files and from the editor's draft. A track with nothing stored has the defaults. The editor writes each change at once, and the playtest page and the asset garage read it whenever a race starts.
@@ -499,6 +504,45 @@ Built 2026-10-06 on Stage 3: a second, more distant horizon behind the horizon s
 **Not done.**
 - Flags, foliage and trackside props that move; true reflections of the scenery.
 - A third sky layer, or a range drawn from each strip's own skyline.
+
+### The relief and the HUD layer
+
+Built 2026-10-06: Stage 3's lighting from height maps ("Stronger lighting could use separately authored normal or height maps for tiles and sprites") and Stage 1's independent HUD layer.
+- **Code:** `src/enhance/relief.js` (the maps, their light, the garage's helpers), `src/enhance/relief-store.js` (the player's maps in this browser), the floor draw's relief hook and the scene's pictures (`project.js`, `scene.js`), the composite's light; the display's HUD layer in `src/enhance/display.js`, the page's two layers in `src/play.js` and the enhancer's in `index.js`.
+- **Design numbers:** `RELIEF` and `DISPLAY.huds` in `config.js`.
+
+**The relief: using it.**
+- **Switch:** TRACK LIGHTING (the panel's *Track lighting*) now also shows the relief; there is no new switch, as the menu's lists are full.
+- **Per track,** in the editor's Atmosphere tab: *Relief* (0 for none; the default is 0.7). The track's own sun (its direction and height) lights it, else SUN FROM at the usual height; a low sun shows the most relief.
+- **The player's own maps,** in the asset garage:
+  - a tile sheet of the tracks (`A_F*.PCX`) and every sprite sheet (`.SP`) have *Relief preview* (the picture lit by its map from the upper left) and *Export height map*, *Import height map* and *Remove imported map*;
+  - the export is the map in use as a grey PNG, lighter for higher: a tile sheet's in the sheet's own layout (320 x 200, the tiles where the sheet has them), a sprite sheet's in the layout of the garage's sprite sheet export for the current width, height, byte offset, pixel order and columns;
+  - an import must have the export's size; it is kept in this browser (IndexedDB, under the member's name) and the race views and the playtest page light the pictures by it from the next race on. A sprite sheet's map can be imported only for the layout the race draws its frames in (the garage's default width and height for the sheet, column-major, from byte 0), and it is applied only to frames wholly inside the member; the label says when the view's layout is another one.
+  - The maps are the player's art, kept apart from the game files; nothing is committed.
+- **Defaults:** with no map of the player's, every track gets the generated relief under Enhanced; Enhanced players, settings stored before included, see it.
+
+**How it is lit.**
+- **The ground:** a height per tile texel from 0 to 1, made once per track and set of maps: the player's map of the sheet, else the generated one, the texel's brightness times 0.5, plus 0.5 on the wall surface (`terrain.special-values`), the water and the red liquid flat (they keep their own light). Each texel's slope (central differences) and how much lower it lies than the texels two away diagonally are kept with it; for the texels within two of a tile's edge they are taken at each sample from the heights around it through the map, so a wall that ends where its tile does has its bevel too (on the user's archive about half of the walls' edges lie on tile edges). Per floor sample the slope is lit by the sun, ambient plus diffuse light against a flat ground's, the occlusion darkens it, and the track's level mixes it in. A height of 1 stands 16 world units, enough for the textures' grain to show.
+- **The pictures:** per drawn pixel, on the screen: the player's map of the frame (found by where the frame's bytes lie in the archive, for a map made for the frames the race draws), else a rounded body (the distance to the picture's edge, up to four pixels, eased) mixed with the pixel's brightness (0.35 of it). Where the screen cuts a picture, the cut is not an edge: the body goes on past it. The slope's normal is lit by the sun in the camera's terms against a flat picture's, so racers and scenery are lighter on the sun's side and darker on the other. The effects drawn over the own car (dust, its pictures) are not lit.
+- **The light** stays within 0.55 and 1.45 and never goes above the demo's fade; the sky, the strip and the overlays are never lit. The generated map's liquids keep their light. The garage's export of a generated map is the very map the race uses.
+
+**The HUD layer.**
+- **Using it:** GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS > CRT AND HUD (renamed from CRT LEVELS) has HUD: PICTURE (the default: in the picture, as before), CRISP or SMOOTH; the panel's *Display* fieldset has *HUD*. It needs WebGL 2, like the CRT look (without it the line says PICTURE).
+- **What it is:** on the race screens (single, split, link; Original and Enhanced) the page hands the display two layers: the world before the overlays, and the overlays alone (the HUD, the overhead map, the labels and messages, the split screen's strips, the in-race menu), found by drawing them a second time into sentinels. The display draws the world with the CRT look and puts the overlays over it after: no scanlines, glow or vignette on them; with curvature they follow the tube's shape. CRISP draws each overlay pixel sharp; SMOOTH enlarges the layer four times with Scale2x twice (AdvanceMAME's edge-preserving pixel-art scaler) on the graphics card, so the digits' and letters' diagonals are smooth on a dense screen while straight edges stay. Every other screen (menus, cards, boards) is the canvas as before.
+- **Unchanged:** the canvas the page draws is the same picture; the overlays keep their pixels' places. The split screen's upside-down half (the inverting shot) is flipped in the world layer as the overlays flip it. The overhead map's rectangle, which the game takes from the race's first frame sky and all, keeps the pixels that only put back the world's index in the world layer, so its sky gets the CRT look as the sky around it does (in the reference renderer's race and link race, as the enhancer already did). Without WebGL 2 the HUD stays in the picture and the page keeps its layout.
+
+**Checks.**
+- `npm test`: `test/relief.test.js` (the atmosphere's level; the generated ground heights: the brightness, the raised wall, the flat water, a player's map replacing one sheet; the slopes; the ground's light flat, toward and away from the sun, at no strength and within its range; the sun's vectors; a picture's light on its two sides and its middle, and a flat map of the player's; the sprite maps' byte order; the sheet layout round trip; the store's records and how a frame is found in an archive; the composite's light on the ground and the pictures only, within the cap) and `test/display.test.js` (the HUD setting, its menu line and word, the layers from indexed pictures, Scale2x's rules).
+- `npm run check:enhance`: the relief alone on track 4 changes only the ground and the pictures (285,339 pixels over 15 moments), a map of the player's for CARS.SP (rising from left to right) changes only the pictures against the generated one (3,620 pixels on track 1); section 3c draws a race, the split screen (with an upside-down half) and a slides demo with and without layers: the same picture, the overlays' layer exactly the overlay pixels, and the reference renderer's two layers put back together equal its picture.
+- **Hashes:** the six scenarios hash the same as Stage 3 with the sky layers, the lighting and the water off, and with every effect on but every track's range, water and relief at 0.
+- **In Chrome:** the playtest page with Enhanced, the CRT look and each HUD mode on track 7, read back from the display's canvas: the overlays drawn over the scanlines, sharp, or smoothed (the timer's and the item box's digits); the garage's relief preview of `A_F13.PCX`; the import of a tile sheet's and of CARS.SP's map through the *Import* buttons (a picture of the wrong size refused) and their removal; the race view with a map of the player's. The test maps were removed afterwards.
+
+**Frame time** (node, 2026-10-06, the machine busy with other work, so read against each other): the relief adds about 0.3 to 0.6 ms a frame on tracks 1, 4 and 7 (medians of 300 pictures); the HUD layer's two layers add about 0.3 ms to the enhancer's draw. The Scale2x passes run on the graphics card and were not timed.
+
+**Not done.**
+- Shadows cast by the relief itself (a wall's shadow on the road); the sun shadows of the pictures are the cast shadows.
+- Maps for the pictures the race makes itself (the crash pictures, the effects), and normal maps (the maps are heights).
+- Hand-made maps: the port ships none; the garage's export and import are the way to make them.
 
 ### Tools that make later milestones easier
 

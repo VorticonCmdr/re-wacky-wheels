@@ -1,6 +1,6 @@
 // The last step of the Enhanced presentation: the indexed picture through the frame's palette (the palette cycle and the demo's fade
-// included), then on the world's pixels only the track's sky (the lighting's gradient, the far range and the clouds), the water, the shadows
-// on the ground, the distance fog, the particles and last the lighting grade. The pixels the overlays drew (the HUD, the overhead map, the finish labels, the messages,
+// included), then on the world's pixels only the track's sky (the lighting's gradient, the far range and the clouds), the water, the relief's
+// light on the ground and the pictures, the shadows on the ground, the distance fog, the particles and last the lighting grade. The pixels the overlays drew (the HUD, the overhead map, the finish labels, the messages,
 // the menus, the split screen's strips) are taken as they are: the overlay code draws a second time into a buffer of sentinels, and
 // whatever it wrote there is the mask. The sky rows are the track's sky only in a single view of a race: the split screen's are the strips'
 // picture and a demo's slide its page, which the enhancer marks by giving no `sky` and a grade without its sky.
@@ -43,7 +43,8 @@ const mixInto = (c, target, t) => [c[0] + (target[0] - c[0]) * t, c[1] + (target
 
 // out: RGBA bytes of the screen. `index` the indexed picture with the overlays, `mask` the overlay pixels, `L` the composed layers, `palette`
 // the RGBA palette of the frame, `effects` { shadow: strength or 0, fog: { color, ramp, horizon } or null, sky: the track's sky or null,
-// water: the water's colours or null, grade: the lighting or null, cap: the largest component (the demo's fade) }, `splats` the particle
+// water: the water's colours or null, relief: whether the layer `relief` lights the ground and the pictures, grade: the lighting or null,
+// cap: the largest component (the demo's fade) }, `splats` the particle
 // discs with `map` (the row of the viewer's picture to the screen row, or -1). `sky` is { rows, stripRows, strip, tint: { colours, amount } or
 // null, range: { cover: { alpha, tone, snow }, colours: { lit, shade, snow } } or null, clouds: [{ alpha, light, lit, shade }] }: per sky row (and strip row) the colour
 // the lighting mixes the sky toward, `strip` the strip's sky indices (clouds.js stripSkyIndices: the lighting's gradient and the far range go
@@ -52,7 +53,7 @@ const mixInto = (c, target, t) => [c[0] + (target[0] - c[0]) * t, c[1] + (target
 // `wet` marks water (1) or the red liquid (2), the water mirrors `sky` by its distance, and the layer `wave` darkens (below 0) or goes toward
 // `highlight` (water) or `glow` (the red liquid). `grade` is grade.js gradeOf's with `trackSky`: whether the sky rows are the track's sky.
 export function composite(out, { index, mask, L, palette, width, effects, splats = [] }) {
-  const { shadow, fog, sky = null, water = null, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
+  const { shadow, fog, sky = null, water = null, relief = false, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
   const fogC = fog ? fog.color.map(v => Math.min(v, cap)) : null, ramp = fog?.ramp, last = ramp ? ramp.length - 1 : 0, skyEnd = sky ? sky.rows * width : 0, stripEnd = sky?.strip ? (sky.rows + sky.stripRows) * width : 0;
   const range = sky?.range ?? null, rangeAlpha = range?.cover.alpha, rangeTone = range?.cover.tone, rangeSnow = range?.cover.snow, rangeLit = range?.colours.lit, rangeShade = range?.colours.shade, rangeWhite = range?.colours.snow;
   const wet = water ? L.wet : null, wave = L.wave, reflect = water?.reflect ?? null, reflectLast = reflect ? reflect.length - 1 : 0, mirror = water?.sky, highlight = water?.highlight, glow = water?.glow;
@@ -89,6 +90,7 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
           r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
         }
       }
+      if (relief && (kind === KIND.floor || kind === KIND.sprite)) { const f = L.relief[i]; if (f !== 1) { r = Math.min(r * f, cap); g = Math.min(g * f, cap); b = Math.min(b * f, cap); } } // the relief's light, within the demo's fade
       if (kind === KIND.floor) { // the ground: the water, the shadows (the darker of contact and sun), then the skid marks
         if (wet !== null && wet[i] !== 0) {
           if (wet[i] === 1 && reflect !== null) { const t = reflect[Math.min(Math.round(L.depth[i]), reflectLast)]; r += (mirror[0] - r) * t; g += (mirror[1] - g) * t; b += (mirror[2] - b) * t; } // @math the three components

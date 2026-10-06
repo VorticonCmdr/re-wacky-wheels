@@ -1,11 +1,12 @@
 // The track editor's Atmosphere tab (docs/enhancements.md, Stage 3; docs/track-editor.md): the atmosphere of the selected track (the sun, the
-// fog, the clouds, the far range, the water, the lighting) and a race view of the track as it is being edited, drawn by the Enhanced presentation over the original
+// fog, the clouds, the far range, the water, the lighting and its relief) and a race view of the track as it is being edited, drawn by the Enhanced presentation over the original
 // art. The atmosphere is kept in this browser by track number (src/enhance/atmosphere.js), apart from the game files and the editor's own
 // draft: the playtest page draws the track with it. Nothing here changes a track's game files.
 import { normalizeAtmosphere, defaultAtmosphere, isDefaultAtmosphere, loadAtmospheres, saveAtmosphere, saveAtmospheres } from './enhance/atmosphere.js';
 import { ATMOSPHERE, GRADES, RANGE, PRESETS, LEVELS } from './enhance/config.js';
 import { normalize } from './enhance/settings.js';
 import { createRacePreview } from './viewer-preview.js';
+import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
 import { patchArchive, trackChanges } from './track-model.js';
 
 const GRADE_LABELS = {
@@ -31,7 +32,7 @@ export function createAtmospherePanel({ $, context, status }) {
     original = new Uint8ClampedArray(WIDTH * HEIGHT * 4),
     enhanced = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
   const settings = normalize(PRESETS.enhanced);
-  const CONTROLS = ['atmo-grade', 'atmo-gradeStrength', 'atmo-clouds', 'atmo-cloudSpeed', 'atmo-rangeShape', 'atmo-range', 'atmo-water', 'atmo-ownSun', 'atmo-sunAngle', 'atmo-sunHeight', 'atmo-ownFog', 'atmo-fogTint', 'atmo-fog', 'atmo-reset', 'atmo-play', 'atmo-original', 'atmo-moment'];
+  const CONTROLS = ['atmo-grade', 'atmo-gradeStrength', 'atmo-clouds', 'atmo-cloudSpeed', 'atmo-rangeShape', 'atmo-range', 'atmo-water', 'atmo-relief', 'atmo-ownSun', 'atmo-sunAngle', 'atmo-sunHeight', 'atmo-ownFog', 'atmo-fogTint', 'atmo-fog', 'atmo-reset', 'atmo-play', 'atmo-original', 'atmo-moment'];
   let local = loadAtmospheres(), // this session's atmospheres: what the browser keeps, and what it did not keep (`unsaved`)
     values = defaultAtmosphere(),
     stem = null,
@@ -46,6 +47,8 @@ export function createAtmospherePanel({ $, context, status }) {
     last = 0,
     accumulator = 0;
   const unsaved = new Set();
+  const relief = createReliefProvider(() => built?.archive ?? null); // the player's own relief maps, by where the frames lie in the preview's archive
+  loadReliefMaps().then(r => { relief.set(r); draw(); });
 
   // The browser's atmospheres, with those it did not keep in this session on top.
   function sync() {
@@ -83,6 +86,7 @@ export function createAtmospherePanel({ $, context, status }) {
     $('atmo-rangeShape').disabled = a.range === 0;
     $('atmo-range').value = String(a.range);
     $('atmo-water').value = String(a.water);
+    $('atmo-relief').value = String(a.relief);
     const ownSun = a.sunAngle !== null || a.sunHeight !== null;
     $('atmo-ownSun').checked = ownSun;
     $('atmo-sunAngle').value = String(a.sunAngle ?? OWN_SUN.sunAngle);
@@ -119,6 +123,7 @@ export function createAtmospherePanel({ $, context, status }) {
   levelInput('atmo-cloudSpeed', 'cloudSpeed');
   levelInput('atmo-range', 'range');
   levelInput('atmo-water', 'water');
+  levelInput('atmo-relief', 'relief');
   levelInput('atmo-sunAngle', 'sunAngle');
   levelInput('atmo-sunHeight', 'sunHeight');
   levelInput('atmo-fog', 'fog');
@@ -173,12 +178,9 @@ export function createAtmospherePanel({ $, context, status }) {
     if (preview && built?.dat === dat && built.stem === track.stem && built.key === key) return true;
     try {
       const changes = trackChanges(track);
-      preview = createRacePreview(
-        changes.size ? patchArchive(dat, changes) : dat,
-        track.stem,
-        { atmosphere: atmosphereOf, demoControls: false }
-      );
-      built = { dat, stem: track.stem, key, edited: changes.size > 0 };
+      const archive = changes.size ? patchArchive(dat, changes) : dat;
+      preview = createRacePreview(archive, track.stem, { atmosphere: atmosphereOf, demoControls: false, relief });
+      built = { dat, archive, stem: track.stem, key, edited: changes.size > 0 };
       preview.seek(Number($('atmo-moment').value), settings);
       caption();
       return true;

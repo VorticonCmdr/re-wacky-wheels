@@ -8,13 +8,16 @@ import { openPicked } from './vfs/picker.js';
 import { withSteps } from './evidence/k.js';
 import { loadTrack, rgbaPalette, archiveMembers } from './game/track-data.js';
 import { renderScene } from './render/scene.js';
-import { drawRaceFrame, drawRaceOverlays, sceneSky } from './render/race-frame.js';
+import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { createEnhancer } from './enhance/index.js';
 import { EFFECTS, LEVELS } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
-import { createDisplay } from './enhance/display.js';
+import { createDisplay, overlayLayers } from './enhance/display.js';
+import { SENTINEL } from './enhance/composite.js';
+import { minimapRect } from './game/minimap.js';
+import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
 import { describeAtmosphere } from './enhance/atmosphere.js';
-import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from './enhance/display-settings.js';
+import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, nextHud, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from './enhance/display-settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
 import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } from './render/versus.js';
 import { stripValues, swapSeat } from './game/versus.js';
@@ -85,10 +88,24 @@ const $ = id => document.getElementById(id);
 const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: null, menuHeld: null, menuHeldCode: null, menuAccumulator: 0, menuArt: null, hudArt: null, hud: createHud(), laps: null, total: 0, finished: false, finalTicks: 0, mov: null, figure: null, figureDraw: null, ai: null, place: 8, dat: null, world: null, car: null, camera: null, keys: new Set(), pause: null, pauseKey: null, pauseAccumulator: 0, tick: 0, last: 0, accumulator: 0, unproven: new Set(), steps: [] };
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
-const enh = createEnhancer(); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer
+const relief = createReliefProvider(() => state.dat); // the player's own relief maps (imported in the asset garage), read again at every race start
+const enh = createEnhancer({ relief }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer
 const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => showDisplay() }); // how the finished picture is put on the screen (docs/enhancements.md, Stage 1): it reads the canvas and never draws into it
-// A finished picture: into the canvas, then onto the screen through the display.
-function show() { ctx.putImageData(image, 0, 0); display.present(); showDisplayStats(); }
+// A finished picture: into the canvas, then onto the screen through the display (`layers`: a race screen's world and overlays for the HUD layer).
+function show(layers = null) { ctx.putImageData(image, 0, 0); display.present(true, layers); showDisplayStats(); }
+// The HUD layer's buffers (docs/enhancements.md, the HUD layer): the world before the overlays, the overlays drawn into sentinels, the two layers.
+const hudUnder = new Uint8Array(320 * 200), hudSentinel = new Uint16Array(320 * 200), hudLayers = { world: new Uint8ClampedArray(320 * 200 * 4), hud: new Uint8ClampedArray(320 * 200 * 4) }; // @math the screen; four bytes a colour
+// A race screen of the reference renderer: `index` holds the world, `overlays(fb)` draws everything over it (the HUD, the map, the menu) and
+// `flip(fb)` the split screen's upside-down halves, which the overlays also do; the canvas gets the whole picture as before, and when the
+// display draws the HUD as a layer of its own it also gets the two layers. `map`: the screen has the overhead map, whose rectangle the game
+// takes from the race's first frame, sky and all: there a pixel that only puts back the world's own index stays world (as the enhancer has it).
+function raceBlit(overlays, palette, flip = null, map = false) {
+  if (!display.hudLayer()) { overlays(index); blit(palette); return; }
+  hudUnder.set(index); overlays(index); hudSentinel.fill(SENTINEL); overlays(hudSentinel); flip?.(hudUnder);
+  if (map) { const [x0, y0, w, h] = minimapRect(); for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) { const i = y * 320 + x; if (index[i] === hudUnder[i]) hudSentinel[i] = SENTINEL; } } // @math the screen's width
+  overlayLayers(hudLayers, { under: hudUnder, index, sentinel: hudSentinel, blank: SENTINEL, palette });
+  toImage(palette); show(hudLayers);
+}
 
 function setMessage(text, bad = false) { const m = $('message'); m.textContent = text; m.style.color = bad ? 'var(--bad)' : ''; m.hidden = !text; }
 
@@ -140,7 +157,7 @@ function startTrack() {
 function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusMode) }) {
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
   startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
-  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); showAtmosphere(); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
+  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); showAtmosphere(); loadReliefMaps().then(r => relief.set(r)); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
   if (state.cup && state.carry) { const car = { ...state.car, counter: state.carry.counter, held: state.carry.held }; state.car = car; state.player = { ...state.player, car }; } // the pickups go from one race of a cup to the next (obj1+0x2006a)
   rgba = rgbaPalette(state.world.palette);
   state.audio?.stopAll(); state.audio?.engineStart(); // a race starts with the engine running (obj1+0xd04)
@@ -323,10 +340,10 @@ function tickOnce() {
   playSounds();
 }
 
-function blit(palette) {
+function toImage(palette) {
   for (let i = 0; i < index.length; i++) { const p = index[i] * 4; image.data[i * 4] = palette[p]; image.data[i * 4 + 1] = palette[p + 1]; image.data[i * 4 + 2] = palette[p + 2]; image.data[i * 4 + 3] = 255; } // @math RGBA
-  show();
 }
+function blit(palette) { toImage(palette); show(); }
 
 // The main menu: the picture, the nine items, the selection icons and the two corner cars, all as the game draws them (menu.screen-model).
 function drawMenu() {
@@ -447,7 +464,7 @@ function drawVolume() {
 }
 
 function chooseItem(action) {
-  if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.level ? cycleCrtLevel(s, d.level) : defaultCrtLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE (no WebGL 2) does nothing
+  if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : d.level ? cycleCrtLevel(s, d.level) : defaultCrtLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
   if (action.graphics) { const g = action.graphics, s = enh.settings; setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js): the same settings as the panel's
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
   if ('duo' in action && state.linkPlay) { linkMode(action.duo); return; } // the host's choice of the link race
@@ -502,8 +519,7 @@ function drawVersus() {
   renderScene(state, sceneA, mode);
   swapSeat(state); renderScene(state, sceneB, mode); swapSeat(state);
   composeSplit(sceneA, sceneB, index);
-  versusOverlays(state, index);
-  blit(raceRgba());
+  raceBlit(fb => versusOverlays(state, fb), raceRgba(), fb => carsOf(state).forEach((c, n) => { if (c.inverted !== 0) flipViewport(fb, n); })); // the world under the overlays flipped as they flip it
   versusReadout();
 }
 // Everything the split screen draws over the two viewers, from the state `s` (the race's, or the enhanced presentation's copy of it).
@@ -526,9 +542,8 @@ function draw() {
   if (state.linkPlay && state.versus) { drawLinkRace(); return; }
   if (state.versus) { drawVersus(); return; }
   const mode = Number($('detail').value);
-  state.detail = mode; drawRaceFrame(state, index);
-  if (state.pause) renderMenuOverlay(index, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
-  blit(raceRgba());
+  state.detail = mode; renderScene(state, index, state.detail, sceneSky(state)); // drawRaceFrame's scene, then its overlays
+  raceBlit(fb => { drawRaceOverlays(state, fb); if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); }, raceRgba(), null, !sceneSky(state)); // the in-race menu over the frozen frame (race.pause-menu); the map over the track's own sky, not a slide's page
   raceReadout();
 }
 function raceReadout() {
@@ -542,10 +557,10 @@ function raceReadout() {
 // pixels, the same overlays as the reference renderer drawn from the presented state. `alpha` is how far the clock is toward the next tick.
 let gfxShown = 0;
 function drawEnhanced() {
-  const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data;
+  const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data, layers = display.hudLayer() ? hudLayers : null; // the HUD layer: the enhancer hands over the world and the overlays apart
   if (state.versus && !state.linkPlay) {
-    enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays });
-    show(); versusReadout();
+    enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays, layers });
+    show(layers); versusReadout();
   } else {
     const L = state.linkPlay && state.versus ? state.linkPlay : null;
     if (!L) state.detail = Number($('detail').value);
@@ -553,9 +568,9 @@ function drawEnhanced() {
       if (L) { const cars = carsOf(s); s.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(s.ai ? s.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; } // the link race's overlay map: the other human, then the computer racers
       drawRaceOverlays(s, fb);
       if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
-    } });
+    }, layers });
     if (!state.minimap && P.minimap) state.minimap = P.minimap; // the overhead map's picture and rectangle are kept from the race's first frame (hud.minimap-draw)
-    show();
+    show(layers);
     if (L) { const [a, b] = carsOf(state); $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`; $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE; } else raceReadout();
   }
   const now = performance.now();
@@ -588,6 +603,7 @@ function showDisplay() {
   const s = display.settings, ready = display.crtReady(), full = display.fullscreen();
   $('dsp-scaling').value = s.scaling; $('dsp-aspect').value = s.aspect; $('dsp-crt').checked = s.crt && ready; $('dsp-crt').disabled = !ready;
   for (const k of CRT_LEVELS) { $(`dsp-${k}`).value = String(s[k]); $(`dsp-${k}`).disabled = !(s.crt && ready); }
+  $('dsp-hud').value = ready ? s.hud : 'picture'; $('dsp-hud').disabled = !ready;
   $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
   showDisplayStats(true);
   if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings
@@ -601,6 +617,7 @@ function setDisplay(next, control) { display.configure(next); saveDisplay(displa
 $('dsp-scaling').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'scaling', e.target.value), e.target));
 $('dsp-aspect').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'aspect', e.target.value), e.target));
 $('dsp-crt').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'crt', e.target.checked), e.target));
+$('dsp-hud').addEventListener('change', e => setDisplay(changeDisplay(display.settings, 'hud', e.target.value), e.target));
 for (const k of CRT_LEVELS) { $(`dsp-${k}`).addEventListener('input', e => setDisplay(changeDisplay(display.settings, k, Number(e.target.value)))); $(`dsp-${k}`).addEventListener('change', e => e.target.blur()); }
 $('dsp-fullscreen').addEventListener('click', e => { display.toggleFullscreen(); e.target.blur(); });
 $('dsp-reset').addEventListener('click', e => setDisplay(resetDisplay(), e.target));
@@ -943,10 +960,10 @@ function tickLink() {
 function drawLinkRace() {
   const L = state.linkPlay, cars = carsOf(state);
   state.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(state.ai ? state.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; // the overhead map's dots: the other human, then the computer racers
+  const palette = raceRgba();
   if (L.seat === 1) swapSeat(state);
-  drawRaceFrame(state, index);
+  renderScene(state, index, state.detail, sceneSky(state)); raceBlit(fb => drawRaceOverlays(state, fb), palette, null, true); // drawRaceFrame's scene, then its overlays (with the overhead map)
   if (L.seat === 1) swapSeat(state);
-  blit(raceRgba());
   const [a, b] = carsOf(state);
   $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`;
   $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE;

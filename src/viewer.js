@@ -14,6 +14,10 @@ import { driverFile, driverCount } from './game/drivers.js';
 import { normalize, applyPreset, change, loadSettings, saveSettings, anyEffect } from './enhance/settings.js';
 import { EFFECTS, LEVELS, PRESETS } from './enhance/config.js';
 import { loadAtmospheres } from './enhance/atmosphere.js';
+import { loadReliefMaps, saveReliefMap, removeReliefMap, createReliefProvider } from './enhance/relief-store.js';
+import { tileSheetHeights, tilesToSheet, sheetToTiles, pictureHeights, shadeByHeights } from './enhance/relief.js';
+import { RELIEF } from './enhance/config.js';
+import { loadTrack } from './game/track-data.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
@@ -94,9 +98,74 @@ function palette(key, own) { return key === 'own' ? own : key === 'gray' ? grays
 function defaultPalette() { return get('a_f1.pcx') ? 'a_f1.pcx' : state.entries.find(e => extension(e.name) === 'pcx')?.name ?? 'gray'; }
 function detail(text) { $('details').append(el('p', text, 'muted')); }
 
+// ---- The relief maps (docs/enhancements.md, the relief): the player's own height maps of the tile sheets and sprite sheets, kept in this
+// browser; the race views here and the playtest page light the ground and the pictures by them, else by maps made from the pictures.
+const relief = { records: [], provider: createReliefProvider(() => get('wacky.dat')?.data ?? null) };
+const reloadRelief = async () => { relief.records = await loadReliefMaps(); relief.provider.set(relief.records); };
+reloadRelief();
+const reliefOf = member => relief.records.find(r => r.member === member.toUpperCase()) ?? null;
+// A grey picture (0 to 255 a pixel) as a PNG download, and a PNG the player picked as grey values of the expected size.
+function downloadGrey(grey, width, height, name) {
+  const c = el('canvas'); c.width = width; c.height = height;
+  const rgba = new Uint8ClampedArray(width * height * 4); // @math four bytes a colour
+  for (let i = 0; i < grey.length; i++) rgba.set([grey[i], grey[i], grey[i], 255], i * 4); // @math opaque grey
+  c.getContext('2d').putImageData(new ImageData(rgba, width, height), 0, 0);
+  c.toBlob(blob => { if (blob) download(blob, name, 'image/png'); else status('Could not encode the height map.', true); }, 'image/png');
+}
+function pickGrey(width, height, done) {
+  const input = el('input'); input.type = 'file'; input.accept = 'image/png,image/*';
+  input.onchange = async () => {
+    const file = input.files?.[0]; if (!file) return;
+    try {
+      const bitmap = await createImageBitmap(file);
+      if (bitmap.width !== width || bitmap.height !== height) throw new Error(`The height map is ${bitmap.width} × ${bitmap.height} pixels; this one needs ${width} × ${height}, as the exported map has.`);
+      const c = el('canvas'); c.width = width; c.height = height; const g = c.getContext('2d'); g.drawImage(bitmap, 0, 0);
+      const data = g.getImageData(0, 0, width, height).data, grey = new Uint8Array(width * height);
+      for (let i = 0; i < grey.length; i++) grey[i] = Math.round(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]); // @math the Rec. 601 luma weights; four bytes a colour
+      await done(grey);
+    } catch (error) { status(error.message, true); }
+  };
+  input.click();
+}
+// The relief controls of a picture: `exportGrey()` the map shown (the player's or the generated one) as a grey picture with its size,
+// `importGrey(grey)` the record to keep from a picked one (it throws when the view's layout is not one the race draws), `redraw()` the view,
+// `applies(record)` whether the player's map is the one shown (else `other(record)` says what it was made for); `what` names the map in the
+// messages. Returns { show }, which the view calls when its layout changes.
+function reliefControls(member, { exportGrey, importGrey, redraw, what, applies = () => true, other = () => '' }) {
+  const own = el('span', undefined, 'frame-label');
+  const show = () => { const r = reliefOf(member); own.textContent = !r ? 'generated from the pictures' : applies(r) ? `your map, imported ${new Date(r.saved).toLocaleString()}` : `your map is for ${other(r)}; this layout shows the generated one`; remove.disabled = !r; };
+  const exp = el('button', 'Export height map'), imp = el('button', 'Import height map'), remove = el('button', 'Remove imported map');
+  exp.onclick = () => { const g = exportGrey(); downloadGrey(g.grey, g.width, g.height, `${member.toLowerCase().replace(/\.[^.]+$/, '')}-relief.png`); status(`Exported the ${what}'s height map: paint it lighter for higher, darker for lower, and import it again.`); };
+  imp.onclick = () => { try { const g = exportGrey(); importGrey(null); pickGrey(g.width, g.height, async grey => { if (await saveReliefMap({ ...importGrey(grey), member, saved: Date.now() })) { await reloadRelief(); show(); redraw(); status(`Imported: the race views and the playtest page light the ${what} by your map (Track lighting on).`); } else status('This browser did not keep the height map.', true); }); } catch (error) { status(error.message, true); } };
+  remove.onclick = async () => { if (await removeReliefMap(member)) { await reloadRelief(); show(); redraw(); status(`Removed: the ${what} is lit by the generated map again.`); } };
+  exp.onclick = (() => { const save = exp.onclick; return () => { try { save(); } catch (error) { status(error.message, true); } }; })();
+  field('Relief map', own); $('controls').append(exp, imp, remove); show();
+  return { show };
+}
+// The first track that draws with a tile sheet, and which of its two sheets it is ({ stem, sheet }), or null.
+function tileSheetUse(name) {
+  for (const e of state.entries) {
+    if (extension(e.name) !== 'gam') continue;
+    try { const at = parseGam(e.data).tiles.indexOf(name.toLowerCase()); if (at >= 0) return { stem: e.name.split('.')[0], sheet: at }; } catch { /* not a track's */ }
+  }
+  return null;
+}
+
 function previewPcx(entry) {
-  const img = decodePcx(entry.data), c = canvas(img.width, img.height); let key = 'own';
-  const draw = () => paint(c, img, palette(key, img.palette)); draw(); controls(); zoomControl(c);
+  const img = decodePcx(entry.data), c = canvas(img.width, img.height), use = get('wacky.dat') ? tileSheetUse(entry.name) : null; let key = 'own', lit = false, generated = null;
+  const sheetHeights = () => { // the map of a tile sheet as its picture: the player's, else the one the race makes for the first track that uses it
+    const r = reliefOf(entry.name);
+    if (r) return tilesToSheet(r.heights, img.width, img.height);
+    generated ??= tilesToSheet(tileSheetHeights(loadTrack(get('wacky.dat').data, use.stem), use.sheet), img.width, img.height);
+    return generated;
+  };
+  const draw = () => { paint(c, img, palette(key, img.palette)); if (lit && use) { const g = c.getContext('2d'), d = g.getImageData(0, 0, img.width, img.height); g.putImageData(new ImageData(shadeByHeights(d.data, sheetHeights(), img.width, img.height, RELIEF.depth), img.width, img.height), 0, 0); } };
+  draw(); controls(); zoomControl(c);
+  if (use) { // a tile sheet of the tracks: its relief map
+    checkControl('Relief preview', lit, v => { lit = v; draw(); });
+    reliefControls(entry.name, { what: 'tile sheet', redraw: draw, exportGrey: () => ({ grey: sheetHeights(), width: img.width, height: img.height }), importGrey: grey => (grey ? { kind: 'tiles', heights: sheetToTiles(grey, img.width) } : null) });
+    detail(`Relief: the track lighting shows the ground's slopes by a height map of this sheet, lit by the track's sun. Without one of yours it is made from the sheet (each texel's brightness, the walls raised; track ${use.stem}'s walls and water). Export it, paint it in any editor (lighter is higher; keep the size and the tiles' places), and import it.`);
+  }
   if (!img.rgba) {
     selectControl('Palette', paletteChoices(true), key, v => { key = v; draw(); });
     gamePaletteControl(draw);
@@ -125,10 +194,22 @@ function previewRaw(entry) {
     } catch (error) { sheetInfo.textContent = error.message; $('export-sheet').disabled = true; }
   }
   function count() { return Math.max(1, Math.ceil((entry.data.length - offset) / (w * h))); }
+  let lit = false, reliefView = null;
+  const luma = () => { const p = displayPalette(palette(key)); return Float32Array.from({ length: 256 }, (_, i) => (0.299 * p[i * 3] + 0.587 * p[i * 3 + 1] + 0.114 * p[i * 3 + 2]) / 255); }; // @math 256 colours; the Rec. 601 luma weights; three components; 8 bits
+  const full = () => Math.max(Math.floor((entry.data.length - offset) / (w * h)), 0); // the whole frames, the ones the race draws
+  const fits = r => r.width === w && r.height === h && r.offset === offset && r.columnMajor === column; // the player's map was made for this layout
+  const frameHeights = f => { // a frame's heights in its picture's rows (the player's map when it was made for this layout, else the generated one)
+    const r = reliefOf(entry.name), size = w * h, own = r && fits(r) && f < r.frames;
+    const bytes = own ? r.heights.subarray(f * size, (f + 1) * size) : pictureHeights(entry.data, { width: w, height: h, offset: offset + f * size, frames: 1, columnMajor: column }, luma());
+    const rows = new Uint8Array(size); for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) rows[y * w + x] = bytes[column ? x * h + y : y * w + x];
+    return rows;
+  };
   function draw() {
     frame = Math.min(frame, count() - 1); frameSlider.max = count() - 1; frameSlider.value = frame;
     if (state.anchorView && !horizon && tables) drawAnchor(c, rawFrame(entry.data, w, h, frame, offset, column), w, h, displayPalette(palette(key)), sunAngle, rule);
     else paint(c, rawFrame(entry.data, w, h, frame, offset, column), palette(key), transparent ? 0 : -1);
+    if (lit && !horizon && !state.anchorView && frame < full()) { const g = c.getContext('2d'), d = g.getImageData(0, 0, w, h); g.putImageData(new ImageData(shadeByHeights(d.data, frameHeights(frame), w, h, RELIEF.spriteDepth), w, h), 0, 0); }
+    reliefView?.show();
     frameLabel.textContent = `${frame + 1} / ${count()} frames`;
     updateSheetInfo();
     if (zoom.value !== 'fit') c.style.width = c.width * Number(zoom.value) + 'px';
@@ -167,6 +248,20 @@ function previewRaw(entry) {
       } catch (error) { status(error.message, true); }
     };
     detail('Sprite sheet export includes all frames from the current byte offset, in order from left to right then top to bottom. It uses the current dimensions, pixel order, palette and transparency; preview zoom does not scale the export.');
+    checkControl('Relief preview', lit, v => { lit = v; draw(); });
+    const sheetGrey = () => { // every whole frame's heights laid out as the sprite sheet export lays out its frames
+      const L = spriteSheetLayout(entry.data.length, w, h, offset, sheetColumns), grey = new Uint8Array(L.width * L.height);
+      for (let f = 0; f < full(); f++) { const rows = frameHeights(f), fx = (f % L.columns) * w, fy = Math.floor(f / L.columns) * h; for (let y = 0; y < h; y++) grey.set(rows.subarray(y * w, (y + 1) * w), (fy + y) * L.width + fx); }
+      return { grey, width: L.width, height: L.height, columns: L.columns };
+    };
+    reliefView = reliefControls(entry.name, { what: 'sprite sheet', redraw: draw, exportGrey: sheetGrey, applies: fits, other: r => `${r.width} × ${r.height}, byte offset ${r.offset}${r.columnMajor ? ', column-major' : ''}`, importGrey: grey => {
+      if (w !== layout.width || h !== layout.height || offset !== 0 || !column || !full()) throw new Error(`The race draws this sheet's frames as ${layout.width} × ${layout.height}, column-major, from byte 0: set that layout to import a height map for them.`);
+      if (!grey) return null;
+      const { width, columns } = sheetGrey(), frames = full(), size = w * h, heights = new Uint8Array(frames * size);
+      for (let f = 0; f < frames; f++) { const fx = (f % columns) * w, fy = Math.floor(f / columns) * h; for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) heights[f * size + (column ? x * h + y : y * w + x)] = grey[(fy + y) * width + fx + x]; }
+      return { kind: 'sprites', width: w, height: h, offset, columnMajor: column, frames, heights };
+    } });
+    detail('Relief: with Track lighting on, the race lights the pictures by their slopes: a height map of yours made for these frames (the same width, height, byte offset and pixel order), else one made from the frame as it is drawn (a rounded body and its brightness). Export the map in the sprite sheet\'s layout, paint it (lighter is higher; keep the size), and import it.');
   }
   function tick(time) { if (animate && time - last >= 125) { frame = (frame + 1) % count(); draw(); last = time; } state.raf = requestAnimationFrame(tick); }
   draw(); state.raf = requestAnimationFrame(tick);
@@ -232,7 +327,7 @@ function previewRace(stem) {
   if (!dat || !get(stem + '.gam')) { $('preview').replaceChildren(el('p', 'The race view runs the game on your WACKY.DAT: open the complete archive.', 'preview-error')); return; }
   let preview;
   const atmospheres = loadAtmospheres(); // the tracks' atmospheres the track editor keeps (read here, never written)
-  try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name] }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
+  try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name], relief: relief.provider }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
   const saved = loadSettings();
   let settings = state.gfx ??= anyEffect(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when it has any, else the Enhanced preset
   let moment = 140, layout = 'both', hud = true, level = 1, playing = false, acc = 0, last = 0, alpha = 1; // @math a moment after the fly-in and the countdown
