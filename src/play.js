@@ -12,14 +12,14 @@ import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { createEnhancer } from './enhance/index.js';
 import { createBoot, stepBoot, stageView, noticeLines, introModel, fadedOut, fadeOutSteps } from './game/boot.js';
 import { loadBootArt, renderNotice as renderBootNotice, renderScene as renderBootScene, renderPicture as renderBootPicture, renderTitle as renderBootTitle } from './render/boot.js';
-import { EFFECTS, LEVELS } from './enhance/config.js';
-import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels } from './enhance/settings.js';
+import { EFFECTS, LEVELS, RENDER } from './enhance/config.js';
+import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels, isRenderChoice, cycleRender } from './enhance/settings.js';
 import { createDisplay, overlayLayers } from './enhance/display.js';
 import { SENTINEL } from './enhance/composite.js';
 import { minimapRect } from './game/minimap.js';
 import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
 import { describeAtmosphere } from './enhance/atmosphere.js';
-import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, nextHud, toggleCrt, cycleCrtLevel, defaultCrtLevels, CRT_LEVELS } from './enhance/display-settings.js';
+import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, nextHud, toggleCrt, cycleCrtLevel, CRT_LEVELS } from './enhance/display-settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
 import { composeSplit, drawStrips, renderWinner, flipViewport, drawRaceHud } from './render/versus.js';
 import { stripValues, swapSeat } from './game/versus.js';
@@ -91,10 +91,12 @@ const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: nul
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 const relief = createReliefProvider(() => state.dat); // the player's own relief maps (imported in the asset garage), read again at every race start
-const enh = createEnhancer({ relief }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer
+const enh = createEnhancer({ relief, stages: true }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer (the stage times are the panel's readout)
 const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => showDisplay() }); // how the finished picture is put on the screen (docs/enhancements.md, Stage 1): it reads the canvas and never draws into it
-// A finished picture: into the canvas, then onto the screen through the display (`layers`: a race screen's world and overlays for the HUD layer).
-function show(layers = null) { ctx.putImageData(image, 0, 0); display.present(true, layers); showDisplayStats(); }
+// A finished picture: into the canvas, then onto the screen through the display (`layers`: a race screen's world and overlays for the HUD layer,
+// or Stage 4's layers of a world drawn at another size). `enhanced`: the picture is a race frame of the enhancer's (snapshotScreen keeps it).
+let lastShow = { enhanced: false, away: false };
+function show(layers = null, enhanced = false) { ctx.putImageData(image, 0, 0); display.present(true, layers); lastShow = { enhanced, away: Boolean(layers?.logical) && layers.world.w !== screen.width }; showDisplayStats(); }
 // The HUD layer's buffers (docs/enhancements.md, the HUD layer): the world before the overlays, the overlays drawn into sentinels, the two layers.
 const hudUnder = new Uint8Array(320 * 200), hudSentinel = new Uint16Array(320 * 200), hudLayers = { world: new Uint8ClampedArray(320 * 200 * 4), hud: new Uint8ClampedArray(320 * 200 * 4) }; // @math the screen; four bytes a colour
 // A race screen of the reference renderer: `index` holds the world, `overlays(fb)` draws everything over it (the HUD, the map, the menu) and
@@ -498,8 +500,12 @@ function drawVolume() {
 }
 
 function chooseItem(action) {
-  if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : d.level ? cycleCrtLevel(s, d.level) : defaultCrtLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
-  if (action.graphics) { const g = action.graphics, s = enh.settings; setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js): the same settings as the panel's
+  if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : cycleCrtLevel(s, d.level)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS and its CRT AND HUD (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
+  if (action.graphics) { // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js) and DISPLAY OPTIONS > RENDERING (display-menu.js): the same settings as the panel's
+    const g = action.graphics, s = enh.settings;
+    if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) do nothing
+    setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return;
+  }
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
   if ('duo' in action && state.linkPlay) { linkMode(action.duo); return; } // the host's choice of the link race
   if (action.race === 1 && state.linkPlay) { hostStart(action.settings.flow); return; }
@@ -590,25 +596,42 @@ function raceReadout() {
 // The race screens through the Enhanced presentation (src/enhance): the picture between the last two ticks, the effects on the world's
 // pixels, the same overlays as the reference renderer drawn from the presented state. `alpha` is how far the clock is toward the next tick.
 let gfxShown = 0;
+// The layers the display shows for an enhanced frame: the enhancer's own when the world was drawn at another size than the canvas's (Stage 4:
+// RESOLUTION 2X; the overlays in its HUD layer, or stamped into the world when the display has no HUD layer), else the page's HUD layers as before.
+function frameLayers(layers) { const l = enh.layers(); return l && (l.world.w !== screen.width || l.world.h !== screen.height) ? l : layers; }
 function drawEnhanced() {
   const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data, layers = display.hudLayer() ? hudLayers : null; // the HUD layer: the enhancer hands over the world and the overlays apart
+  const worldReady = display.worldReady(), aspect = display.settings.aspect; // the frame context (Stage 4): the world at the settings' resolution only where the display can show it
   if (state.versus && !state.linkPlay) {
-    enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays, layers });
-    show(layers); versusReadout();
+    enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays, layers, worldReady });
+    show(frameLayers(layers), true); versusReadout();
   } else {
     const L = state.linkPlay && state.versus ? state.linkPlay : null;
     if (!L) state.detail = Number($('detail').value);
-    const P = enh.drawSingle(state, alpha, { index, out, palette, cap, mode: state.detail, sky: sceneSky(state), seat: L ? L.seat : 0, overlays: (s, fb) => {
+    const P = enh.drawSingle(state, alpha, { index, out, palette, cap, mode: state.detail, sky: sceneSky(state), seat: L ? L.seat : 0, worldReady, aspect, wideAllowed: !L && !sceneSky(state), overlays: (s, fb) => { // a link race gives both players the same sight, a slides demo shows its pages: neither is ever wide
       if (L) { const cars = carsOf(s); s.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(s.ai ? s.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; } // the link race's overlay map: the other human, then the computer racers
       drawRaceOverlays(s, fb);
       if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
     }, layers });
     if (!state.minimap && P.minimap) state.minimap = P.minimap; // the overhead map's picture and rectangle are kept from the race's first frame (hud.minimap-draw)
-    show(layers);
+    show(frameLayers(layers), true);
     if (L) { const [a, b] = carsOf(state); $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`; $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE; } else raceReadout();
   }
   const now = performance.now();
-  if (now - gfxShown > 500) { gfxShown = now; const s = enh.stats(); $('gfx-stats').textContent = `${enh.settings.smooth ? `Smooth motion shows the race ${Math.round(s.delay)} ms behind its last tick (mean). ` : ''}Draw ${s.ms.toFixed(1)} ms a frame, ${s.particles} particles, ${s.marks} skid mark segments.`; } // @math twice a second
+  if (now - gfxShown > 500) { gfxShown = now; const s = enh.stats(); $('gfx-stats').textContent = `${enh.settings.smooth ? `Smooth motion shows the race ${Math.round(s.delay)} ms behind its last tick (mean). ` : ''}Draw ${s.ms.toFixed(1)} ms a frame, ${s.particles} particles, ${s.marks} skid mark segments.`; showRender(s); } // @math twice a second
+}
+// The Rendering group's readout (Stage 4): the sizes of the world and the HUD the display was handed, the draw's mean time and its stages, and the
+// hint when the world is drawn above 1x or wide and the mean over the last TIMING_FRAMES frames is longer than RENDER.budgetMs (the page never
+// changes a setting itself). Without WebGL 2 the readout keeps saying so (resolutionNone): the world is drawn at 1x in the standard view whatever
+// resolution and view are stored.
+const resolutionNone = settings => { const kept = [settings.scale > 1 ? `${settings.scale}x` : '', settings.view === 'wide' ? 'the wide view' : ''].filter(Boolean).join(' and '); return display.crtReady() ? '' : `Resolution and view: none, this browser cannot use WebGL 2${kept ? ` (${kept} ${kept.includes(' and ') ? 'are' : 'is'} kept for when it can)` : ''}; the race world is drawn at 1x in the standard view.`; };
+const STAGE_NAMES = { clear: 'clear', floor: 'floor', records: 'pictures', contact: 'contact', sun: 'sun', blur: 'blur', marks: 'marks', decimate: 'samples', overlays: 'overlays', particles: 'particles', covers: 'sky', composite: 'composite', hud: 'canvas and HUD' };
+function showRender(s) {
+  const l = enh.layers(), d = display.stats(), hud = l?.hud ? `HUD ${l.hud.w} x ${l.hud.h}` : 'HUD in the picture', stages = Object.entries(s.stages ?? {}).filter(([, v]) => v >= 0.05).map(([k, v]) => `${STAGE_NAMES[k] ?? k} ${v.toFixed(1)}`).join(', '); // @math stages under a twentieth of a millisecond are not listed
+  const none = resolutionNone(enh.settings), drawn = l ? l.world.h / l.logical.h : 1, wide = l ? l.logical.w > screen.width : false; // the scale and the view the world was drawn at, not the ones stored
+  $('gfx-render').textContent = [none, l ? `World ${l.world.w} x ${l.world.h}, ${hud}, draw ${s.ms.toFixed(1)} ms${stages ? ` (${stages})` : ''}.${d.world && (d.world.w !== l.world.w || d.world.h !== l.world.h) ? ` The display shows ${d.world.w} x ${d.world.h}.` : ''}` : ''].filter(Boolean).join(' ');
+  const slow = (drawn > 1 || wide) && s.window !== null && s.window > RENDER.budgetMs;
+  $('gfx-budget').hidden = !slow; if (slow) $('gfx-budget').textContent = `${drawn}x${wide ? ' wide' : ''} draws in ${s.window.toFixed(1)} ms here, slower than a 60 Hz frame: ${drawn > 1 && wide ? '1x and the standard view are' : wide ? 'the standard view is' : '1x is'} recommended.`;
 }
 
 // The graphics panel: the preset, the effect switches, the levels and the reset, kept in this browser apart from the game's own settings.
@@ -619,15 +642,23 @@ function showGraphics() {
   for (const k of EFFECTS) $(`gfx-${k}`).checked = s[k];
   for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
   $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !(s.sunShadows || s.water); // the sun lights the shadows and the water's glints
-  if (!enh.active()) $('gfx-stats').textContent = 'The reference renderer draws the race.';
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s) } }; // the game menu's DISPLAY AND EFFECTS shows the same settings
+  const ready = display.crtReady(); // a world of another size needs WebGL 2 (the stored resolution and view are kept for when it is there again)
+  $('gfx-scale').value = String(s.scale); $('gfx-scale').disabled = !ready; $('gfx-view').value = s.view; $('gfx-view').disabled = !ready;
+  if (!ready) $('gfx-render').textContent = resolutionNone(s);
+  else if (!enh.active()) $('gfx-render').textContent = '';
+  if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
 }
 // The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the sky's layers, the water, the lighting and the fog draw this track with.
 function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
-function setGraphics(next, control) { enh.configure(next); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider)
+function setGraphics(next, control) { enh.configure(next); display.setRendering(renderingOf(enh.settings)); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider); the display draws with the graphics card while the resolution is above 1x or the view is wide
+// What the display is told of the stored rendering choices (display.setRendering): the scale, and whether the view is wide (its element is then laid out for the wide picture).
+function renderingOf(s) { return { scale: s.scale, wide: s.view === 'wide' }; }
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
 for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphics(change(enh.settings, k, e.target.checked), e.target));
 for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
+$('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 'scale', Number(e.target.value)), e.target));
+$('gfx-view').addEventListener('change', e => setGraphics(change(enh.settings, 'view', e.target.value), e.target));
 $('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
 showGraphics();
 
@@ -640,7 +671,8 @@ function showDisplay() {
   $('dsp-hud').value = ready ? s.hud : 'picture'; $('dsp-hud').disabled = !ready;
   $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
   showDisplayStats(true);
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
+  showGraphics();
 }
 function showDisplayStats(now = false) {
   const t = performance.now(); if (!now && t - dspShown < 500) return; dspShown = t; // @math twice a second
@@ -655,7 +687,7 @@ $('dsp-hud').addEventListener('change', e => setDisplay(changeDisplay(display.se
 for (const k of CRT_LEVELS) { $(`dsp-${k}`).addEventListener('input', e => setDisplay(changeDisplay(display.settings, k, Number(e.target.value)))); $(`dsp-${k}`).addEventListener('change', e => e.target.blur()); }
 $('dsp-fullscreen').addEventListener('click', e => { display.toggleFullscreen(); e.target.blur(); });
 $('dsp-reset').addEventListener('click', e => setDisplay(resetDisplay(), e.target));
-display.configure(loadDisplay()); showDisplay();
+display.setRendering(renderingOf(enh.settings)); display.configure(loadDisplay()); showDisplay(); // the stored resolution and view before the display's settings are applied: a stored 2x or wide view starts the graphics card even from plain display settings (after the panel's code above, which a failing start calls back)
 
 // ---- the vehicle screen in front of the setup menus (menu.vehicle-screen)
 function enterVehicle(first) {
@@ -710,7 +742,10 @@ function raceRgba() {
   return out;
 }
 
-function snapshotScreen() { state.snapshot = { index: index.slice(), rgba: raceRgba(), image: enh.active() ? Uint8ClampedArray.from(image.data) : null }; } // the enhanced picture as it was shown
+// The race's last frame for the screens shown over it (the menu of a lost race, the loading card, the leaderboard): its index and palette, and
+// when the enhancer drew it the picture as it was shown (`image`, the canvas) and, for a world drawn at another size (Stage 4), a copy of its
+// layers (`layers`: the world at its size and the HUD), which those screens keep showing with their own overlay over it.
+function snapshotScreen() { const enhanced = enh.active() && lastShow.enhanced; state.snapshot = { index: index.slice(), rgba: raceRgba(), image: enhanced ? Uint8ClampedArray.from(image.data) : null, layers: enhanced && lastShow.away ? enh.keepLayers() : null }; }
 
 // A cup from the menu: Bronze (the cup board is not ported), regular or bonus pack races, three tries.
 function beginCup(cup = 1) { state.cup = startCup(cup, state.menu.settings.flow.races === 2); state.totals = null; state.tries = 3; state.slots = null; state.carry = { counter: 0, held: 0 }; enterCard(); } // a new cup starts with nothing held (obj1+0x83a7)
@@ -771,9 +806,10 @@ function drawCard(now) {
   const c = state.card;
   if (c.stage === 'loading') {
     index.set(state.snapshot.index);
-    const text = c.demo ? demoModel().cardText : cardText(state.cup), b = bannerOf(text);
-    drawBox(index, b.x, b.y, b.width, b.height, b.border, b.fill); drawText(index, state.hudArt.ofont, text, b.x + b.margin, b.y + b.margin);
-    blit(state.snapshot.rgba);
+    const text = c.demo ? demoModel().cardText : cardText(state.cup), b = bannerOf(text), banner = fb => { drawBox(fb, b.x, b.y, b.width, b.height, b.border, b.fill); drawText(fb, state.hudArt.ofont, text, b.x + b.margin, b.y + b.margin); };
+    banner(index);
+    if (state.snapshot.image) { const L = enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: banner, kept: state.snapshot.layers, hudLayer: display.hudLayer() }); show(state.snapshot.layers ? L : null); } // the banner over the enhanced picture as it was shown (at its resolution); not reached today: every card follows another screen, never a race frame (docs/enhancements.md, M6)
+    else blit(state.snapshot.rgba);
   } else {
     index.set(c.picture.indices);
     const step = Math.min(Math.floor((now - c.since) / FADE_MS), fadeSteps());
@@ -1147,7 +1183,7 @@ function stepRetryClock(now) {
 function drawRetry() {
   index.set(state.snapshot.index);
   renderMenuOverlay(index, state.menuArt, choiceView(state.retry));
-  if (state.snapshot.image) { enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: fb => renderMenuOverlay(fb, state.menuArt, choiceView(state.retry)) }); show(); }
+  if (state.snapshot.image) { const L = enh.drawOver({ out: image.data, base: state.snapshot.image, index, palette: state.snapshot.rgba, overlay: fb => renderMenuOverlay(fb, state.menuArt, choiceView(state.retry)), kept: state.snapshot.layers, hudLayer: display.hudLayer() }); show(state.snapshot.layers ? L : null); } // the menu over the enhanced picture as it was shown (at its resolution)
   else blit(state.snapshot.rgba);
   $('badge').className = 'badge bad'; $('badge').textContent = 'The menu of a race that was not won in the first three places (obj1+0x219cd): not compared with a frame of the running game; SAVE AND QUIT is left out.';
 }
@@ -1209,7 +1245,7 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady() }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }

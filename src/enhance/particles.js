@@ -10,7 +10,7 @@ import { PARTICLES, MOTION } from './config.js';
 import { surfacePicture, sparkShift } from '../game/effects.js';
 import { terrainAt } from '../game/surface.js';
 import { RACE } from '../game/versus-rules.js';
-import { projectFine, pixelsPerUnit, texelAt, paletteColor, headingVector } from './project.js';
+import { projectAt, pixelsPerUnit, texelAt, paletteColor, headingVector } from './project.js';
 import { models } from './models.js';
 
 const wrap16 = v => v - 65536 * Math.round(v / 65536); // @math world words are 16 bits: the shortest signed difference
@@ -116,20 +116,23 @@ export function createParticles() {
       }
     },
 
-    // The particles of the picture at the presentation time `now` for a camera, as screen discs: { x, y, r, depth, color, alpha, soft }.
-    splats(world, camera, now) {
-      const V = models().view, out = [];
+    // The particles of the picture at the presentation time `now` for a camera, as screen discs: { x, y, r, depth, color, alpha, soft }. At a
+    // geometry G (geometry.js) the discs are in output pixels: the reference place x, y and radius r become s (x + m), s y and s r (at the
+    // reference geometry the very numbers they always were); with a margin (the wide view) a particle is placed through the wide projection
+    // (project.js projectAt: the equiangular continuation outside the reference fan), so it stays over the ground the floor draws there.
+    splats(world, camera, now, G = null) {
+      const V = models().view, out = [], s = G ? G.s : 1, m = G ? G.m : 0;
       for (const p of pool) {
         const age = (now - p.born) / MS;
         if (age < 0 || age * MS > p.life) continue;
         const travel = p.drag ? (1 - Math.exp(-p.drag * age)) / p.drag : age;
         const x = p.x + p.vx * travel, y = p.y + p.vy * travel, z = p.drag ? p.vz * travel : Math.max(p.vz * age - (p.gravity * age * age) / 2, 0); // @math a puff billows up and slows, a drop or a spark falls under gravity
-        const at = projectFine(world, camera, x, y);
+        const at = projectAt(world, camera, x, y, m);
         if (!at || at.distance < V.minDistance || at.distance > V.maxDistance) continue;
         const ppu = pixelsPerUnit(at.distance), life = 1 - (age * MS) / p.life;
         const alpha = p.alpha * life * life * (p.fadeIn ? Math.min(age * MS / P.fadeInMs, 1) : 1) * Math.min((at.distance - V.minDistance) / P.nearFade, 1);
         if (alpha <= 0) continue;
-        out.push({ x: at.column, y: at.bottom - z * ppu, r: Math.max((p.size + p.grow * age) * ppu, P.minPixels), depth: at.distance, color: p.color, alpha, soft: p.kind === 'dust' });
+        out.push({ x: s * (at.column + m), y: s * (at.bottom - z * ppu), r: s * Math.max((p.size + p.grow * age) * ppu, P.minPixels), depth: at.distance, color: p.color, alpha, soft: p.kind === 'dust' });
       }
       return out.sort((a, b) => b.depth - a.depth);
     },

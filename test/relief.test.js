@@ -10,6 +10,7 @@ import { composite } from '../src/enhance/composite.js';
 import { createLayers } from '../src/enhance/scene.js';
 import { KIND } from '../src/enhance/project.js';
 import { models } from '../src/enhance/models.js';
+import { createRandom } from '../src/enhance/particles.js';
 
 const W = 320, H = 200, SIZE = W * H; // @math the screen
 const close = (a, b, eps = 1e-6) => Math.abs(a - b) < eps;
@@ -86,6 +87,38 @@ test('a picture\'s light: its side toward the sun lighter, the other darker, the
   assert.ok(close(edgeOut[100 * W], 1, 1e-6), 'no rim where the screen cuts the picture'); assert.ok(edgeOut[100 * W + 12] !== 1, 'its own edge still has one'); // @math the cut column and the picture's right edge
 });
 
+test('Stage 4: a picture\'s light above 1x is lit on the reference grid: at its samples the 1x light, each cell its sample\'s', () => {
+  const random = createRandom(23), luma = Float32Array.from({ length: 256 }, (_, i) => i / 255), sun = [0.5, -0.6, 0.62]; // @math any brightness ramp; a sun from the right, above, toward the viewer
+  // A picture of random indices with transparent holes, its source bytes its pixels' order, at places in the middle and cut by each side of the
+  // screen; reference grids of 320 and 426 columns (the margin of 53 a side); the generated heights and a map of the player's for some bytes.
+  const w = 26, h = 31, pixels = Array.from({ length: w * h }, () => (random() < 0.12 ? 0 : 1 + Math.floor(random() * 255))); // @math a picture of 26 x 31, about one pixel in eight transparent
+  for (const W1 of [320, 426]) for (const [left, top] of [[100, 80], [-7, 60], [W1 - 19, 90], [150, -9], [140, 200 - 22]]) for (const heights of [null, src => (src % 3 ? null : (src * 37) % 256)]) { // @math the reference widths; the places: the middle, cut left, right, top and bottom; a map for every third byte
+    for (const s of [2, 3]) { // @math the scales of the tests
+      const H1 = 200, Ws = W1 * s, Hs = H1 * s, fb1 = new Uint8Array(W1 * H1), fbs = new Uint8Array(Ws * Hs), d1 = [], src1 = [], ds = [], srcs = []; // @math the screen's rows
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const v = pixels[y * w + x], X = left + x, Y = top + y;
+        if (!v || X < 0 || X >= W1 || Y < 0 || Y >= H1) continue;
+        fb1[Y * W1 + X] = v; d1.push(Y * W1 + X); src1.push(y * w + x);
+        for (let q = 0; q < s; q++) for (let r = 0; r < s; r++) { const o = (s * Y + q) * Ws + s * X + r; fbs[o] = v; ds.push(o); srcs.push(y * w + x); } // its s x s block, as a nearest copy draws it
+      }
+      const out1 = new Float32Array(W1 * H1).fill(1), outs = new Float32Array(Ws * Hs).fill(1);
+      pictureLight(out1, { drawn: Int32Array.from(d1), sources: Int32Array.from(src1), count: d1.length, fb: fb1, width: W1, luma, sun, strength: 1, heights });
+      pictureLight(outs, { drawn: Int32Array.from(ds), sources: Int32Array.from(srcs), count: ds.length, fb: fbs, width: Ws, luma, sun, strength: 1, heights, scale: s });
+      for (const o of d1) {
+        const X = o % W1, Y = (o - X) / W1;
+        for (let q = 0; q < s; q++) for (let r = 0; r < s; r++) assert.equal(outs[(s * Y + q) * Ws + s * X + r], out1[o], `${s}x on ${W1} columns, the picture at ${left},${top}: pixel ${X},${Y} (${r},${q} of its cell)`);
+      }
+      assert.ok(d1.some(o => out1[o] !== 1), 'the picture is lit');
+    }
+  }
+  // A pixel whose cell's sample the picture leaves transparent takes the light of the drawn sample beside it, an isolated one none.
+  const Ws = 640, fbs = new Uint8Array(Ws * 400), ds = [2 * 100 * Ws + 200, 2 * 100 * Ws + 201, 2 * 100 * Ws + 203, 2 * 150 * Ws + 101]; // @math 2x: the sample of cell 100,100, a pixel of that cell, one of the next cell (its sample transparent), one alone in cell 50,150
+  ds.forEach(o => { fbs[o] = 200; }); // @math a bright index
+  const outs = new Float32Array(Ws * 400).fill(0); // @math 0: not written
+  pictureLight(outs, { drawn: Int32Array.from(ds), sources: null, count: ds.length, fb: fbs, width: Ws, luma, sun, strength: 1, scale: 2 }); // @math 2x
+  assert.notEqual(outs[ds[0]], 0); assert.equal(outs[ds[1]], outs[ds[0]]); assert.equal(outs[ds[2]], outs[ds[0]], 'the sample to its left'); assert.equal(outs[ds[3]], 1, 'no sample beside it');
+});
+
 test('the generated map of sprite frames: transparent pixels 0, higher toward the middle, in the frames\' own byte order', () => {
   const w = 6, h = 4, bytes = new Uint8Array(2 * w * h).fill(5); // @math two frames of 6 x 4, all opaque
   bytes[0] = 0; // @math the first frame's top left pixel transparent (column-major byte 0)
@@ -134,4 +167,30 @@ test('the composite: the relief lights the ground and the pictures, never the sk
   const at = (o, i) => o[i * 4]; // @math the red component
   assert.equal(at(on, 150 * W + 1), 140); assert.equal(at(on, 150 * W + 2), 140); assert.equal(at(on, 10), 100); assert.equal(at(on, 150 * W + 4), 100); // @math floor and picture lit, sky and overlay not
   assert.equal(at(off, 150 * W + 1), 100); assert.equal(at(capped, 150 * W + 1), 120); // @math off; the cap
+});
+
+test('Stage 4: the ground\'s light from its tables (above 1x) is the light computed on the spot, in every texel of the map and around it', () => {
+  const w = world(), random = createRandom(17);
+  w.tiles = Uint8Array.from({ length: 4096 }, () => Math.floor(random() * 3)); // @math the map's cells: plain, the half wall, water at random
+  const g = groundRelief(w), opts = { sun: [-0.6, 0.48, 0.64], strength: 0.7 }, spot = groundLight(w, g, opts), table = groundLight(w, g, opts, true), F = models().floor; // @math a sun from the side and up; the default relief
+  let edges = 0;
+  for (let n = 0; n < 6000; n++) { // @math world texels over the map and its padding
+    const x = (F.mapOrigin * 32 - 64 + Math.floor(random() * (F.mapColumns * 32 + 128))) & 0xffff, y = (F.mapOrigin * 32 - 64 + Math.floor(random() * (F.mapRows * 32 + 128))) & 0xffff; // @math texels of the map and two tiles of padding around it
+    const row = (y >> 5) - F.mapOrigin, col = (x >> 5) - F.mapOrigin, id = row >= 0 && row < F.mapRows && col >= 0 && col < F.mapColumns ? w.tiles[row * F.mapColumns + col] : 0, at = id * 1024 + ((y & 31) << 5) + (x & 31); // @math tiles of 32 texels, 1024 a tile
+    const want = Math.fround(spot(at, x, y)), got = table(at, x, y); // the layer is Float32: the value it would store
+    assert.equal(Math.fround(got), want, `texel ${x},${y}`);
+    assert.equal(table(at, x, y), got, 'the same the second time (kept)');
+    if ((x & 31) < 2 || (x & 31) > 29 || (y & 31) < 2 || (y & 31) > 29) edges++; // @math the texels near a tile's edge (RELIEF.reach)
+  }
+  assert.ok(edges > 500, 'edge texels were among them'); // @math about a quarter of 6000
+  // Another strength and another sun make their own tables (a ground keeps only its latest), and going back makes the first again: each is the
+  // light on the spot, and another strength lights a texel differently.
+  const texels = Array.from({ length: 3000 }, () => { const x = (F.mapOrigin * 32 + Math.floor(random() * F.mapColumns * 32)) & 0xffff, y = (F.mapOrigin * 32 + Math.floor(random() * F.mapRows * 32)) & 0xffff, id = w.tiles[((y >> 5) - F.mapOrigin) * F.mapColumns + (x >> 5) - F.mapOrigin]; return [id * 1024 + ((y & 31) << 5) + (x & 31), x, y]; }); // @math texels of the map; tiles of 32 texels, 1024 a tile
+  let differ = 0;
+  for (const other of [{ ...opts, strength: 0.3 }, { sun: [0.3, -0.7, 0.648], strength: 0.7 }, opts]) { // @math another strength, another sun, the first again
+    const tableOf = groundLight(w, g, other, true), spotOf = groundLight(w, g, other);
+    for (const [at, x, y] of texels) assert.equal(Math.fround(tableOf(at, x, y)), Math.fround(spotOf(at, x, y)), `strength ${other.strength}, sun ${other.sun}: texel ${x},${y}`);
+    if (other.strength !== opts.strength) differ = texels.filter(([at, x, y]) => Math.fround(spot(at, x, y)) !== 1 && Math.fround(tableOf(at, x, y)) !== Math.fround(spot(at, x, y))).length;
+  }
+  assert.ok(differ > 100, 'another strength lights the lit texels differently'); // @math many of 3000
 });

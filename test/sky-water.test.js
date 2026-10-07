@@ -13,6 +13,11 @@ import { gradeOf } from '../src/enhance/grade.js';
 import { drawFloor, KIND } from '../src/enhance/project.js';
 import { createRandom } from '../src/enhance/particles.js';
 import { models } from '../src/enhance/models.js';
+import { cloudField, coverClouds, sample, bayer } from '../src/enhance/clouds.js';
+import { CLOUDS } from '../src/enhance/config.js';
+import { geometryOf, stripPeriod } from '../src/enhance/geometry.js';
+import { drawSkyAt, drawStripAt, upscaleRows, skyMargins } from '../src/enhance/sky-hd.js';
+import { renderSky, renderHorizon } from '../src/render/sky.js';
 
 const W = 320, H = 200, SIZE = W * H; // @math the screen
 
@@ -162,4 +167,111 @@ test('the water is a look switch: turning it on or off keeps the scene', () => {
   enh.configure({ ...PRESETS.original, smooth: true }); resets = 0;
   enh.configure({ ...PRESETS.original, smooth: true, water: true }); assert.equal(resets, 0);
   enh.configure({ ...PRESETS.original, smooth: true }); assert.equal(resets, 0);
+});
+
+// ---- Stage 4: the covers on the reference grid at any width, and the sky and the strip at a geometry
+
+// The covers as they were before Stage 4 (320 columns from the reference column 0, the field carried along the row), the reference the
+// parameterized covers must give at x0 = 0.
+function cloudsBefore(out, { amount, speed, scroll, time }) {
+  const S = models().sky, W = S.width, H = S.skyRows, size = CLOUDS.texture, levels = CLOUDS.levels, lightSteps = CLOUDS.lightLevels - 1, seconds = time / 1000; // @math ms to seconds
+  const smooth = t => { const c = Math.min(Math.max(t, 0), 1); return c * c * (3 - 2 * c); }, profile = (layer, y) => smooth((y - layer.rows[0]) / layer.top) * smooth((layer.rows[1] - y) / layer.base); // @math smoothstep
+  const above = (field, share) => { const sorted = Float32Array.from(field).sort(), steps = 256, q = Float32Array.from({ length: steps + 1 }, (_, i) => sorted[Math.min(Math.round((i / steps) * (sorted.length - 1)), sorted.length - 1)]); return q[Math.round(Math.min(Math.max(1 - share, 0), 1) * (q.length - 1))]; }; // @math the distribution in 256 steps
+  CLOUDS.layers.forEach((layer, n) => {
+    const { alpha, light } = out[n], cover = Math.min(Math.max(amount * layer.cover, 0), 1);
+    alpha.fill(0); light.fill(0);
+    if (cover <= 0) return;
+    const field = cloudField(layer.seed), threshold = above(field, CLOUDS.coverage * cover ** CLOUDS.curve), soft = CLOUDS.soft, [su, sv] = layer.scale, wind = layer.wind * speed * seconds, relief = CLOUDS.relief * sv;
+    for (let y = Math.max(layer.rows[0], 0); y < Math.min(layer.rows[1], H); y++) {
+      const p = profile(layer, y), row = y * W, v = (y - layer.rows[0]) * sv;
+      if (p <= 0) continue;
+      let u = scroll * su + wind;
+      for (let x = 0; x < W; x++, u += su) {
+        const d = sample(field, size, u, v) - (1 - p) * CLOUDS.edge, t = Math.min(Math.max((d - threshold) / soft, 0), 1);
+        if (t <= 0) continue;
+        const a = t * t * (3 - 2 * t) * layer.opacity, dither = bayer(x, y); // @math smoothstep over the soft edge
+        alpha[row + x] = Math.min(Math.floor(a * levels + dither), levels) / levels;
+        const lit = Math.min(Math.max(0.5 + (sample(field, size, u, v + relief) - sample(field, size, u, v - relief)) * CLOUDS.reliefGain, 0), 1); // @math half lit where the field is as dense above as below
+        light[row + x] = Math.min(Math.floor(lit * lightSteps + dither), lightSteps) / lightSteps;
+      }
+    }
+  });
+}
+function rangeBefore(out, { height, shape, scroll }) {
+  const S = models().sky, W = S.width, foot = S.horizonRow + S.horizonRows - 1, s = RANGE.shapes[shape], rows = s ? height * s.rows : 0, steps = RANGE.levels - 1;
+  out.alpha.fill(0);
+  const profile = rangeProfile(shape), snowLine = s.snow === null ? Infinity : s.snow * rows, at = (p, x) => { const n = p.length, q = ((x % n) + n) % n, i = Math.floor(q), t = q - i; return p[i] + (p[(i + 1) % n] - p[i]) * t; };
+  for (let x = 0; x < W; x++) {
+    const p = x + scroll * RANGE.parallax, h = at(profile, p) * rows, slope = ((at(profile, p + RANGE.reach) - at(profile, p - RANGE.reach)) * rows) / (2 * RANGE.reach); // @math the central difference over the reach
+    const crest = foot + 1 - h, light = Math.min(Math.max(0.5 + slope * RANGE.relief, 0), 1); // @math the row below the foot, less the height; half lit on the flat
+    for (let y = Math.max(Math.floor(crest), 0); y <= foot; y++) {
+      const d = bayer(x, y), cover = Math.min(y + 1 - crest, 1);
+      if (cover < 1 && cover <= d) continue;
+      const i = y * W + x;
+      out.alpha[i] = 1;
+      out.tone[i] = Math.min(Math.max(Math.round(light * steps + (d - 0.5) * RANGE.dither), 0), steps) / steps; // @math dithered only near the middle between two steps
+      out.snow[i] = foot + 1 - y + (d - 0.5) * 2 > snowLine ? 1 : 0; // @math a dithered snow line, a pixel either way
+    }
+  }
+}
+const cloudCovers = width => CLOUDS.layers.map(() => ({ alpha: new Float32Array(width * S.skyRows), light: new Float32Array(width * S.skyRows) }));
+const rangeCover = width => { const n = width * (S.skyRows + S.horizonRows); return { alpha: new Uint8Array(n), tone: new Float32Array(n), snow: new Uint8Array(n) }; };
+const S = models().sky;
+
+test('Stage 4: the covers at x0 = 0 are the covers before Stage 4, and a wide cover\'s reference columns are the standard one\'s to the bit', () => {
+  for (const [scroll, time, amount] of [[0, 0, 0.35], [123.75, 4000, 0.9], [-37.5, 12345, 1], [2560.25, 777, 0.6]]) { // @math scrolls either way and far, times, amounts
+    const before = cloudCovers(S.width), now = cloudCovers(S.width), explicit = cloudCovers(S.width);
+    cloudsBefore(before, { amount, speed: 0.3, scroll, time }); coverClouds(now, { amount, speed: 0.3, scroll, time }); coverClouds(explicit, { amount, speed: 0.3, scroll, time, width: S.width, x0: 0 }); // @math any wind
+    for (let n = 0; n < CLOUDS.layers.length; n++) { assert.deepEqual(now[n], before[n], `clouds at scroll ${scroll}`); assert.deepEqual(explicit[n], before[n]); }
+    for (const m of [18, 53, 120]) { // @math the margins of 16 BY 10 and 4 BY 3, and a wider one
+      const wide = cloudCovers(S.width + 2 * m);
+      coverClouds(wide, { amount, speed: 0.3, scroll, time, width: S.width + 2 * m, x0: -m }); // @math any wind
+      for (let n = 0; n < CLOUDS.layers.length; n++) for (let y = 0; y < S.skyRows; y++) for (let x = 0; x < S.width; x++) {
+        const i = y * (S.width + 2 * m) + x + m, j = y * S.width + x; // @math a margin each side
+        if (wide[n].alpha[i] !== before[n].alpha[j] || wide[n].light[i] !== before[n].light[j]) assert.fail(`clouds, margin ${m}: column ${x}, row ${y} of bank ${n}`);
+      }
+      assert.ok(wide.some(c => c.alpha.some((v, i) => v > 0 && (i % (S.width + 2 * m) < m))), `the left margin of ${m} has clouds`); // @math a margin each side
+    }
+  }
+  for (const [shape, scroll] of [['hills', 0], ['mountains', 77.25], ['hills', -400.5]]) { // @math both shapes, scrolls either way
+    const before = rangeCover(S.width), now = rangeCover(S.width);
+    rangeBefore(before, { height: 1, shape, scroll }); coverRange(now, { height: 1, shape, scroll });
+    assert.deepEqual(now, before, `${shape} at ${scroll}`);
+    for (const m of [18, 53]) { // @math the margins of the two shapes
+      const w = S.width + 2 * m, wide = rangeCover(w); // @math a margin each side
+      coverRange(wide, { height: 1, shape, scroll, width: w, x0: -m });
+      for (let y = 0; y < S.skyRows + S.horizonRows; y++) for (let x = 0; x < S.width; x++) { const i = y * w + x + m, j = y * S.width + x; if (wide.alpha[i] !== before.alpha[j] || (before.alpha[j] && (wide.tone[i] !== before.tone[j] || wide.snow[i] !== before.snow[j]))) assert.fail(`range, margin ${m}: ${x},${y}`); }
+      assert.ok(wide.alpha.some((v, i) => v && i % w < m), 'the range stands in the left margin');
+    }
+  }
+});
+
+test('Stage 4: the sky and the strip at a geometry: every reference sample is renderSky\'s and renderHorizon\'s, a cell is its sample\'s copies, a margin continues the strip\'s panorama', () => {
+  const random = createRandom(21), sky = Uint8Array.from({ length: S.width * 200 }, () => Math.floor(random() * 256)), P = stripPeriod(); // @math the sky picture is 320 x 200
+  const par = new Uint8Array(S.parBytes);
+  for (let j = 0; j < S.horizonRows; j++) for (let p = 0; p < S.parRowPixels; p++) par[j * S.parRowPixels + p] = (((p % P) * 13) ^ (j * 29)) & 0xff; // @math a pattern of the period
+  for (const [s, m] of [[1, 0], [2, 0], [3, 0], [2, 53], [1, 18]]) { // @math the scales and margins of the tests
+    const G = geometryOf({ s, m }), fb = new Uint8Array(G.W * G.H);
+    for (const offset of [0, 37, 81.75, 160.5, S.offsetMax]) { // @math whole and fractional offsets, the last
+      drawSkyAt(sky, fb, G); drawStripAt(par, offset, fb, G);
+      const ref = renderSky(sky, new Uint8Array(64000)); // @math the 320 x 200 picture
+      if (Number.isInteger(offset)) renderHorizon(par, offset, ref);
+      for (let y = 0; y < S.horizonRow + S.horizonRows; y++) for (let x = 0; x < S.width; x++) {
+        const o = s * y * G.W + s * (x + m);
+        if (y < S.skyRows && fb[o] !== ref[y * S.width + x]) assert.fail(`${s}x margin ${m}: the sky's sample ${x},${y}`);
+        if (y >= S.horizonRow && Number.isInteger(offset) && fb[o] !== ref[y * S.width + x]) assert.fail(`${s}x margin ${m} offset ${offset}: the strip's sample ${x},${y}`);
+        for (let q = 0; q < s; q++) if (fb[o + q * G.W] !== fb[o]) assert.fail('the rows of a cell are copies of its first');
+      }
+      // The strip's window starts round(offset x pixelsPerByte x s) / s pixels in: 1/s of a pixel a step.
+      const start = Math.round(offset * S.pixelsPerByte * s);
+      for (let X = 0; X < G.W; X++) { const p = Math.floor((start + X - s * m) / s); assert.equal(fb[s * S.horizonRow * G.W + X], par[((p % P) + P) % P], `${s}x margin ${m}: strip column ${X}`); }
+      if (m) { const ext = skyMargins(sky, m); for (let y = 0; y < S.skyRows; y++) for (const X of [0, G.W - 1]) assert.equal(fb[s * y * G.W + X], ext.pixels[y * ext.refW + G.colRef[X] + m], 'a margin column of the sky is skyMargins\' (M8)'); }
+    }
+  }
+  const odd = par.slice(); odd[700] ^= 1; // @math a strip that does not repeat
+  assert.throws(() => drawStripAt(odd, 0, new Uint8Array(geometryOf({ s: 2, m: 53 }).W * 400), geometryOf({ s: 2, m: 53 })), /does not repeat/); // @math 2x at 4 BY 3: 400 rows
+  drawStripAt(odd, 0, new Uint8Array(640 * 400), geometryOf({ s: 2, m: 0 })); // @math the standard view needs no period
+  // A slide's page (rows 0..129 of a 320-wide picture) enlarged as the sky is.
+  const G = geometryOf({ s: 2, m: 0 }), page = Uint8Array.from({ length: 64000 }, (_, i) => i % 251), fb = upscaleRows(page, S.horizonRow + S.horizonRows, new Uint8Array(G.W * G.H), G); // @math a page; its 130 rows
+  for (let y = 0; y < 130; y++) for (let x = 0; x < S.width; x += 7) for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) assert.equal(fb[(2 * y + dy) * G.W + 2 * x + dx], page[y * S.width + x]); // @math the page's rows; a column every seven; the four pixels of a cell
 });

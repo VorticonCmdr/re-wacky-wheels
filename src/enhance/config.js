@@ -31,8 +31,94 @@ export const MENU = {
   sunNames: ['WEST', 'NORTH WEST', 'NORTH', 'NORTH EAST', 'EAST', 'SOUTH EAST', 'SOUTH', 'SOUTH WEST'],
 };
 
+// Stage 4 (docs/enhancements.md, Stage 4 as built): how the race world is rendered, a group of choices beside the effects and the levels,
+// kept with them in the graphics settings. Each is a list of allowed values; a stored value that is missing or not in the list takes the
+// default, and the defaults are the presentation before Stage 4 (settings stored before it load as they were).
+// - `scale`: the world drawn at 1 or 2 times the original's samples in each direction (the tests also use 3).
+// - `view`: 'standard' (the original's 320 columns) or 'wide', margins added on both sides up to the shape in `views` (16:9).
+// - `hudPlace`: where the overlays go in a wide view, 'centred' over the original columns or 'edges' (it matters only while the view is wide).
+// - `sizes`: 'classes', the pictures at the size of the game's ten size classes at any scale (the original's steps), or 'smooth', a
+//   continuous size between the classes.
+// - `angles`: how a kart's direction picks among the frames of an artwork pack's extra angles: 'locked' to the game's own frame, 'free',
+//   or 'off' (the game's frames); nothing without the artwork on and a pack with angles.
+// - `art`: whether the player's artwork packs replace the archive's art in the race world.
+// Only the scale, the view, the sizes and the artwork change what is drawn by themselves (settings.js renderActive); the HUD place and the
+// angles only refine them.
+// - `budgetMs`: the page's panel recommends 1x when the mean draw over TIMING_FRAMES frames is longer than this (a 60 Hz frame is 16.7 ms,
+//   and the display's pass and the browser need the rest); the page never changes a setting itself.
+export const RENDER = {
+  scales: [1, 2],
+  views: { standard: null, wide: 16 / 9 },
+  hudPlaces: ['centred', 'edges'],
+  sizes: ['classes', 'smooth'],
+  angles: ['locked', 'free', 'off'],
+  defaults: { scale: 1, view: 'standard', hudPlace: 'centred', sizes: 'classes', angles: 'locked', art: false },
+  budgetMs: 12,
+};
+// The words of the game menu's RENDERING list (DISPLAY AND EFFECTS > DISPLAY OPTIONS > RENDERING; its lines come with the Stage 4 milestones
+// that bring their settings): letters, digits and spaces only, and a name, a space and its longest word within a bar's 20 characters
+// (SPRITE SIZES STEPPED is exactly 20). NONE is said where a choice cannot be shown (no WebGL 2, no pack, no pack with angles).
+export const RENDER_MENU = {
+  item: 'RENDERING',
+  scale: 'RESOLUTION',
+  scales: { 1: '1X', 2: '2X' },
+  view: 'VIEW',
+  views: { standard: 'STANDARD', wide: 'WIDE', edges: 'WIDE EDGES' },
+  sizes: 'SPRITE SIZES',
+  sizeNames: { classes: 'STEPPED', smooth: 'SMOOTH' },
+  angles: 'KART ANGLES',
+  angleNames: { locked: 'LOCKED', free: 'FREE', off: 'OFF' },
+  art: 'ARTWORK',
+  none: 'NONE',
+  width: 20,
+};
+
+// Stage 4's drawing above the reference geometry (docs/enhancements.md, Stage 4 as built, M5): the choices it is built with, the 2x spike's
+// decision for the next milestone (scripts/spike-2x.mjs), and the budget the spike measures against. The docs name the alternatives and what
+// would make them worth building.
+// - `hooks`: where the floor's liquid and relief hooks run above 1x: 'reference', once per reference sample (a cell of the output, at its
+//   top-left pixel: caster.js), so the water's lines and its dither keep the original's density and cost about what they cost at 1x. Built.
+// - `castAt`: where the sun shadows are cast in the 'full' look: 'output', at the output resolution, softened by a running-sum box blur of
+//   SUN.blur x s pixels. Built. (The 'reference' look casts them on the reference grid.)
+// - `look`: where the soft layers are kept above 1x: 'reference' (built in M6, the default), the contact shadows, the sun shadows, the skid
+//   marks and the ground's relief light on the reference grid (refW x 200), drawn there as at 1x and read by the composite at each output
+//   pixel's reference cell, as the covers of the clouds and the far range are; the pictures' relief is lit on the reference grid too (relief.js
+//   pictureLight above 1x). The water's light is worked out once a reference cell (`hooks`) but kept per output pixel with the liquid's own
+//   edge (the layer `wet` follows the texels at the output resolution, and a pixel whose cell's sample is dry is shaded on the spot). 'full'
+//   keeps every soft layer at the output resolution (M5's draw), for comparison: createEnhancer({ look: 'full' }), the checks' --time rows
+//   and scripts/spike-2x.mjs. The spike's decision (2026-10-07): 'full' misses the budget below; on a quiet machine 'reference', the cheaper,
+//   misses it too, so 2x may drop frames (docs/enhancements.md, M6, Time).
+// - `budget`: the most a 2x Enhanced draw may take on the maintainer's MacBook Air (node on a quiet machine; Chrome takes about 1.5 times as
+//   long): `meanMs` and `p95Ms` with the default atmosphere, `sunsetMs` with a sunset grade. `quiet`: the 1x Enhanced draw the budget was set
+//   against on that machine (mean and 95th percentile); a run on a busy machine is scaled by its own 2x / 1x ratio.
+export const HD = { hooks: 'reference', castAt: 'output', look: 'reference', budget: { meanMs: 8, p95Ms: 11, sunsetMs: 9.5 }, quiet: { meanMs: 3.65, p95Ms: 4.61 } };
+
+// The wide view (Stage 4, M8: docs/enhancements.md, Stage 4 as built): what a world must pass to get one, and how the things in its margins are
+// found (src/enhance/wide.js).
+// - `viewTolerance`: the floor's distances and the pictures' sizes outside the original 320 columns are continued through the TRIG cosine
+//   (geometry.js cosT), which assumes the world's VIEW words are 2^14 times the cosine of each column's angle (a lead, never a claim). A world
+//   whose VIEW[c] / VIEW[160] differs from cosT(c - 160) by more than this anywhere gets no wide view (its margin is 0). Measured on the
+//   maintainer's archive (2026-10-07): 7.3e-4 at worst (column 0) on all 42 tracks, which share one table; this leaves about four times that.
+// - `probeDistance`: world units back from a thing the margins may show to the probe camera that looks straight at it (wide.js): the thing
+//   stands at the probe's column 160 and distance about 400, well inside every cull of the reference draw list (its box, its cone, its columns,
+//   its distances 80 to 1122), so a thing the probe does not return is one a game filter dropped.
+// - `seam`: reference columns inside each edge of the original 320 where a thing the reference draw list dropped is still asked about. The
+//   game's own column is worked out with whole forward and lateral distances (view.js projectPoint), the enhancer's with fractions; near the
+//   camera the two differ by several columns at the edges, so without this a thing could be in neither list for a frame. Measured on the
+//   maintainer's archive (2026-10-07, 245 million points over every heading a seventh of an entry apart, distances 70 to 1150): a point the
+//   game culls at its column has its fractional column at most 4.8 columns inside either edge; this leaves room. A thing the reference list
+//   drew is never asked about again (one record per thing), nor one inside the reference columns that the game's box culled (that is the
+//   game's decision, not a rounding of its column).
+export const WIDE = { viewTolerance: 0.003, probeDistance: 400, seam: 8 };
+
+// The wide view's sky margins (Stage 4, M8): the columns of the track's sky picture beyond its 320, which the game never drew. A row of one
+// index is continued exactly; a dithered row (BACK1.PCX and BACK2.PCX: two or three indices in no period) is made again from that row's own
+// indices in their proportions, by an ordered dither on the reference cell: 'redither' (sky-hd.js skyMargins), or 'mirror', the row reflected
+// at the picture's edge. Both are invented pixels (documented, never the art of the game); columns 0..319 are always the picture's own.
+export const SKY_MARGIN = { mode: 'redither', modes: ['redither', 'mirror'] };
+
 // The settings a visitor starts with: the Original preset, so the port plays as the game did until the player chooses otherwise.
-export const DEFAULTS = { preset: 'original', ...PRESETS.original, ...LEVELS };
+export const DEFAULTS = { preset: 'original', ...PRESETS.original, ...LEVELS, ...RENDER.defaults };
 export const STORAGE_KEY = 'wackywheels.graphics';
 
 // Smooth motion: what counts as a discontinuity between two completed ticks rather than movement. The fastest legitimate steps seen
@@ -108,6 +194,10 @@ export const FOG = {
 
 // The frame time readout averages this many frames.
 export const TIMING_FRAMES = 120;
+
+// The player's own art kept in this browser (IndexedDB, src/enhance/store.js): the version of the page's database. Version 1 had the relief
+// maps only; version 2 (Stage 4) adds the artwork packs and their art. The relief maps carry over unchanged.
+export const ART = { dbVersion: 2 };
 
 // The display (Stage 1 of docs/enhancements.md): how the finished 320 x 200 picture is put on the visitor's screen, after every renderer, for
 // the Original preset as for the Enhanced one. Nothing here changes a pixel of the picture itself.

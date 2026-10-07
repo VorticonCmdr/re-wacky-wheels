@@ -11,9 +11,19 @@ import { firstBar, gameTopBar, pageMenus } from './menu-bars.js';
 test('no list of the page\'s menus starts its first bar higher than the game\'s own lists do', () => {
   const settings = { ...defaultSettings(1, true), graphics: menuView(resetSettings()), display: displayView(resetDisplay()) }, top = gameTopBar(), ids = pageMenus(settings);
   assert.equal(top, 76); // @math the main menu and the six-line FAMOUS DRIVERS lists: the logo ends on row 75
-  for (const id of ['options', 'keysSound', 'keys', 'keysOne', 'keysTwo', 'sound', 'soundEffects', 'soundMusic', 'peer', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels']) assert.ok(ids.includes(id), `${id} is reached`);
+  for (const id of ['options', 'keysSound', 'keys', 'keysOne', 'keysTwo', 'sound', 'soundEffects', 'soundMusic', 'peer', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels', 'rendering']) assert.ok(ids.includes(id), `${id} is reached`);
   const high = ids.filter(id => firstBar(id, settings) < top).map(id => `${id} (row ${firstBar(id, settings)})`);
   assert.deepEqual(high, []);
+});
+
+test('the page\'s display lists in Stage 4: CRT LOOK leads CRT AND HUD, DEFAULT LEVELS is gone from it, RENDERING takes DISPLAY OPTIONS\' last free line, and every page list keeps to six lines', () => {
+  const settings = { ...defaultSettings(1, true), graphics: menuView(resetSettings()), display: displayView(resetDisplay()) }, levels = menuDef('crtLevels', settings), display = menuDef('display', settings);
+  assert.ok(levels.items[0].startsWith('CRT LOOK') && !levels.items.includes('DEFAULT LEVELS') && levels.items.length === 6); // @math CRT LOOK, three levels, HUD, LEAVE THIS MENU
+  assert.ok(!display.items.some(t => t.startsWith('CRT LOOK')) && display.items.length === 6 && display.items[4] === 'RENDERING'); // @math SCALING, ASPECT, FULL SCREEN, CRT AND HUD, RENDERING, LEAVE THIS MENU
+  assert.deepEqual(menuDef('rendering', settings).items.length, 3); // @math RESOLUTION, VIEW (M8) and LEAVE THIS MENU (the later lines come with their milestones)
+  assert.ok(menuDef('gfxLevels', settings).items.includes('DEFAULT LEVELS'), 'EFFECT LEVELS keeps its own DEFAULT LEVELS');
+  const long = ['options', 'keysSound', 'keys', 'sound', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels', 'rendering'].filter(id => menuDef(id, settings).items.length > 6); // @math the page's own lists: six lines at most
+  assert.deepEqual(long, []);
 });
 
 test('a player\'s key list has its six keys and no LEAVE THIS MENU: Esc goes back, as from the game\'s setup lists', () => {

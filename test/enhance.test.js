@@ -2,8 +2,9 @@
 // against the reference floor, the compositor's masks and layers, the shadows and the lint rules of the directory. No game files.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalize, presetOf, applyPreset, change, resetSettings, anyEffect, loadSettings, saveSettings } from '../src/enhance/settings.js';
-import { DEFAULTS, PRESETS, EFFECTS, STORAGE_KEY, MOTION, SHADOW } from '../src/enhance/config.js';
+import { normalize, presetOf, applyPreset, change, resetSettings, anyEffect, loadSettings, saveSettings, renderActive, enhancedOn, renderDefault, nextPreset, menuView } from '../src/enhance/settings.js';
+import { DEFAULTS, PRESETS, EFFECTS, STORAGE_KEY, MOTION, SHADOW, RENDER, RENDER_MENU } from '../src/enhance/config.js';
+import { createEnhancer } from '../src/enhance/index.js';
 import { capture, blend, present, turnDelta, wrapHeading, blendHorizon, createMotion } from '../src/enhance/motion.js';
 import { drawFloor, rowAt, KIND } from '../src/enhance/project.js';
 import { renderFloor } from '../src/render/floor.js';
@@ -42,6 +43,74 @@ test('settings: the Original preset by default, presets, custom, levels, storage
   assert.deepEqual(loadSettings(throwing), resetSettings());
   assert.equal(saveSettings(e, throwing), false);
   assert.deepEqual(PRESETS.original, Object.fromEntries(EFFECTS.map(k => [k, false])));
+});
+
+test('settings, Stage 4: the rendering choices (RENDER) beside the switches, their defaults the presentation before Stage 4', () => {
+  const R = RENDER.defaults, keys = Object.keys(R);
+  assert.deepEqual(keys, ['scale', 'view', 'hudPlace', 'sizes', 'angles', 'art']);
+  assert.deepEqual(R, { scale: 1, view: 'standard', hudPlace: 'centred', sizes: 'classes', angles: 'locked', art: false });
+  for (const k of keys) assert.equal(DEFAULTS[k], R[k]);
+  // Settings stored before Stage 4 (no rendering choice in them) normalize to the same preset and values, with every choice at its default.
+  const before = [{ preset: 'original', ...PRESETS.original, ...LEVELS }, { preset: 'enhanced', ...PRESETS.enhanced, shadowStrength: 0.5, sunAngle: 0.125 }, { preset: 'custom', ...PRESETS.enhanced, fog: false, fogStrength: 0.25 }, { preset: 'enhanced', smooth: true }]; // @math levels a player may have set
+  for (const old of before) {
+    const s = normalize(old);
+    for (const k of [...EFFECTS, ...Object.keys(LEVELS)]) if (k in old && k !== 'preset') assert.equal(s[k], old[k], k);
+    for (const k of keys) assert.equal(s[k], R[k], k);
+    assert.equal(s.preset, old.preset); // the preset it was stored under
+    assert.equal(enhancedOn(s), anyEffect(s), 'the same path as before Stage 4');
+  }
+  const kept = memoryStorage(); kept.setItem(STORAGE_KEY, JSON.stringify(before[1]));
+  assert.deepEqual(loadSettings(kept), { ...normalize(before[1]), ...R });
+  // Values outside their lists take the default; the scale may come from a form as text.
+  assert.deepEqual(keys.map(k => normalize({ scale: 3, view: 'ultra', hudPlace: 'left', sizes: 'huge', angles: 'spin', art: 'yes' })[k]), keys.map(k => R[k])); // @math 3 is not offered (tests only)
+  assert.equal(normalize({ scale: '2' }).scale, 2); assert.equal(normalize({ scale: '' }).scale, 1); assert.equal(normalize({ view: 'toString' }).view, 'standard'); assert.equal(normalize({ art: 1 }).art, false);
+  // Original is the reference renderer: off; Enhanced: on.
+  assert.equal(enhancedOn(resetSettings()), false); assert.equal(renderActive(resetSettings()), false); assert.ok(renderDefault(resetSettings()));
+  assert.equal(enhancedOn(applyPreset(resetSettings(), 'enhanced')), true);
+  // The scale, the view, the sizes and the artwork turn the enhanced path on (an enhancer's active() too) and make Original's switches 'custom';
+  // the HUD place and the angles alone do not (they only refine those), so the preset word stays ORIGINAL, matching what draws.
+  const away = { scale: 2, view: 'wide', hudPlace: 'edges', sizes: 'smooth', angles: 'free', art: true }; // @math the second allowed value of each
+  for (const k of keys) {
+    const s = change(resetSettings(), k, away[k]), enh = createEnhancer({ storage: memoryStorage() }), drawing = !['hudPlace', 'angles'].includes(k);
+    assert.equal(s.preset, drawing ? 'custom' : 'original', k); assert.equal(s[k], away[k]);
+    enh.configure(s);
+    assert.equal(renderActive(s), drawing, k); assert.equal(enhancedOn(s), drawing, k); assert.equal(enh.active(), drawing, `${k}: active()`);
+    assert.equal(presetOf({ ...s, ...PRESETS.enhanced }), 'enhanced', `${k}: Enhanced whatever the rendering choices`);
+  }
+  // applyPreset('original') puts the choices back, applyPreset('enhanced') keeps them; Enter from CUSTOM goes to Original and puts them back.
+  const custom = normalize({ ...PRESETS.original, ...away });
+  assert.deepEqual(keys.map(k => applyPreset(custom, 'original')[k]), keys.map(k => R[k])); assert.equal(applyPreset(custom, 'original').preset, 'original');
+  const enhanced = applyPreset(custom, 'enhanced');
+  assert.deepEqual(keys.map(k => enhanced[k]), keys.map(k => away[k])); assert.equal(enhanced.preset, 'enhanced');
+  assert.equal(custom.preset, 'custom'); assert.deepEqual(nextPreset(custom), applyPreset(custom, 'original'));
+  assert.deepEqual(keys.map(k => resetSettings()[k]), keys.map(k => R[k]));
+});
+
+test('settings, Stage 4: a rendering choice keeps the scene unless it turns the enhanced path on or off', () => {
+  const enh = createEnhancer({ storage: memoryStorage() });
+  let resets = 0; const reset = enh.reset; enh.reset = () => { resets++; reset(); };
+  enh.configure(PRESETS.enhanced); resets = 0;
+  for (const [k, v] of [['scale', 2], ['view', 'wide'], ['sizes', 'smooth'], ['angles', 'off'], ['art', true], ['hudPlace', 'edges']]) enh.configure(change(enh.settings, k, v)); // @math the second scale
+  assert.equal(resets, 0, 'look-only while the effects are on');
+  enh.configure(resetSettings()); resets = 0;
+  enh.configure(change(enh.settings, 'scale', 2)); assert.equal(resets, 1, 'Original at 2x draws through the enhanced path: a new scene'); // @math the second scale
+  enh.configure(change(enh.settings, 'sizes', 'smooth')); assert.equal(resets, 1);
+  enh.configure(change(enh.settings, 'scale', 1)); assert.equal(resets, 1, 'still on (smooth sizes)');
+  enh.configure(change(enh.settings, 'sizes', 'classes')); assert.equal(resets, 2, 'off again: the scene ends');
+});
+
+test('settings, Stage 4: the RENDERING words fit a bar of the menu font, and NONE where a choice cannot be shown', () => {
+  const R = RENDER_MENU, bar = (name, word) => name.length + 1 + word.length;
+  const words = [[R.scale, Object.values(R.scales)], [R.view, Object.values(R.views)], [R.sizes, Object.values(R.sizeNames)], [R.angles, Object.values(R.angleNames)], [R.art, ['ON', 'OFF']]];
+  for (const [name, list] of words) for (const w of [...list, R.none]) { assert.ok(bar(name, w) <= R.width, `${name} ${w}`); assert.match(`${name} ${w}`, /^[A-Z0-9 ]+$/); }
+  assert.equal(bar(R.sizes, R.sizeNames.classes), R.width); // SPRITE SIZES STEPPED, exactly the bar
+  assert.equal(R.item.length <= R.width, true);
+  assert.deepEqual(Object.keys(R.scales).map(Number), RENDER.scales); assert.deepEqual(Object.keys(R.sizeNames), RENDER.sizes); assert.deepEqual(Object.keys(R.angleNames), RENDER.angles);
+  const v = menuView(resetSettings());
+  assert.deepEqual(v.render, { scale: '1X', view: 'STANDARD', sizes: 'STEPPED', angles: 'NONE', art: false, artReady: false }); assert.equal(v.active, false);
+  const w = menuView(normalize({ ...PRESETS.original, scale: 2, view: 'wide', hudPlace: 'edges', angles: 'free', art: true }), { worldReady: false, packs: 1, angleSets: 1 }); // @math one pack, with angles
+  assert.deepEqual(w.render, { scale: 'NONE', view: 'NONE', sizes: 'STEPPED', angles: 'FREE', art: true, artReady: true }); assert.equal(w.active, true); assert.equal(w.preset, 'CUSTOM');
+  assert.equal(menuView(normalize({ view: 'wide', hudPlace: 'edges' })).render.view, 'WIDE', 'a stored edges place draws centred until M9: the word of the placement drawn'); assert.equal(menuView(normalize({ view: 'wide' })).render.view, 'WIDE');
 });
 
 const world = { name: 'w' };
@@ -300,4 +369,94 @@ test('sun shadows fall away from the sun as the camera turns, and a lifted pictu
   assert.ok(low.box.x1 > 165, 'the shadow reaches right of the picture');
   assert.ok(high.box.x0 > low.box.x0, 'a lifted picture casts further away');
   assert.ok(low.L.cast.subarray(0, 120 * 320).every(v => v === 0));
+});
+
+// ---- Stage 4: the decals at a geometry (geometry.js): the reference numbers placed at s (x + m), s y, so each is the 1x one with s times the samples
+import { geometryOf } from '../src/enhance/geometry.js';
+import { castOf } from '../src/enhance/shadows.js';
+import { createParticles } from '../src/enhance/particles.js';
+
+// fillQuad as it was before Stage 4, over the whole of its box every row: the reference for the rows worked only where their scanlines cross.
+function fillQuadBefore(layer, pts, value, width, height, kinds = null, kind = 0, sub = 4) { // @math four scanlines a row
+  const ys = pts.map(p => p[1]), y0 = Math.max(Math.floor(Math.min(...ys)), 0), y1 = Math.min(Math.floor(Math.max(...ys)), height - 1);
+  const xs = pts.map(p => p[0]), left = Math.max(Math.floor(Math.min(...xs)), 0), right = Math.min(Math.floor(Math.max(...xs)), width - 1);
+  if (right < left) return;
+  const cover = new Float32Array(right - left + 1);
+  for (let y = y0; y <= y1; y++) {
+    cover.fill(0);
+    for (let s = 0; s < sub; s++) {
+      const cy = y + (s + 0.5) / sub; let lo = Infinity, hi = -Infinity; // @math the sub-scanline's middle
+      for (let k = 0; k < pts.length; k++) { const [xa, ya] = pts[k], [xb, yb] = pts[(k + 1) % pts.length]; if ((cy < ya && cy < yb) || (cy > ya && cy > yb) || ya === yb) continue; const x = xa + ((cy - ya) * (xb - xa)) / (yb - ya); if (x < lo) lo = x; if (x > hi) hi = x; }
+      if (lo > hi) continue;
+      for (let x = Math.max(Math.floor(lo), left); x <= Math.min(Math.floor(hi), right); x++) cover[x - left] += Math.max(Math.min(hi, x + 1) - Math.max(lo, x), 0) / sub;
+    }
+    for (let x = left; x <= right; x++) { const v = value * Math.min(cover[x - left], 1), o = y * width + x; if (v > 0 && (!kinds || kinds[o] === kind) && v > layer[o]) layer[o] = v; }
+  }
+}
+
+test('Stage 4: the quad fill works each row only where its scanlines cross, with the very values of its whole box', () => {
+  const random = createRandom(23), W = 64, H = 48, kinds = Uint8Array.from({ length: W * H }, () => (random() < 0.7 ? KIND.floor : KIND.sprite)); // @math a small picture, most of it floor
+  const a = new Float32Array(W * H), b = new Float32Array(W * H);
+  for (let n = 0; n < 400; n++) { // @math long slanted bands, thin ones, ones off the picture
+    const x = random() * 80 - 8, y = random() * 60 - 6, dx = random() * 30 - 15, dy = random() * 40 - 20, w = random() * 3; // @math places, extents and widths over and around the picture
+    const pts = [[x, y], [x + w, y + w * 0.3], [x + w + dx, y + dy], [x + dx, y + dy - w * 0.2]], value = 0.2 + random() * 0.8, sub = n % 3 ? 4 : 1, mask = n % 2 ? kinds : null; // @math a convex quad; any value; the marks' four scanlines and the casts' one
+    fillQuad(a, pts, value, W, H, mask, KIND.floor, sub); fillQuadBefore(b, pts, value, W, H, mask, KIND.floor, sub);
+  }
+  assert.deepEqual(a, b);
+  assert.ok(a.some(v => v > 0));
+});
+
+test('Stage 4: contact and sun shadows, skid marks and particles at a geometry are the reference ones in output pixels', () => {
+  const G = geometryOf({ s: 2, m: 0 }), opts = { shadows: true, sceneryShadows: true }, picture = { w: 37, h: 28 }, P = { car: {}, fx: {} }; // @math 2x; an odd width
+  // The grid a record's shadows are drawn on (scene.js): the unclipped picture's top left, u pixels a reference pixel (s: the output's, the
+  // 'full' look; 1: the reference grid of the reference look), the margin added to the column.
+  const grid = (r, g, u = g.s) => ({ x: u * (r.left - r.firstColumn + g.m), y: u * r.top, u, m: g.m });
+  const racer = { type: 1, racer: 2, left: 100, top: 150, picture, firstColumn: 3 }, own = { type: 0, left: 141, top: 160, picture, firstColumn: 0 }; // @math a racer cut on the left, the own car lifted
+  for (const r of [racer, own]) {
+    const one = casterOf(r, P, null, 188, opts), two = casterOf(r, P, null, 188, opts, grid(r, G)), ref = casterOf(r, P, null, 188, opts, grid(r, G, 1)); // @math the own car's ground row
+    assert.deepEqual([two.x, two.y, two.rx, two.strength], [2 * one.x, 2 * one.y, 2 * one.rx, one.strength]); // @math s times the place and the size; the same strength
+    assert.deepEqual(ref, one, 'on the reference grid (the reference look): the 1x shadow itself');
+  }
+  const wide = geometryOf({ s: 2, m: 53 }); // @math 2x at 4 BY 3
+  assert.equal(casterOf(racer, P, null, 188, opts, grid(racer, wide)).x, 2 * (casterOf(racer, P, null, 188, opts).x + 53)); // @math the margin added to the column
+  assert.equal(casterOf(racer, P, null, 188, opts, grid(racer, wide, 1)).x, casterOf(racer, P, null, 188, opts).x + 53); // @math on the reference grid, the margin added
+  const foot = { minX: 40, maxX: 69, lift: 4 }, object = { type: -1, object: 0, left: 20, top: 100, picture, firstColumn: 0 }; // @math an object's footprint in output pixels, lifted four output rows
+  const scenery = casterOf(object, P, foot, 188, opts, grid(object, G)), keep = 1 - Math.min(4 / (SHADOW.liftFade * 2), 1) / 2; // @math four output rows are two reference rows
+  assert.deepEqual([scenery.x, scenery.y, scenery.strength], [(40 + 69 + 1) / 2, 2 * 128, keep]); // @math the footprint's middle; the picture's bottom row 100 + 28, times 2
+  // The ellipse at 2x: four times the pixels of the 1x one, about the same total darkness per reference pixel, the same smallest shadow.
+  const L1 = createLayers(64000), L2 = createLayers(G.W * G.H), c1 = casterOf(racer, P, null, 188, opts); // @math the 320 x 200 screen
+  stampShadow(L1, c1, 320, 200); stampShadow(L2, casterOf(racer, P, null, 188, opts, grid(racer, G)), G.W, G.H, G.s); // @math the reference screen
+  const sum = a => a.reduce((x, y) => x + y, 0), lit = a => a.reduce((n, v) => n + (v > 0), 0);
+  assert.ok(Math.abs(sum(L2.shade) / 4 - sum(L1.shade)) / sum(L1.shade) < 0.05, 'the same darkness over four times the pixels'); // @math s squared; within five percent
+  assert.ok(Math.abs(lit(L2.shade) / 4 - lit(L1.shade)) / lit(L1.shade) < 0.1); // @math s squared; within a tenth
+  const tiny = { x: 300, y: 190, rx: (SHADOW.minRows - 0.5) / 2, strength: 1 }, L3 = createLayers(G.W * G.H); // @math narrower than the smallest shadow at 1x
+  stampShadow(L3, { ...tiny, x: 600, y: 380, rx: tiny.rx * 2 }, G.W, G.H, G.s); // @math the same shadow at 2x
+  assert.ok(L3.shade.every(v => v === 0), 'the smallest shadow is a reference pixel\'s');
+  // The sun shadow of a picture drawn at 2x (its silhouette in output pixels): about four times the 1x cast's area, in the same place.
+  const w = syntheticGround(), side = sunDirection(w, 0.25, 0), pic = { w: 10, h: 20 }, r = { type: -1, object: 0, left: 155, top: 172, distance: 124, picture: pic, firstColumn: 0 }; // @math a quarter turn of sun; a picture at the own car's distance
+  const cols1 = { top: new Int16Array(10).fill(0), bottom: new Int16Array(10).fill(19) }, cols2 = { top: new Int16Array(20).fill(0), bottom: new Int16Array(20).fill(39) }; // @math the columns at 1x and 2x
+  const L4 = createLayers(64000), box1 = { x0: 320, x1: -1, y0: 200, y1: -1 }, L5 = createLayers(G.W * G.H), box2 = { x0: G.W, x1: -1, y0: G.H, y1: -1 }; // @math empty boxes
+  castShadow(L4, castOf(r, P, { cols: cols1 }, 192), w, side, 320, 200, box1); // @math the own car's ground row
+  const at2 = castOf(r, P, { cols: cols2 }, 192, grid(r, G));
+  assert.deepEqual([at2.left, at2.top, at2.anchor, at2.ground, at2.s], [2 * 155, 2 * 172, 2 * (155 + 5), 2 * (172 + 20), 2]); // @math s times the picture's place, its anchor column (half its width) and its ground row
+  castShadow(L5, at2, w, side, G.W, G.H, box2);
+  const area1 = lit(L4.cast), area2 = lit(L5.cast);
+  assert.ok(area2 > 3 * area1 && area2 < 5 * area1, `about four times the area: ${area1} and ${area2}`); // @math s squared, roughly
+  assert.ok(Math.abs(box2.x0 - 2 * box1.x0) <= 2 && Math.abs(box2.x1 - 2 * box1.x1) <= 3 && Math.abs(box2.y1 - 2 * box1.y1) <= 3, 'the same place'); // @math within a reference pixel or so
+  // Skid marks at 2x: on the ground only, about four times the pixels of the 1x marks.
+  const marks = createMarks(), seat = o => ({ cx: 1000, cy: 1000, heading: 0, dir: 0, px: 1124, py: 1000, surface: 0, jump: 0, skid: true, crashed: false, ...o }), snap = (t, o) => ({ world: w, tick: t, time: t * 88, seats: [seat(o)], racers: [], shots: [] }); // @math a car ahead of the camera
+  marks.emit(snap(1), snap(2, { px: 1144 })); // @math a tick's travel
+  const M1 = createLayers(64000), M2 = createLayers(G.W * G.H), camera = { x: 1000, y: 1000, heading: 0 }; // @math the 320 x 200 screen
+  M1.kind.fill(KIND.floor, 130 * 320); M2.kind.fill(KIND.floor, 260 * G.W); // @math the floor's rows at 1x and 2x
+  marks.stamp(M1, w, camera, 200, 320, 200); marks.stamp(M2, w, camera, 200, G.W, G.H, G); // @math 200 ms after the mark was laid
+  assert.ok(lit(M2.mark) > 3 * lit(M1.mark) && lit(M2.mark) < 5 * lit(M1.mark), `marks: ${lit(M1.mark)} and ${lit(M2.mark)} pixels`); // @math s squared, roughly
+  assert.ok(M2.mark.subarray(0, 260 * G.W).every(v => v === 0), 'never above the ground'); // @math the floor's first row at 2x
+  // Particles (a contact's sparks, which need no surface's picture): the same discs, s times their place and radius, the margin added.
+  const particles = createParticles(), sw = { ...w, spark: Uint8Array.from({ length: 90 }, (_, i) => (i % 3 ? 40 + i : 0)), palette: Uint8Array.from({ length: 768 }, (_, i) => i % 64) }; // @math SPARK.SP's 10 x 9 bytes, some transparent; a palette of 6-bit components
+  const car = (t, spark, sparkCount) => ({ world: sw, tick: t, time: t * 88, seats: [seat({ px: 1124, py: 1000, jump: 1, special: 0, spark, sparkCount })], racers: [], shots: [] }); // @math in the air: no dust
+  particles.emit({ duck: null }, car(1, 0, 0), car(2, 1, 1)); // the spark's first picture in this tick
+  assert.ok(particles.count > 0);
+  const one = particles.splats(sw, camera, 2 * 88 + 40), two = particles.splats(sw, camera, 2 * 88 + 40, G), margin = particles.splats(sw, camera, 2 * 88 + 40, wide); // @math the tick's time and a little after
+  assert.ok(one.length > 0); assert.equal(two.length, one.length);
+  one.forEach((d, n) => { assert.deepEqual([two[n].x, two[n].y, two[n].r, two[n].depth, two[n].alpha], [2 * d.x, 2 * d.y, 2 * d.r, d.depth, d.alpha]); assert.equal(margin[n].x, 2 * (d.x + 53)); }); // @math s times the place and radius; the margin added
 });

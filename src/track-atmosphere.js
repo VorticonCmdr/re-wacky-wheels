@@ -4,7 +4,7 @@
 // draft: the playtest page draws the track with it. Nothing here changes a track's game files.
 import { normalizeAtmosphere, defaultAtmosphere, isDefaultAtmosphere, loadAtmospheres, saveAtmosphere, saveAtmospheres } from './enhance/atmosphere.js';
 import { ATMOSPHERE, GRADES, RANGE, PRESETS, LEVELS } from './enhance/config.js';
-import { normalize } from './enhance/settings.js';
+import { normalize, loadSettings } from './enhance/settings.js';
 import { createRacePreview } from './viewer-preview.js';
 import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
 import { patchArchive, trackChanges } from './track-model.js';
@@ -22,6 +22,9 @@ const OWN_SUN = { sunAngle: LEVELS.sunAngle, sunHeight: 0.5 }; // where the slid
 const STRIP_FOG = '#a0b4c8'; // where the colour picker starts when a track gets its own fog colour
 const WIDTH = 320;
 const HEIGHT = 200;
+// The race view's graphics settings: the Enhanced preset, drawn at 1x in the standard view (a small panel that must stay responsive), with the
+// player's stored sprite sizes, artwork and kart angles (Stage 4), read again whenever the view is built.
+const viewSettings = () => { const stored = loadSettings(); return normalize({ ...PRESETS.enhanced, sizes: stored.sizes, art: stored.art, angles: stored.angles }); };
 
 // `$` finds an element by id; `context()` gives { original (the archive's bytes), track (the selected track's model) }; `status(text, bad)`
 // reports to the editor's status line.
@@ -31,7 +34,7 @@ export function createAtmospherePanel({ $, context, status }) {
     image = g.createImageData(WIDTH, HEIGHT),
     original = new Uint8ClampedArray(WIDTH * HEIGHT * 4),
     enhanced = new Uint8ClampedArray(WIDTH * HEIGHT * 4);
-  const settings = normalize(PRESETS.enhanced);
+  let settings = viewSettings();
   const CONTROLS = ['atmo-grade', 'atmo-gradeStrength', 'atmo-clouds', 'atmo-cloudSpeed', 'atmo-rangeShape', 'atmo-range', 'atmo-water', 'atmo-relief', 'atmo-ownSun', 'atmo-sunAngle', 'atmo-sunHeight', 'atmo-ownFog', 'atmo-fogTint', 'atmo-fog', 'atmo-reset', 'atmo-play', 'atmo-original', 'atmo-moment'];
   let local = loadAtmospheres(), // this session's atmospheres: what the browser keeps, and what it did not keep (`unsaved`)
     values = defaultAtmosphere(),
@@ -179,6 +182,7 @@ export function createAtmospherePanel({ $, context, status }) {
     try {
       const changes = trackChanges(track);
       const archive = changes.size ? patchArchive(dat, changes) : dat;
+      settings = viewSettings();
       preview = createRacePreview(archive, track.stem, { atmosphere: atmosphereOf, demoControls: false, relief });
       built = { dat, archive, stem: track.stem, key, edited: changes.size > 0 };
       preview.seek(Number($('atmo-moment').value), settings);

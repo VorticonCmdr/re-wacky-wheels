@@ -15,7 +15,7 @@ import { renderScene } from './render/scene.js';
 import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { loadHudArt } from './render/hud.js';
 import { createEnhancer } from './enhance/index.js';
-import { normalize, anyEffect } from './enhance/settings.js';
+import { normalize, enhancedOn } from './enhance/settings.js';
 import { EFFECTS, LOOK_EFFECTS, SHADOW } from './enhance/config.js';
 import { turnDelta } from './enhance/motion.js';
 import { createLayers } from './enhance/scene.js';
@@ -70,7 +70,7 @@ function demoOf(track) {
 export function createRacePreview(dat, track, { atmosphere = null, demoControls = true, relief = null } = {}) {
   const members = archiveMembers(dat), bmc = demoControls ? members.get(`${track}.BMC`) : null, hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
   const recorded = bmc ? demoOf(track) : null, demo = recorded?.spec ?? null; // the demo's class, engine, laps and detail level (the detail sets the steering rate)
-  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${anyEffect(s)}`; // the sky's layers, the lighting and the water only colour the picture (but with every effect off the enhancer takes no snapshot)
+  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${enhancedOn(s)}`; // the sky's layers, the lighting, the water and the rendering choices only colour or draw the picture (but with the enhanced path off the enhancer takes no snapshot)
   let state = null, enh = null, inputs = null, switches = null, controls = null;
   const index = new Uint8Array(SIZE), ref = new Uint8Array(SIZE);
 
@@ -108,14 +108,19 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
     },
     step() { stepRace(state, inputs()); enh.afterTick(state); api.count++; },
     // Draws the moment: `alpha` how far toward the next pass (smooth motion), `hud` whether the overlays are drawn, `detail` the detail
-    // level. Fills `original` and `enhanced` (RGBA, 320 x 200).
-    draw({ alpha = 1, hud = true, detail = 1 }, original, enhanced) { // `detail` is the drawing's; the race keeps its own (it sets the steering rate)
+    // level, `aspect` the display's shape the wide view's margin is worked out for (display-settings.js; none: the standard view whatever the
+    // settings say). Fills `original` and `enhanced` (RGBA, 320 x 200: at a resolution above 1x or in the wide view the reference view of the
+    // enhanced world, its samples with the overlays). Returns the enhancer's stats with the enhanced picture as drawn (Stage 4): `world` its
+    // RGBA bytes at `w` x `h` (the settings' resolution and view: 640 x 400 at 2x, 426 x 200 wide on 4:3, the overlays in it, over the
+    // original's columns in the middle; 320 x 200 at 1x in the standard view, `enhanced` itself).
+    draw({ alpha = 1, hud = true, detail = 1, aspect = null }, original, enhanced) { // `detail` is the drawing's; the race keeps its own (it sets the steering rate)
       const palette = framePalette(state), overlays = (s, fb) => { if (!hud) return; const v = { ...s, demo: null }; drawRaceOverlays(v, fb); if (!state.minimap && v.minimap) state.minimap = v.minimap; }; // the race's own HUD, also over a demo's controls
       renderScene(state, ref, detail, sceneSky(state)); overlays(state, ref);
       for (let i = 0, o = 0; i < SIZE; i++, o += 4) { const p = ref[i] * 4; original[o] = palette[p]; original[o + 1] = palette[p + 1]; original[o + 2] = palette[p + 2]; original[o + 3] = 255; } // @math four bytes a colour
-      if (anyEffect(enh.settings)) enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays });
+      let world = { data: enhanced, w: WIDTH, h: HEIGHT };
+      if (enhancedOn(enh.settings)) { enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays, worldReady: true, aspect, wideAllowed: !sceneSky(state) }); const l = enh.layers(); if (l.world.w !== WIDTH || l.world.h !== HEIGHT) world = l.world; } // the preview shows the world itself: no display to wait for; a demo's slides are never wide
       else enhanced.set(original);
-      return enh.stats();
+      return { ...enh.stats(), world: world.data, w: world.w, h: world.h };
     },
     tickMs: frameMs(),
   };

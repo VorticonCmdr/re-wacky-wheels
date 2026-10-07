@@ -46,7 +46,7 @@ export function displayView(settings, { fullscreen = false, crtReady = true } = 
 }
 
 // What Enter on a menu line does: the shape and the scaling go to the next choice, the CRT look flips, a level goes up a quarter (from full to
-// off), DEFAULT LEVELS puts the CRT levels back.
+// off). (The menu's DEFAULT LEVELS left CRT AND HUD in Stage 4: the quarter steps reach every default, and the panel's Reset display remains.)
 const next = (list, value) => list[(list.indexOf(value) + 1) % list.length];
 export const nextAspect = settings => changeDisplay(settings, 'aspect', next(Object.keys(DISPLAY.aspects), settings.aspect));
 export const nextScaling = settings => changeDisplay(settings, 'scaling', next(DISPLAY.scalings, settings.scaling));
@@ -56,4 +56,3 @@ export function cycleCrtLevel(settings, key) {
   const steps = Math.round(1 / MENU.strengthStep), at = Math.floor(settings[key] * steps + 1e-9) + 1; // @math the next quarter above the level (a level between quarters goes to the next)
   return changeDisplay(settings, key, at > steps ? 0 : at / steps);
 }
-export const defaultCrtLevels = settings => normalizeDisplay({ ...settings, ...Object.fromEntries(LEVELS.map(k => [k, DISPLAY.defaults[k]])) });

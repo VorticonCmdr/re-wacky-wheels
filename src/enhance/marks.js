@@ -3,7 +3,7 @@
 // reset empties it. Marks are decorative: nothing here reads back into the race.
 import { MARKS, MOTION } from './config.js';
 import { surfacePicture } from '../game/effects.js';
-import { KIND, headingVector, toCamera, fromCamera } from './project.js';
+import { KIND, headingVector, toCamera, fromCameraAt } from './project.js';
 import { fillQuad } from './raster.js';
 import { models } from './models.js';
 
@@ -54,8 +54,15 @@ export function createMarks() {
       });
     },
 
-    // Draws the marks alive at the presentation time `now` into L.mark for a camera, on the ground pixels only.
-    stamp(L, world, camera, now, width, height) {
+    // Draws the marks alive at the presentation time `now` into L.mark for a camera, on the ground pixels only (`kinds`, L's kinds by
+    // default). At a geometry G (geometry.js, or any { s, m }) `L` is that grid's (width x height) and a corner at the reference column x and
+    // row y lands on s (x + m), s y (at the reference geometry the very numbers it always was); fillQuad keeps its four scanlines a row of
+    // the grid. The reference look (config.js HD.look) stamps them on the reference grid ({ s: 1, m }) with no kinds: the composite darkens
+    // only the ground's pixels, whose kinds are the output's. With a margin (m > 0, the wide view) the corners are projected through the wide
+    // projection (project.js fromCameraAt), so a mark in the margins lies on the texels the floor draws there. `trace` (the checks) gets the
+    // box of each quad drawn, { x0, y0, x1, y1 } on the grid.
+    stamp(L, world, camera, now, width, height, G = null, kinds = L.kind, trace = null) {
+      const sc = G ? G.s : 1, m = G ? G.m : 0;
       for (const s of ring) {
         const age = now - s.born;
         if (age < 0) continue;
@@ -65,13 +72,18 @@ export function createMarks() {
         if (a.f < MARKS.near && b.f < MARKS.near) continue;
         if (a.f < MARKS.near) a = cut(b, a); else if (b.f < MARKS.near) b = cut(a, b);
         const df = b.f - a.f, dl = b.l - a.l, len = Math.hypot(df, dl) || 1, nf = (-dl / len) * (s.width / 2), nl = (df / len) * (s.width / 2); // @math half the width either side
-        const corners = [[a.f + nf, a.l + nl], [b.f + nf, b.l + nl], [b.f - nf, b.l - nl], [a.f - nf, a.l - nl]].map(([f, l]) => fromCamera(world, f, l));
+        const corners = [[a.f + nf, a.l + nl], [b.f + nf, b.l + nl], [b.f - nf, b.l - nl], [a.f - nf, a.l - nl]].map(([f, l]) => fromCameraAt(world, f, l, true, m));
         if (corners.some(c => !c)) continue;
-        fillQuad(L.mark, corners.map(c => [c.column, c.bottom]), s.strength * fade, width, height, L.kind, KIND.floor);
+        const pts = corners.map(c => [sc * (c.column + m), sc * c.bottom]);
+        fillQuad(L.mark, pts, s.strength * fade, width, height, kinds, KIND.floor);
+        if (trace) trace.push(boxOf(pts));
       }
     },
   };
 }
+
+// The box of a quad's corners on its grid.
+const boxOf = pts => ({ x0: Math.min(...pts.map(p => p[0])), y0: Math.min(...pts.map(p => p[1])), x1: Math.max(...pts.map(p => p[0])), y1: Math.max(...pts.map(p => p[1])) });
 
 // The point of the segment q -> p where it crosses the near limit (p is the one in front of the camera's limit).
 function cut(p, q) {

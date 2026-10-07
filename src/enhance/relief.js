@@ -66,7 +66,13 @@ export function sunVector(world, angle, length) {
 // from its slope and occlusion (groundRelief) under the sun (`sun` from sunVector): ambient and diffuse light against a flat ground's, mixed in
 // by `strength`. A texel within RELIEF.reach of its tile's edge takes them from the heights around it through the map, so an edge between two
 // tiles (a wall that ends where its tile does) has its slope as well; the generated map's liquids keep their light.
-export function groundLight(world, ground, { sun, strength }) {
+// With `table` (the floor above 1x, where a texel covers several output pixels and the hook runs for nearly every one) the light comes from
+// tables kept per map, sun and strength: an interior texel's depends on its tile texel alone and is made for all of them at once; a texel near
+// a tile's edge depends on its place on the map (its neighbours across the edge), so the map's cells keep theirs, each computed the first time
+// it is drawn; the padding around the map is computed on the spot. The layer the light goes into is a Float32 one, so the value it stores is
+// the one computed on the spot.
+const lightTables = new WeakMap();
+export function groundLight(world, ground, { sun, strength }, table = false) {
   const F = models().floor, T = F.tileBytes, tiles = world.tiles, { height, gx, gy, occlusion, flat } = ground, ambient = RELIEF.ambient, lit0 = ambient + (1 - ambient) * Math.max(sun[2], 0), [low, high] = RELIEF.range, k = RELIEF.occlusion, [sx, sy, sz] = sun; // @math the sun's third component is its height
   const r = RELIEF.reach, ring = Math.max(r, 1), last = F.tileMask - ring, depth = RELIEF.depth / 2; // @math the central difference spans two texels
   const h = (x, y) => {
@@ -74,14 +80,46 @@ export function groundLight(world, ground, { sun, strength }) {
     const row = (y >> F.tileShift) - F.mapOrigin, col = (x >> F.tileShift) - F.mapOrigin, id = row >= 0 && row < F.mapRows && col >= 0 && col < F.mapColumns ? tiles[row * F.mapColumns + col] : 0; // the padding of the map is tile 0, as drawFloor has it
     return height[id * T + ((y & F.tileMask) << F.tileShift) + (x & F.tileMask)];
   };
-  return (at, x, y) => {
-    if (flat[at]) return 1;
-    const tx = x & F.tileMask, ty = y & F.tileMask;
-    let a, b, o;
-    if (tx >= ring && tx <= last && ty >= ring && ty <= last) { a = gx[at]; b = gy[at]; o = occlusion[at]; }
-    else { a = (h(x + 1, y) - h(x - 1, y)) * depth; b = (h(x, y + 1) - h(x, y - 1)) * depth; o = Math.max((h(x + r, y + r) + h(x - r, y + r) + h(x + r, y - r) + h(x - r, y - r)) / 4 - height[at], 0); } // @math the four diagonal neighbours
+  if (!table) {
+    return (at, x, y) => {
+      if (flat[at]) return 1;
+      const tx = x & F.tileMask, ty = y & F.tileMask;
+      let a, b, o;
+      if (tx >= ring && tx <= last && ty >= ring && ty <= last) { a = gx[at]; b = gy[at]; o = occlusion[at]; }
+      else { a = (h(x + 1, y) - h(x - 1, y)) * depth; b = (h(x, y + 1) - h(x, y - 1)) * depth; o = Math.max((h(x + r, y + r) + h(x - r, y + r) + h(x + r, y - r) + h(x - r, y - r)) / 4 - height[at], 0); } // @math the four diagonal neighbours
+      const lit = (ambient + (1 - ambient) * Math.max((sz - a * sx - b * sy) / Math.sqrt(a * a + b * b + 1), 0)) / lit0; // the normal (-gx, -gy, 1) against the sun, against a flat ground's
+      return Math.min(Math.max(1 + strength * (lit * (1 - k * o) - 1), low), high);
+    };
+  }
+  // The same light, its interior texels from the table (shade and edge are the expressions above).
+  const shade = (a, b, o) => {
     const lit = (ambient + (1 - ambient) * Math.max((sz - a * sx - b * sy) / Math.sqrt(a * a + b * b + 1), 0)) / lit0; // the normal (-gx, -gy, 1) against the sun, against a flat ground's
     return Math.min(Math.max(1 + strength * (lit * (1 - k * o) - 1), low), high);
+  };
+  const inside = (tx, ty) => tx >= ring && tx <= last && ty >= ring && ty <= last;
+  const edge = (at, x, y) => shade((h(x + 1, y) - h(x - 1, y)) * depth, (h(x, y + 1) - h(x, y - 1)) * depth, Math.max((h(x + r, y + r) + h(x - r, y + r) + h(x + r, y - r) + h(x - r, y - r)) / 4 - height[at], 0)); // @math the four diagonal neighbours
+  let byKey = lightTables.get(ground);
+  if (!byKey) { byKey = new Map(); lightTables.set(ground, byKey); }
+  const key = `${sun.join(',')}:${strength}`;
+  let kept = byKey.get(key);
+  if (!kept) {
+    byKey.clear(); // a ground keeps only the tables of its latest sun and strength
+    const lights = new Float32Array(height.length), slot = new Int16Array(T).fill(-1);
+    let slots = 0;
+    for (let t = 0; t < T; t++) if (!inside(t & F.tileMask, t >> F.tileShift)) slot[t] = slots++; // the edge texels of a tile, numbered
+    for (let at = 0; at < height.length; at++) { const texel = at % T; lights[at] = flat[at] ? 1 : inside(texel & F.tileMask, texel >> F.tileShift) ? shade(gx[at], gy[at], occlusion[at]) : 0; }
+    kept = { lights, slot, slots, edges: new Float32Array(F.mapRows * F.mapColumns * slots).fill(NaN) }; // NaN: not drawn yet
+    byKey.set(key, kept);
+  }
+  const { lights, slot, slots, edges } = kept;
+  return (at, x, y) => {
+    const tx = x & F.tileMask, ty = y & F.tileMask;
+    if (flat[at] || inside(tx, ty)) return lights[at];
+    const row = (y >> F.tileShift) - F.mapOrigin, col = (x >> F.tileShift) - F.mapOrigin;
+    if (row < 0 || row >= F.mapRows || col < 0 || col >= F.mapColumns) return edge(at, x, y);
+    const e = (row * F.mapColumns + col) * slots + slot[(ty << F.tileShift) + tx];
+    if (edges[e] !== edges[e]) edges[e] = edge(at, x, y); // NaN until computed
+    return edges[e];
   };
 }
 
@@ -96,10 +134,14 @@ export function screenSun(direction, length) {
 // null), `fb` the screen's indices, `heights(source)` the player's map of the picture's frame (0 to 255 by source byte) or null. The
 // heights are the map's, else a rounded body by the distance to the picture's edge mixed with the pixel's brightness (RELIEF.spriteDetail of
 // it); the light is how far each pixel's slope leans toward the sun (`sun` from screenSun) against a flat picture's. Where the picture runs
-// off the screen its cut edge is not an edge: the body goes on past it. Writes RELIEF's light into `out`.
+// off the screen its cut edge is not an edge: the body goes on past it. Writes RELIEF's light into `out`. `scale` is the geometry's (Stage 4:
+// the picture drawn at s output pixels a reference pixel, `width` the output's; HD.look 'reference'): above 1x the picture is lit on the
+// reference grid (pictureLightAt below), so at its reference samples the light is the 1x picture's. `frame` (above 1x: the picture's source
+// frame, which `sources` index) gives the pixels' indices instead of fb, for pixels listed where nothing was written (blit.js blitAt's `from`).
 const scratch = { size: 0, mask: null, dist: null, height: null };
-export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun, strength, heights = null }) {
+export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun, strength, heights = null, scale = 1, frame = null }) {
   if (!count) return;
+  if (scale > 1) { pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale, frame }); return; }
   let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
   for (let n = 0; n < count; n++) { const o = drawn[n], x = o % width, y = (o - x) / width; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   const bw = x1 - x0 + 3, bh = y1 - y0 + 3, size = bw * bh; // @math a border of one pixel around the box: outside the picture
@@ -131,6 +173,34 @@ export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun,
     const lean = (-gx * sun[0] - gy * sun[1] + sun[2]) / len - sun[2]; // @math the normal (-gx, -gy, 1) against the sun, less a flat picture's
     out[drawn[n]] = Math.min(Math.max(1 + strength * RELIEF.spriteGain * lean, low), high);
   }
+}
+
+// A picture drawn at s output pixels a reference pixel (`width` the output's, a whole s times the reference grid's), lit on the reference grid:
+// its reference samples (the pixels it drew at a cell's top-left output pixel, s x and s y: the INF's own bytes where blit.js's class maps
+// draw it at s times its place) are lit as pictureLight lights a 1x picture, by their palette indices and source bytes, and every pixel it drew
+// takes its cell's light. So the light at the samples is the 1x light, and the other pixels of a cell share it, as the ground's pixels share
+// their texel's. A pixel whose cell's sample the picture leaves transparent (a texel between the INF's samples that a class map reads) takes
+// the light of the drawn sample to its left, right, above or below, the first found, else none (1). A split viewer's picture lists its pixels
+// above the viewer's first row too (blitAt's `from`), where fb holds the last frame's: their indices are read from `frame` by their source bytes
+// (the same as fb's where the blit wrote), so the whole picture is lit as the 1x split screen lights it before its cut, with no rim at that row.
+const grid = { size: 0, drawn: null, sources: null, fb: null, light: null, on: null };
+function pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale: s, frame }) {
+  const rw = width / s, rh = fb.length / width / s, size = rw * rh;
+  if (grid.size < size) { grid.size = size; grid.drawn = new Int32Array(size); grid.sources = new Int32Array(size); grid.fb = new Uint8Array(size); grid.light = new Float32Array(size); grid.on = new Uint8Array(size); }
+  const { light, on } = grid;
+  let k = 0;
+  for (let n = 0; n < count; n++) {
+    const o = drawn[n], x = o % width, y = (o - x) / width;
+    if (x % s || y % s) continue;
+    const r = (y / s) * rw + x / s;
+    grid.drawn[k] = r; if (sources) grid.sources[k] = sources[n]; grid.fb[r] = frame && sources ? frame[sources[n]] : fb[o]; on[r] = 1; k++;
+  }
+  pictureLight(light, { drawn: grid.drawn, sources: sources ? grid.sources : null, count: k, fb: grid.fb.subarray(0, size), width: rw, luma, sun, strength, heights });
+  for (let n = 0; n < count; n++) {
+    const o = drawn[n], x = o % width, y = (o - x) / width, cx = Math.floor(x / s), cy = Math.floor(y / s), r = cy * rw + cx;
+    out[o] = on[r] ? light[r] : cx > 0 && on[r - 1] ? light[r - 1] : cx < rw - 1 && on[r + 1] ? light[r + 1] : cy > 0 && on[r - rw] ? light[r - rw] : cy < rh - 1 && on[r + rw] ? light[r + rw] : 1;
+  }
+  for (let j = 0; j < k; j++) on[grid.drawn[j]] = 0;
 }
 
 // ---- The asset garage's part: the generated maps as images the player can paint over, and a lit preview of a map.

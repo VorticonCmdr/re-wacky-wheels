@@ -28,6 +28,7 @@
     "check:versus": "node scripts/check-versus.js",
     "check:link": "node scripts/check-link.js",
     "check:enhance": "node scripts/check-enhance.js",
+    "check:identity": "node scripts/compare-enhance.mjs",
     "dev:lan": "vite --host 0.0.0.0",
     "serve:lan": "node tools/lan-server.mjs"
   },

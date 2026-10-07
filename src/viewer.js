@@ -11,9 +11,10 @@ import { decodeVoc, decodePcSpeaker, encodeWav } from './audio.js';
 import { numericValues, inspectData, b800Cells } from './data-formats.js';
 import { createRacePreview, anchorStage } from './viewer-preview.js';
 import { driverFile, driverCount } from './game/drivers.js';
-import { normalize, applyPreset, change, loadSettings, saveSettings, anyEffect } from './enhance/settings.js';
-import { EFFECTS, LEVELS, PRESETS } from './enhance/config.js';
+import { normalize, applyPreset, change, loadSettings, saveSettings, enhancedOn } from './enhance/settings.js';
+import { EFFECTS, LEVELS, PRESETS, RENDER } from './enhance/config.js';
 import { loadAtmospheres } from './enhance/atmosphere.js';
+import { loadDisplay } from './enhance/display-settings.js';
 import { loadReliefMaps, saveReliefMap, removeReliefMap, createReliefProvider } from './enhance/relief-store.js';
 import { tileSheetHeights, tilesToSheet, sheetToTiles, pictureHeights, shadeByHeights } from './enhance/relief.js';
 import { RELIEF } from './enhance/config.js';
@@ -329,26 +330,32 @@ function previewRace(stem) {
   const atmospheres = loadAtmospheres(); // the tracks' atmospheres the track editor keeps (read here, never written)
   try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name], relief: relief.provider }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
   const saved = loadSettings();
-  let settings = state.gfx ??= anyEffect(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when it has any, else the Enhanced preset
+  let settings = state.gfx ??= enhancedOn(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when they draw through the enhanced path, else the Enhanced preset
   let moment = 140, layout = 'both', hud = true, level = 1, playing = false, acc = 0, last = 0, alpha = 1; // @math a moment after the fly-in and the countdown
-  const c = canvas(640, 200), ctx = c.getContext('2d'); c.style.width = '100%'; c.style.maxWidth = 'none'; // the screens as large as the preview allows
-  const left = new Uint8ClampedArray(320 * 200 * 4), right = new Uint8ClampedArray(320 * 200 * 4); // @math the two screens
-  const legend = el('div', undefined, 'compare-legend'); legend.append(el('span', 'ORIGINAL · reference renderer'), el('span', 'ENHANCED')); c.parentElement.append(legend);
+  const c = canvas(640, 200), ctx = c.getContext('2d'); c.style.width = '100%'; c.style.maxWidth = 'none'; c.style.imageRendering = 'pixelated'; // the screens as large as the preview allows, their pixels sharp
+  const left = new Uint8ClampedArray(320 * 200 * 4), right = new Uint8ClampedArray(320 * 200 * 4), small = document.createElement('canvas'); // @math the two screens; the original's picture before it is enlarged
+  small.width = 320; small.height = 200; // @math the screen
+  const legend = el('div', undefined, 'compare-legend'), legendLeft = el('span', 'ORIGINAL · reference renderer'), legendRight = el('span', 'ENHANCED'); legend.append(legendLeft, legendRight); c.parentElement.append(legend);
   const momentSlider = el('input'), momentLabel = el('span', undefined, 'frame-label'), stats = el('span', undefined, 'frame-label');
   momentSlider.type = 'range'; momentSlider.min = 0; momentSlider.max = 2400; momentSlider.step = 1; momentSlider.value = moment; // @math about three and a half minutes of passes
+  // The Original at 320 x 200, enlarged nearest as many times as the Enhanced picture's resolution (Stage 4: RESOLUTION), beside the Enhanced
+  // picture at its own size, so the two show at the same size and every pixel of each is its own. In the wide view (VIEW, worked out for the
+  // shape the playtest page's display keeps: 53 columns a side on 4:3, 18 on 16:10) the Original stands in the middle of a screen as wide as
+  // the Enhanced one, black either side, over the columns the Enhanced picture shares with it.
+  const aspect = loadDisplay().aspect;
   function draw() {
-    const s = preview.draw({ alpha: playing ? alpha : 1, hud, detail: level }, left, right);
-    const both = layout === 'both';
-    c.width = both ? 640 : 320; // @math one or two screens
-    if (layout !== 'enhanced') ctx.putImageData(new ImageData(left, 320, 200), 0, 0); // @math the screen
-    if (layout !== 'original') ctx.putImageData(new ImageData(right, 320, 200), both ? 320 : 0, 0); // @math the screen
-    legend.hidden = !both;
+    const s = preview.draw({ alpha: playing ? alpha : 1, hud, detail: level, aspect }, left, right), k = s.h / 200, both = layout === 'both', ow = 320 * k; // @math the screen's rows and columns
+    c.width = (both ? 2 : 1) * s.w; c.height = s.h; // @math one or two screens
+    if (layout !== 'enhanced') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, s.w, s.h); small.getContext('2d').putImageData(new ImageData(left, 320, 200), 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(small, (s.w - ow) / 2, 0, ow, s.h); } // @math the screen, in the middle of a wide one
+    if (layout !== 'original') ctx.putImageData(new ImageData(s.world, s.w, s.h), both ? s.w : 0, 0);
+    const wide = s.w > ow; // @math the Enhanced picture wider than the Original's columns
+    legend.hidden = !both; legendLeft.textContent = k > 1 ? `ORIGINAL · reference renderer, enlarged ${k} times` : 'ORIGINAL · reference renderer'; legendRight.textContent = k > 1 || wide ? `ENHANCED · ${s.w} x ${s.h}${wide ? `, ${(s.w - ow) / (2 * k)} more columns either side` : ''}` : 'ENHANCED';
     momentLabel.textContent = `pass ${moment} · ${(moment * preview.tickMs / 1000).toFixed(1)} s`; // @math milliseconds in a second
-    stats.textContent = anyEffect(settings) ? `${s.particles} particles · ${s.marks} skid mark segments · enhanced draw ${s.last.toFixed(1)} ms` : 'every effect off: the reference renderer';
+    stats.textContent = enhancedOn(settings) ? `${s.particles} particles · ${s.marks} skid mark segments · enhanced draw ${s.last.toFixed(1)} ms at ${s.w} x ${s.h}` : 'every effect off: the reference renderer';
   }
   function seek() { try { preview.seek(moment, settings); draw(); } catch (e) { status(e.message, true); } }
   function set(next) { // the settings, and every control showing them
-    settings = state.gfx = normalize(next); presetSelect.value = settings.preset;
+    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view;
     for (const k of EFFECTS) boxes[k].checked = settings[k];
     for (const k of Object.keys(LEVELS)) ranges[k].value = String(settings[k]);
     seek();
@@ -362,6 +369,8 @@ function previewRace(stem) {
   checkControl('HUD', hud, v => { hud = v; draw(); });
   const presetSelect = selectControl('Preset', [['original', 'Original'], ['enhanced', 'Enhanced'], ['custom', 'Custom']], settings.preset, v => set(applyPreset(settings, v)));
   presetSelect.querySelector('option[value=custom]').disabled = true;
+  const scaleSelect = selectControl('Resolution', RENDER.scales.map(n => [n, `${n}x`]), settings.scale, v => set(change(settings, 'scale', Number(v)))); // Stage 4: the Enhanced world at twice the samples; the preview shows it itself, WebGL or not
+  const viewSelect = selectControl('View', [['standard', 'Standard'], ['wide', 'Wide (16:9)']], settings.view, v => set(change(settings, 'view', v))); // Stage 4: the wide view's margins, for the playtest page's display shape
   const boxes = Object.fromEntries(EFFECTS.map(k => [k, checkControl(EFFECT_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const ranges = Object.fromEntries(Object.keys(LEVELS).map(k => [k, rangeControl(LEVEL_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const use = el('button', 'Use these in the game'); use.onclick = () => { if (saveSettings(settings)) status('Saved: the playtest page draws with these graphics settings from now on.'); else status('This browser does not let the page keep settings.', true); }; field('Playtest', use);
@@ -376,7 +385,7 @@ function previewRace(stem) {
     state.raf = requestAnimationFrame(tick);
   }
   seek(); state.raf = requestAnimationFrame(tick);
-  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels and the sun direction apply at once, and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
+  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution and the view apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
 }
 
 function previewPos(entry) {

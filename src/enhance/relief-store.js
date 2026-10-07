@@ -4,28 +4,13 @@
 // { width, height, offset, columnMajor, frames }: the frames' heights one after the other, each in the order of the frame's own bytes.
 // - tiles: the sheet's tiles (RELIEF's tile order, as the floor reads them), a tile's texels row by row.
 // - sprites: frame k's height of byte i at k x width x height + i; the frames start at `offset` bytes into the member.
+// The records live in the page's database (store.js, the store 'relief', keyed by the member), which every part of the page opens through store.js.
 import { archiveMembers } from '../game/track-data.js';
 import { models } from './models.js';
+import { withStore } from './store.js';
 
-const DB = 'wackywheels', STORE = 'relief', VERSION = 1;
-
-function database() {
-  return new Promise((resolve, reject) => {
-    try {
-      const request = globalThis.indexedDB?.open(DB, VERSION);
-      if (!request) { reject(new Error('This browser keeps no data for the page.')); return; }
-      request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE, { keyPath: 'member' }); };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error ?? new Error('The page could not open its data.'));
-    } catch (error) { reject(error); }
-  });
-}
-async function run(mode, work) {
-  const db = await database();
-  try {
-    return await new Promise((resolve, reject) => { const tx = db.transaction(STORE, mode), store = tx.objectStore(STORE), request = work(store); tx.oncomplete = () => resolve(request?.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error); });
-  } finally { db.close(); }
-}
+const STORE = 'relief';
+const run = (mode, work) => withStore(STORE, mode, work);
 
 // A record from anything stored: null when it is not one this page made.
 export function normalizeRecord(r) {
@@ -37,7 +22,7 @@ export function normalizeRecord(r) {
   return { member, kind: 'sprites', heights: r.heights, saved, width: r.width, height: r.height, offset: r.offset, frames: r.frames, columnMajor: Boolean(r.columnMajor) };
 }
 
-// Every kept record ([] when the browser keeps nothing or refuses).
+// Every kept record ([] when the browser keeps nothing, refuses, or another tab of the page blocks the database's upgrade).
 export async function loadReliefMaps() {
   try { return ((await run('readonly', store => store.getAll())) ?? []).map(normalizeRecord).filter(Boolean); } catch { return []; }
 }

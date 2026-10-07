@@ -34,3 +34,5 @@ dt { color: var(--dim); } dd { margin: 0; text-align: right; }
 .graphics label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .graphics label.check { justify-content: flex-start; }
 .graphics input[type="range"] { width: 140px; }
+.render-group { gap: 4px; padding: 4px 8px 8px; }
+.help.warn { color: var(--bad); }

@@ -38,17 +38,19 @@ function at(profile, p) {
 // where it stands (its top edge dithered by how much of the pixel it covers), its light (0 shaded, 1 lit, in RANGE.levels steps, dithered
 // where the light lies near the middle between two)
 // and 1 where its top is snow. `height` the track's range (0 to 1), `shape` one of RANGE.names, `scroll` how far the sky has turned (screen
-// pixels, the strip's scroll without its wraps). Returns whether it stands anywhere.
-export function coverRange(out, { height, shape, scroll }) {
-  const S = models().sky, W = S.width, foot = S.horizonRow + S.horizonRows - 1, s = RANGE.shapes[shape], rows = s ? height * s.rows : 0, steps = RANGE.levels - 1;
+// pixels, the strip's scroll without its wraps). `width` (the sky's 320 by default) is the cover's columns and `x0` the reference column of
+// its first (0 by default; -m for a wide view's margin of m columns, geometry.js): the cover stays on the reference grid whatever the geometry,
+// and its reference columns 0..319 are the standard view's. Returns whether it stands anywhere.
+export function coverRange(out, { height, shape, scroll, width = models().sky.width, x0 = 0 }) {
+  const S = models().sky, W = width, foot = S.horizonRow + S.horizonRows - 1, s = RANGE.shapes[shape], rows = s ? height * s.rows : 0, steps = RANGE.levels - 1;
   out.alpha.fill(0);
   if (!(rows > 0)) return false;
   const profile = rangeProfile(shape), snowLine = s.snow === null ? Infinity : s.snow * rows;
   for (let x = 0; x < W; x++) {
-    const p = x + scroll * RANGE.parallax, h = at(profile, p) * rows, slope = ((at(profile, p + RANGE.reach) - at(profile, p - RANGE.reach)) * rows) / (2 * RANGE.reach); // @math the central difference over the reach: rows a pixel
+    const c = x + x0, p = c + scroll * RANGE.parallax, h = at(profile, p) * rows, slope = ((at(profile, p + RANGE.reach) - at(profile, p - RANGE.reach)) * rows) / (2 * RANGE.reach); // @math the central difference over the reach: rows a pixel
     const crest = foot + 1 - h, light = Math.min(Math.max(0.5 + slope * RANGE.relief, 0), 1); // @math the row below the foot, less the height; half lit on the flat
     for (let y = Math.max(Math.floor(crest), 0); y <= foot; y++) {
-      const d = bayer(x, y), cover = Math.min(y + 1 - crest, 1); // @math the part of the pixel's row below the crest
+      const d = bayer(c, y), cover = Math.min(y + 1 - crest, 1); // @math the part of the pixel's row below the crest
       if (cover < 1 && cover <= d) continue;
       const i = y * W + x;
       out.alpha[i] = 1;

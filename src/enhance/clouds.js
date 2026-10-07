@@ -1,7 +1,7 @@
 // The clouds of the Enhanced presentation (docs/enhancements.md, Stage 3): layers of a cloud field over the track's sky. The sky picture of the
-// game never moves; the clouds are taken as a plane above the track seen in perspective, which moves with the horizon strip as the car turns
-// (the strip's scroll without its wraps, so no seam) and which the wind moves over the plane. This module only works out how much of each
-// sky pixel a layer covers; composite.js mixes the colours.
+// game never moves; the clouds are a flat field (no perspective: a screen pixel across is the same step of the field in every row and column)
+// that scrolls with the horizon strip as the car turns (the strip's scroll without its wraps, so no seam) and that the wind moves across.
+// This module only works out how much of each sky pixel a layer covers; composite.js mixes the colours.
 import { CLOUDS } from './config.js';
 import { createRandom } from './particles.js';
 import { paletteColor } from './project.js';
@@ -63,9 +63,13 @@ function profile(layer, y) {
 // The cloud banks over the sky rows, written into `out` (one { alpha, light } per bank, each a Float32Array of width x skyRows: how much of the
 // sky a cloud hides there, and whether it is its lit top (1) or its shaded base (0)): `amount` the track's cloud amount (0 to 1), `speed` its
 // wind (0 to 1), `scroll` how far the sky has turned (screen pixels, the strip's scroll without its wraps), `time` the presentation clock (ms).
-// Returns how many banks have any cover.
-export function coverClouds(out, { amount, speed, scroll, time }) {
-  const S = models().sky, W = S.width, H = S.skyRows, size = CLOUDS.texture, levels = CLOUDS.levels, lightSteps = CLOUDS.lightLevels - 1, seconds = time / 1000; // @math ms to seconds
+// `width` (the sky's 320 by default) is the cover's columns and `x0` the reference column of its first (0 by default; -m for a wide view's
+// margin of m columns, geometry.js): the cover stays on the reference grid whatever the geometry (an output pixel reads its reference cell),
+// and its columns 0..319 are the standard view's to the bit, because the field's position is carried from column 0 rightward as it always was
+// (and from there leftward into a left margin), never from the cover's first column. Returns how many banks have any cover.
+export function coverClouds(out, { amount, speed, scroll, time, width = models().sky.width, x0 = 0 }) {
+  const S = models().sky, W = width, H = S.skyRows, size = CLOUDS.texture, levels = CLOUDS.levels, lightSteps = CLOUDS.lightLevels - 1, seconds = time / 1000; // @math ms to seconds
+  const zero = Math.min(Math.max(-x0, 0), W); // the cover's column of the reference column 0 (its first when there is no left margin)
   let banks = 0;
   CLOUDS.layers.forEach((layer, n) => {
     const { alpha, light } = out[n], cover = Math.min(Math.max(amount * layer.cover, 0), 1);
@@ -77,15 +81,27 @@ export function coverClouds(out, { amount, speed, scroll, time }) {
     for (let y = Math.max(layer.rows[0], 0); y < Math.min(layer.rows[1], H); y++) {
       const p = profile(layer, y), row = y * W, v = (y - layer.rows[0]) * sv;
       if (p <= 0) continue;
-      let u = scroll * su + wind;
-      for (let x = 0; x < W; x++, u += su) {
+      // One column of the bank at the field's position u (the loop below has the same lines, kept apart for its speed).
+      const column = (x, u) => {
+        const d = sample(field, size, u, v) - (1 - p) * CLOUDS.edge, t = Math.min(Math.max((d - threshold) / soft, 0), 1);
+        if (t <= 0) return;
+        const a = t * t * (3 - 2 * t) * layer.opacity, dither = bayer(x + x0, y); // @math smoothstep over the soft edge
+        alpha[row + x] = Math.min(Math.floor(a * levels + dither), levels) / levels;
+        const lit = Math.min(Math.max(0.5 + (sample(field, size, u, v + relief) - sample(field, size, u, v - relief)) * CLOUDS.reliefGain, 0), 1); // @math half lit where the field is as dense above as below
+        light[row + x] = Math.min(Math.floor(lit * lightSteps + dither), lightSteps) / lightSteps;
+      };
+      const start = (scroll + x0 + zero) * su + wind; // the reference column 0's (scroll + 0 when the cover starts there)
+      let u = start;
+      for (let x = zero; x < W; x++, u += su) { // from the reference column 0 rightward
         const d = sample(field, size, u, v) - (1 - p) * CLOUDS.edge, t = Math.min(Math.max((d - threshold) / soft, 0), 1);
         if (t <= 0) continue;
-        const a = t * t * (3 - 2 * t) * layer.opacity, dither = bayer(x, y); // @math smoothstep over the soft edge
+        const a = t * t * (3 - 2 * t) * layer.opacity, dither = bayer(x + x0, y); // @math smoothstep over the soft edge
         alpha[row + x] = Math.min(Math.floor(a * levels + dither), levels) / levels; // a few steps of cover, dithered between
         const lit = Math.min(Math.max(0.5 + (sample(field, size, u, v + relief) - sample(field, size, u, v - relief)) * CLOUDS.reliefGain, 0), 1); // @math half lit where the field is as dense above as below
         light[row + x] = Math.min(Math.floor(lit * lightSteps + dither), lightSteps) / lightSteps;
       }
+      u = start;
+      for (let x = zero - 1; x >= 0; x--) { u -= su; column(x, u); } // a left margin, from the reference column 0 leftward
     }
   });
   return banks;

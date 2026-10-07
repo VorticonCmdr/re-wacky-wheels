@@ -4,6 +4,7 @@
 // Every pixel the floor writes also gets its distance, in the unit the game sorts its sprites by (the row table's distance): the NDIST
 // distance of the column and step scaled by the column's VIEW word, which puts the floor and the sprites on one depth scale.
 import { models } from './models.js';
+import { cosT } from './geometry.js';
 
 export const KIND = { sky: 0, horizon: 1, floor: 2, sprite: 3 }; // @math the kinds of pixel
 
@@ -87,9 +88,19 @@ export function headingVector(world, heading) {
   return [world.trig.getInt32(h * V.trigEntryBytes, true) / scale, world.trig.getInt32(h * V.trigEntryBytes + V.trigEntryBytes / 2, true) / scale]; // @math the second dword is half an entry on
 }
 
-// A world point in the camera's terms: f ahead along the heading, l to the right (view.js's forward and lateral distances, unrounded).
+// The heading vector at a fractional TRIG entry (Stage 4: the fine heading of a world drawn above 1x, round(h s) / s): the entries at
+// floor(h) and the one after it, read as signed words and lerped, never renormalized, as the floor caster lerps its rays (caster.js). At a
+// whole heading it is headingVector itself.
+export function headingVectorAt(world, heading) {
+  if (Number.isInteger(heading)) return headingVector(world, heading);
+  const f = Math.floor(heading), t = heading - f, a = headingVector(world, f), b = headingVector(world, f + 1);
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+// A world point in the camera's terms: f ahead along the heading, l to the right (view.js's forward and lateral distances, unrounded). A
+// fractional heading (Stage 4's fine heading) turns the camera between two TRIG entries (headingVectorAt).
 export function toCamera(world, camera, x, y) {
-  const [a, b] = headingVector(world, camera.heading), dx = wrap16(x - camera.x), dy = wrap16(y - camera.y);
+  const [a, b] = headingVectorAt(world, camera.heading), dx = wrap16(x - camera.x), dy = wrap16(y - camera.y);
   return { f: a * dx + b * dy, l: a * dy - b * dx };
 }
 
@@ -113,10 +124,58 @@ export function cameraPoint(world, column, distance) {
 }
 
 // The projection of view.js's projectPoint without its rounding and culling: the column, the distance and the bottom row of a world point
-// for a camera (x and y may hold fractions, the heading is a TRIG entry); null behind the camera.
+// for a camera (x and y may hold fractions, the heading is a TRIG entry, or between two above 1x); null behind the camera.
 export function projectFine(world, camera, x, y) {
   const { f, l } = toCamera(world, camera, x, y);
   return fromCamera(world, f, l, wrap16(y - camera.y) < wrap16(y)); // the routine's sign test (view.js)
+}
+
+// Stage 4's wide view (M8: docs/enhancements.md, Stage 4 as built), the projection with m margin columns a side. Inside the reference fan
+// (a point at most te TRIG entries off the heading, te the fan's edge: atan(tan / 2^16) in entries, 159.9992) it is the pinhole above
+// (fromCamera, cameraPoint), unrounded. Only with a margin (m > 0) does a point outside the fan continue equiangularly, one column a TRIG
+// entry as the floor's rays go (caster.js): column = centre + sigma sign(t) (centre + |t| - te), t = atan2(l, f) in entries and sigma the
+// pinhole's own sign (its flip test), so the column is continuous at the fan's edge (both are 0 and 320 there) and is the column the floor
+// gives that ray (to te's 8e-4 of an entry). A pinhole would put a point at 40 degrees about 19 columns off its ground. The distance outside
+// the fan is root VIEW(u) / 2^viewShift with the VIEW word continued past the table as the floor continues it (caster.js): VIEW[e] cosT(u -
+// centre) / cosT(e - centre), e the edge column 0 or 319. At m = 0 these are fromCamera, cameraPoint and projectFine themselves (the pinhole
+// everywhere with its VIEW clamp), so nothing of the standard view moves.
+const RADIAN = () => models().view.turn / (2 * Math.PI); // @math TRIG entries a radian
+let edge = null;
+export const fanEdge = () => (edge ??= Math.atan(models().view.tan / 2 ** models().view.fixedBits) * RADIAN()); // @math the tangent is 16.16
+// The VIEW word of a reference column outside the table (u < 0 or u > maxColumn), continued from the edge column through the TRIG cosine; a
+// word of 0 is a scale of 1.0, as floorDepths and the caster have it.
+function viewWordAt(world, u) {
+  const V = models().view, e = u < 0 ? 0 : V.maxColumn, word = world.view.getUint32(e * V.viewBytes, true) || 2 ** V.viewShift; // @math the VIEW word is a 2.14 fixed-point scale
+  return (word * cosT(world.trig, u - V.center)) / cosT(world.trig, e - V.center);
+}
+// fromCamera with m margin columns a side.
+export function fromCameraAt(world, f, l, flip = true, m = 0) {
+  if (m === 0) return fromCamera(world, f, l, flip);
+  if (f <= 0) return null;
+  const V = models().view, t = Math.atan2(l, f) * RADIAN(), te = fanEdge();
+  if (Math.abs(t) <= te) return fromCamera(world, f, l, flip);
+  const column = V.center + (flip ? 1 : -1) * Math.sign(t) * (V.center + Math.abs(t) - te), distance = (Math.hypot(f, l) * viewWordAt(world, column)) / 2 ** V.viewShift; // @math the VIEW word is a 2.14 fixed-point scale
+  return { column, distance, bottom: rowAt(world.rows, distance) };
+}
+// cameraPoint with m margin columns a side: the pinhole's inverse inside the fan (columns 0 to 320), the equiangular one outside it.
+export function cameraPointAt(world, column, distance, m = 0) {
+  const V = models().view;
+  if (m === 0 || (column >= 0 && column <= 2 * V.center)) return cameraPoint(world, column, distance); // @math the fan's columns, both edges
+  const a = (Math.abs(column - V.center) - V.center + fanEdge()) / RADIAN(), root = (distance * 2 ** V.viewShift) / viewWordAt(world, column); // @math the VIEW word is a 2.14 fixed-point scale
+  return { f: root * Math.cos(a), l: Math.sign(column - V.center) * root * Math.sin(a) };
+}
+// projectFine with m margin columns a side.
+export function projectAt(world, camera, x, y, m = 0) {
+  if (m === 0) return projectFine(world, camera, x, y);
+  const { f, l } = toCamera(world, camera, x, y);
+  return fromCameraAt(world, f, l, wrap16(y - camera.y) < wrap16(y), m); // the routine's sign test (view.js)
+}
+// The lateral over the forward distance of a screen column's ray (cameraPoint's r): the pinhole's inside the fan (columns 0 to 320), the
+// equiangular continuation's outside it (the wide view's margins: the water's sun glitter there, water.js sunGlitter).
+export function rayRatio(column) {
+  const V = models().view;
+  if (column >= 0 && column <= 2 * V.center) return ((column - V.center) * V.tan) / (V.center * 2 ** V.fixedBits); // @math the fan's columns, both edges; the tangent is 16.16
+  return Math.sign(column - V.center) * Math.tan((Math.abs(column - V.center) - V.center + fanEdge()) / RADIAN());
 }
 
 // Screen pixels per world unit at a distance (the lateral scale of the projection; the camera's height makes the vertical one the same).
