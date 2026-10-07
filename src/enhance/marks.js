@@ -60,8 +60,9 @@ export function createMarks() {
     // the grid. The reference look (config.js HD.look) stamps them on the reference grid ({ s: 1, m }) with no kinds: the composite darkens
     // only the ground's pixels, whose kinds are the output's. With a margin (m > 0, the wide view) the corners are projected through the wide
     // projection (project.js fromCameraAt), so a mark in the margins lies on the texels the floor draws there. `trace` (the checks) gets the
-    // box of each quad drawn, { x0, y0, x1, y1 } on the grid.
-    stamp(L, world, camera, now, width, height, G = null, kinds = L.kind, trace = null) {
+    // box of each quad drawn, { x0, y0, x1, y1 } on the grid. `row` (the smooth sprite sizes, M7: geometry.js rowLaw) puts the corners on the
+    // floor's own rows, where the pictures stand, instead of the row table's.
+    stamp(L, world, camera, now, width, height, G = null, kinds = L.kind, trace = null, row = null) {
       const sc = G ? G.s : 1, m = G ? G.m : 0;
       for (const s of ring) {
         const age = now - s.born;
@@ -72,7 +73,7 @@ export function createMarks() {
         if (a.f < MARKS.near && b.f < MARKS.near) continue;
         if (a.f < MARKS.near) a = cut(b, a); else if (b.f < MARKS.near) b = cut(a, b);
         const df = b.f - a.f, dl = b.l - a.l, len = Math.hypot(df, dl) || 1, nf = (-dl / len) * (s.width / 2), nl = (df / len) * (s.width / 2); // @math half the width either side
-        const corners = [[a.f + nf, a.l + nl], [b.f + nf, b.l + nl], [b.f - nf, b.l - nl], [a.f - nf, a.l - nl]].map(([f, l]) => fromCameraAt(world, f, l, true, m));
+        const corners = [[a.f + nf, a.l + nl], [b.f + nf, b.l + nl], [b.f - nf, b.l - nl], [a.f - nf, a.l - nl]].map(([f, l]) => fromCameraAt(world, f, l, true, m, row));
         if (corners.some(c => !c)) continue;
         const pts = corners.map(c => [sc * (c.column + m), sc * c.bottom]);
         fillQuad(L.mark, pts, s.strength * fade, width, height, kinds, KIND.floor);

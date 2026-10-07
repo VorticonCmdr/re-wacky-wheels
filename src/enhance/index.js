@@ -16,7 +16,9 @@
 // are kept on the reference grid (config.js HD.look 'reference', scene.js createSoftLayers) unless the enhancer is made with look 'full'.
 // The wide view (RENDER: VIEW WIDE, M8) adds m margin columns a side (geometry.js viewMargin for the display's shape and the world): the
 // margins' records come from wide.js (aimed probes of the game's draw list), and the overlays are moved by m into the refW x 200 HUD layer
-// (hud-place.js: 'centred').
+// (hud-place.js: 'centred'). Smooth sprite sizes (RENDER: SPRITE SIZES SMOOTH, M7) draw the records at sizes between the game's classes on
+// the floor's own rows (up to the row table's last row) at any geometry, the reference one included (scene.js placeSmooth, the opts'
+// `sizes`), and stand the particles on those rows too (geometry.js rowLaw).
 import { frameMs } from '../game/clock.js';
 import { carsBySeat, swapSeat } from '../game/versus.js';
 import { LAYOUT } from '../game/versus-rules.js';
@@ -29,7 +31,7 @@ import { createLayers, createCollect, renderEnhancedScene, LAYER_KEYS, SOFT_KEYS
 import { KIND } from './project.js';
 import { createMarks } from './marks.js';
 import { composite, compositeAt, overlayMask, fogColor, fogRamp, SENTINEL } from './composite.js';
-import { IDENTITY, geometryOf, viewMargin } from './geometry.js';
+import { IDENTITY, geometryOf, viewMargin, rowLaw } from './geometry.js';
 import { createWide } from './wide.js';
 import { hudPlaces } from './hud-place.js';
 import { composeSplitAt, flipViewportAt, splitSample } from './split.js';
@@ -108,7 +110,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     const length = sunLengthOf(atmo);
     return { ground: groundRelief(world, relief?.tiles ?? null), sun: sunVector(world, sunAngleOf(atmo, settings.sunAngle), length), length, strength: atmo.relief, frameHeights: relief?.frame ?? null };
   };
-  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0) => ({ subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
+  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0) => ({ subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
   // The liquids of a world when its water moves (the switch, the track's water above 0, a liquid on its map), else null.
   const liquidsOn = (world, atmo) => { if (!settings.water || !(atmo.water > 0)) return null; const l = liquidsOf(world); return l.any ? { ...l, beach: world.beach !== null && world.beach !== undefined } : null; };
   const rampOf = (world, strength) => { // the fog's table of a world at a strength (the game setting's times the track's)
@@ -250,7 +252,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
         if (G.identity && !forced.pipeline) {
           const camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine, atmo, liquids, lit));
           overlaid(P, overlays, index, !sky); mark?.('overlays');
-          const splats = settings.particles ? particles.splats(P.world, camera, fine.time).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
+          const splats = settings.particles ? particles.splats(P.world, camera, fine.time, null, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
           if (trace) splatted = splats;
           const look = lookOf(P.world, atmo, fine, seat, !sky, cap, liquids);
           compose(out, index, layers, { L, palette, width: F.width, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, rowFlags); mark?.('composite');
@@ -260,7 +262,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
         const B = buffersFor(G), camera = renderEnhancedScene(P, fine, seat, B.fb, B.L, mode, sky, opts(fine, atmo, liquids, lit, B), G);
         decimate(B, index); mark?.('decimate');
         overlaid(P, overlays, index, !sky, B.kind); mark?.('overlays');
-        const splats = settings.particles ? particles.splats(P.world, camera, fine.time, G).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
+        const splats = settings.particles ? particles.splats(P.world, camera, fine.time, G, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
         if (trace) splatted = splats;
         const look = lookOf(P.world, atmo, fine, seat, !sky, cap, liquids, B);
         composeAt(B, out, index, layers, { L: B.L, palette, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, G.sample);
@@ -293,7 +295,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
             const row = y - (n === 0 ? 0 : Y.shift), top = n === 0 ? Y.flip.first : Y.flip.first - Y.shift; // @math the first viewer keeps its rows
             return flipped[n] && row >= top && row < top + Y.flip.rows ? top + Y.flip.rows - 1 - (row - top) : row; // @math the mirrored row
           };
-          const splats = settings.particles ? [0, 1].flatMap(n => particles.splats(P.world, cams[n], fine.time).map(s => ({ ...s, map: y => rowOf(n, y) }))).sort((a, b) => b.depth - a.depth) : []; // @math the two viewers
+          const splats = settings.particles ? [0, 1].flatMap(n => particles.splats(P.world, cams[n], fine.time, null, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => rowOf(n, y) }))).sort((a, b) => b.depth - a.depth) : []; // @math the two viewers
           mark?.('particles');
           const look = lookOf(P.world, atmo, fine, first, false, cap, liquids);
           compose(out, index, layers, { L, palette, width: F.width, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }); mark?.('composite');
@@ -317,7 +319,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
           const row = y - (n === 0 ? 0 : s * Y.shift), top = s * (n === 0 ? Y.flip.first : Y.flip.first - Y.shift), rows = s * Y.flip.rows; // @math the first viewer keeps its rows
           return flipped[n] && row >= top && row < top + rows ? top + rows - 1 - (row - top) : row; // @math the mirrored row
         };
-        const splats = settings.particles ? [0, 1].flatMap(n => particles.splats(P.world, cams[n], fine.time, G).map(sp => ({ ...sp, map: y => rowOf(n, y) }))).sort((a, b) => b.depth - a.depth) : []; // @math the two viewers
+        const splats = settings.particles ? [0, 1].flatMap(n => particles.splats(P.world, cams[n], fine.time, G, rowLaw(P.world, settings.sizes)).map(sp => ({ ...sp, map: y => rowOf(n, y) }))).sort((a, b) => b.depth - a.depth) : []; // @math the two viewers
         mark?.('particles');
         const look = lookOf(P.world, atmo, fine, first, false, cap, liquids, B);
         composeAt(B, out, index, layers, { L: B.L, palette, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, splitSample(G, flipped));

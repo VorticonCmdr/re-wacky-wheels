@@ -503,7 +503,7 @@ function chooseItem(action) {
   if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : cycleCrtLevel(s, d.level)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS and its CRT AND HUD (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
   if (action.graphics) { // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js) and DISPLAY OPTIONS > RENDERING (display-menu.js): the same settings as the panel's
     const g = action.graphics, s = enh.settings;
-    if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) do nothing
+    if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) do nothing; SPRITE SIZES draws at 1x too
     setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return;
   }
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
@@ -643,7 +643,7 @@ function showGraphics() {
   for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
   $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !(s.sunShadows || s.water); // the sun lights the shadows and the water's glints
   const ready = display.crtReady(); // a world of another size needs WebGL 2 (the stored resolution and view are kept for when it is there again)
-  $('gfx-scale').value = String(s.scale); $('gfx-scale').disabled = !ready; $('gfx-view').value = s.view; $('gfx-view').disabled = !ready;
+  $('gfx-scale').value = String(s.scale); $('gfx-scale').disabled = !ready; $('gfx-view').value = s.view; $('gfx-view').disabled = !ready; $('gfx-sizes').value = s.sizes; // the sprite sizes draw at 1x too: never disabled
   if (!ready) $('gfx-render').textContent = resolutionNone(s);
   else if (!enh.active()) $('gfx-render').textContent = '';
   if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
@@ -659,6 +659,7 @@ for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphi
 for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
 $('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 'scale', Number(e.target.value)), e.target));
 $('gfx-view').addEventListener('change', e => setGraphics(change(enh.settings, 'view', e.target.value), e.target));
+$('gfx-sizes').addEventListener('change', e => setGraphics(change(enh.settings, 'sizes', e.target.value), e.target));
 $('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
 showGraphics();
 

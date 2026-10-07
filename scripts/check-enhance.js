@@ -16,7 +16,8 @@
 //  4c. the HUD layer: the enhancer's world and overlay layers give the very same picture as its draw without them, the overlays' layer
 //     holds exactly the masked pixels, and the reference renderer's layers put back together are its picture;
 //  5. with --time, the mean, median and 95th percentile draw time of each effect on the demos, on this machine (and of the general paths of
-//     6, and of 2x: smooth motion only, Enhanced, Enhanced with a sunset, and both again with every soft layer at the output resolution);
+//     6, and of 2x: smooth motion only, Enhanced, Enhanced with a sunset, and both again with every soft layer at the output resolution; the
+//     wide view at 1x and 2x; the smooth sprite sizes at 1x and 2x);
 //  6. Stage 4's general paths (caster.js, blit.js, composite.js compositeAt) and the draw of a geometry (the enhancer's own buffers, the
 //     decimation, the split screen's general cut and flip, the world composed under the overlays, the canvas and the HUD built from it) forced
 //     at the reference geometry (createEnhancer's `force`): every scenario, the slides demo, the link race's second seat, a race at detail
@@ -37,10 +38,17 @@
 //     particles off: their discs are drawn at the output resolution) every pixel of the world's reference samples that is no picture, no
 //     overlay and under no contact shadow, sun shadow or skid mark is the 1x Enhanced picture's, and with the relief off the pictures' pixels
 //     are too; every draw is 640 x 400. Section 1 runs 2x too, switching between 1x and 2x mid-run.
+//  10. Stage 4's smooth sprite sizes (SPRITE SIZES SMOOTH, M7) against the stepped ones at the tick, at 1x, 2x and 1x wide, in every
+//     scenario, the slides demo and the link race's second seat: every record's ground anchor within one reference column and one reference
+//     row of its classes place at every distance; the particles and the skid marks on the same rows as the pictures; a far object's bottom
+//     row continuous across the row table's plateau (the floor's own rows, geometry.js rowOfDepth, where the row table stands everything from
+//     800 to 1122 on row 131), never above that row 131 (geometry.js standingRow: past the floor's last sample the floor draws no ground) and
+//     its contact shadow on the floor; each track's floor giving those rows. Section 1 switches into and out of smooth sizes at 1x and 2x
+//     mid-run too.
 //  11. Stage 4's wide view (VIEW WIDE through the settings and the frame context) at 1x and 2x against the standard view and the reference
 //     renderer, with and without the margins' probes (the full list at the section). Section 1 switches into and out of it mid-run too.
-// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,6,6b,9,11] (--only runs the sections named, for a
-// quick look; the gate is the run of every section)
+// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,6,6b,9,10,11] (--only runs the sections named, for
+// a quick look; the gate is the run of every section)
 import { readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
@@ -73,7 +81,13 @@ import { createReliefProvider } from '../src/enhance/relief-store.js';
 import { SENTINEL } from '../src/enhance/composite.js';
 import { LAYER_KEYS } from '../src/enhance/scene.js';
 import { blockPictures } from '../src/enhance/blit.js';
-import { geometryOf, viewMargin, wideReport, stripPeriod } from '../src/enhance/geometry.js';
+import { geometryOf, viewMargin, wideReport, stripPeriod, rowOfDepth, rowReport, standingRow } from '../src/enhance/geometry.js';
+import { placeSmooth } from '../src/enhance/scene.js';
+import { headingVector, rowAt } from '../src/enhance/project.js';
+import { casterOf, stampShadow, shadowBox } from '../src/enhance/shadows.js';
+import { models } from '../src/enhance/models.js';
+import { viewSetup, projectPoint } from '../src/game/view.js';
+import { clipPicture } from '../src/game/objects.js';
 import { normalizeDisplay } from '../src/enhance/display-settings.js';
 import { WIDE, SUN } from '../src/enhance/config.js';
 import { splitSample } from '../src/enhance/split.js';
@@ -159,7 +173,7 @@ const hashState = s => crc32(new TextEncoder().encode(JSON.stringify(s, (k, v) =
 const lehmer = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147483647); // @math a repeatable stand-in for the browser's random source
 const keepRandom = Math.random;
 const guarded = fn => { const r = Math.random; Math.random = () => { throw new Error('the enhanced presentation used Math.random'); }; try { return fn(); } finally { Math.random = r; } };
-const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }]; // Stage 4: 2x and the wide view among them, switched to and from mid-run
+const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.enhanced, sizes: 'smooth' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }, { ...PRESETS.original, sizes: 'smooth' }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }]; // Stage 4: 2x, the wide view and the smooth sprite sizes (1x, 2x, and alone with Original's switches) among them, switched to and from mid-run
 // A settings change every `EVERY` ticks, so that a run of `frames` ticks applies every entry, Original's reference renderer back to the enhanced
 // path (its reset) among them; a run that goes past the last change and misses one fails.
 const EVERY = Math.max(Math.floor(frames / (SWITCHES.length + 1)), 1);
@@ -394,7 +408,7 @@ if (want('3c')) {
 // check:identity, every scenario with the slides demo, the link race's second seat, a race at detail level 3 and the split screen with a viewer
 // upside down now and then (set on the state for both draws and put back before the next tick). The two enhancers draw the same
 // state at the same blends; the overhead map is kept from the dispatched draw only after both have drawn, so each captures it from its own world.
-if (want('6') || want('6b') || want('9') || want('11')) {
+if (want('6') || want('6b') || want('9') || want('10') || want('11')) {
   const ticks = Math.min(frames, 160), FORCE = { caster: true, blit: true, composite: true, pipeline: true }; // @math the fly-in, the start and some racing
   const darkFull = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math check:identity's B: every track night, cloudy, mountainous, its water and relief full
   const CONFIGS = { A: { settings: PRESETS.enhanced, atmosphere: null, layers: false }, B: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: false }, C: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: true }, D: { settings: { ...PRESETS.original, smooth: true }, atmosphere: null, layers: false } };
@@ -556,6 +570,121 @@ if (want('6') || want('6b') || want('9') || want('11')) {
   if (want('9') && !count.compared) fail('2x: no pixel compared with the 1x picture');
   else if (want('9') && !nineWrong) console.log(`ok   2x through the settings: ${count.scenarios} scenarios, ${count.pictures} pictures at the tick, each 640 x 400; the index, the canvas and the HUD layer (${count.hud} overlay pixels) the reference renderer's; ${count.compared} pixels of the world's samples the 1x Enhanced picture's with a sunset, the sky's layers, the relief and the water (the particles off), the pictures among them with the relief off; left out ${count.sprites} picture pixels with the relief on (${count.spriteSame} of them the 1x colour all the same) and ${count.soft} under a shadow or a mark (${count.softSame} of them the 1x colour, as the reference look's soft layers must be) (${((performance.now() - ninth) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
 
+  // ---- 10. the smooth sprite sizes (SPRITE SIZES SMOOTH through the settings, M7) at the tick against the stepped sizes (the classes): two
+  // traced enhancers, Enhanced with the default atmosphere, one with each size law, drawing the same state at alpha 1 at 1x, 2x and 1x wide
+  // (the display's default shape: the margin records too), in every scenario (the split screen's trace is its last viewer's), the slides demo
+  // and the link race's second seat. The records are matched by what they show (wide.js recordKey); every smooth record's ground anchor (the
+  // anchor column of its picture's bottom edge) must lie within one reference column and one reference row (s output pixels) of its classes
+  // place, at every distance (the standing row is the floor's own row, within a row of the table's below 800, and the table's last row 131
+  // from about 878 on). The two enhancers keep the same particles and skid marks (the same ticks, the same seed): every particle disc of the
+  // smooth sizes is the classes' moved down by s times the standing row less the row table's row of its distance, and the skid mark quads
+  // are the classes' columns on rows of their own. Then a far object swept from 700 to 1122 units: its smooth bottom row goes down steadily
+  // (the floor's rows, rowOfDepth, at quarter units strictly decreasing with no step of a hundredth of a row; drawn, never up and never more
+  // than an output row between neighbouring units) while the classes stand it on row 131, it never stands above that row (where the floor
+  // draws no ground and the composite would show no contact shadow under it), and its contact shadow darkens the floor's rows at every
+  // distance of the plateau.
+  const tenth = performance.now(), ten = { scenarios: 0, pictures: 0, records: 0, smooth: 0, far: 0, worstX: 0, worstY: 0, worstFar: 0, splats: 0, splatsMoved: 0, marks: 0, marksMoved: 0 };
+  let tenWrong = 0;
+  if (want('10')) {
+    const reports = raceTracks.map(t => { const w = loadTrack(dat, String(t)); let worst = 0; for (let d = 80; d < 800; d++) worst = Math.max(worst, Math.abs(rowOfDepth(w, d) - w.rows[d])); return { t, ok: rowReport(w).ok, worst }; }); // @math the distances of the game's records below the plateau
+    const refused = reports.filter(r => !r.ok);
+    if (refused.length) fail(`the floor gives no rows of its own on track ${refused.map(r => r.t).join(', ')} (its centre-column depths do not increase): the smooth sizes stand them on the row table there`);
+    console.log(`     the floor's own rows (rowOfDepth) on ${reports.length - refused.length} of ${reports.length} tracks, within ${Math.max(...reports.map(r => r.worst)).toFixed(3)} rows of the row table at the whole distances 80 to 799`);
+    for (const [scale, view] of [[1, 'standard'], [2, 'standard'], [1, 'wide']]) for (const make of [...SCENARIOS, slides, linkSecond]) { // @math the scales and views of the check
+      const sc = make(), st = sc.state, cfg = { ...PRESETS.enhanced, scale, view }, E = { classes: createEnhancer({ storage: memory(), trace: true }), smooth: createEnhancer({ storage: memory(), trace: true }) };
+      E.classes.configure(cfg); E.smooth.configure({ ...cfg, sizes: 'smooth' });
+      const index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+      const drawn = e => {
+        const palette = rgbaPalette(st.world.palette);
+        const P = sc.split ? e.drawSplit(st, 1, { index, out, palette, mode: st.menu.settings.detail.split, overlays: versusOverlays, worldReady: true })
+          : e.drawSingle(st, 1, { index, out, palette, mode: st.detail, sky: sceneSky(st), seat: sc.seat ?? 0, worldReady: true, aspect: ASPECT, wideAllowed: !sc.link && !sceneSky(st), overlays: (p, fb) => drawRaceOverlays(p, fb) });
+        if (!st.minimap && P.minimap) st.minimap = P.minimap;
+        return sizeWrong(e, sc);
+      };
+      let found = null;
+      for (let t = 0; t < ticks && !found; t++) {
+        const input = sc.input(); if (input === null) break;
+        stepRace(st, input); E.classes.afterTick(st); E.smooth.afterTick(st);
+        if (t % 7 !== 3) continue; // @math a sample now and then
+        for (const k of ['classes', 'smooth']) { const bad = drawn(E[k]); if (bad) found ??= `tick ${t}, ${k}: ${bad}`; }
+        const a = E.classes.inspect().trace.records, b = E.smooth.inspect().trace.records, byKey = new Map(a.map(r => [r.key, r]));
+        if (a.length !== b.length || b.some(r => !byKey.has(r.key))) found ??= `tick ${t}: the smooth sizes drew ${b.length} records (${b.map(r => r.key).join(' ')}), the classes ${a.length} (${a.map(r => r.key).join(' ')})`;
+        for (const r of b) {
+          const c = byKey.get(r.key);
+          if (!c || found) continue;
+          ten.records++;
+          if (!r.smooth) { if (r.key !== null) found = `tick ${t}: ${r.key} was not drawn in smooth sizes`; continue; } // only the own car keeps its class
+          ten.smooth++;
+          const dx = Math.abs(r.anchor.x - c.anchor.x) / scale, dy = Math.abs(r.anchor.y - c.anchor.y) / scale;
+          if (c.distance >= 800) { ten.far++; ten.worstFar = Math.max(ten.worstFar, dx, dy); } else { ten.worstX = Math.max(ten.worstX, dx); ten.worstY = Math.max(ten.worstY, dy); } // @math the row table's plateau begins here
+          if (dx > 1 || dy > 1) found = `tick ${t}: ${r.key} at the distance ${c.distance} stands at ${r.anchor.x},${r.anchor.y} in smooth sizes, ${c.anchor.x},${c.anchor.y} in the classes (${scale}x ${view})`;
+        }
+        if (!sc.split) { // the particles (the split screen keeps no discs in its trace)
+          const pa = E.classes.inspect().splats, pb = E.smooth.inspect().splats, w = st.world;
+          if (pa.length !== pb.length) found ??= `tick ${t}: ${pb.length} particles in smooth sizes, ${pa.length} in the classes`;
+          else for (let i = 0; i < pa.length && !found; i++) {
+            const a = pa[i], b = pb[i], dy = scale * (standingRow(w, a.depth) - rowAt(w.rows, a.depth));
+            ten.splats++; if (b.y !== a.y) ten.splatsMoved++;
+            if (b.x !== a.x || b.r !== a.r || b.depth !== a.depth || Math.abs(b.y - a.y - dy) > 1e-6) found = `tick ${t}: the particle at the distance ${a.depth.toFixed(2)} is at ${b.x.toFixed(2)},${b.y.toFixed(3)} in smooth sizes, ${a.x.toFixed(2)},${a.y.toFixed(3)} in the classes, where the standing row is ${(dy / scale).toFixed(3)} rows from the table's (${scale}x ${view})`; // @math the tolerance
+          }
+        }
+        const ma = E.classes.inspect().trace.marks, mb = E.smooth.inspect().trace.marks; // the skid marks: the same quads, in the same columns
+        if (ma.length !== mb.length || mb.some((q, i) => q.x0 !== ma[i].x0 || q.x1 !== ma[i].x1)) found ??= `tick ${t}: ${mb.length} skid mark quads in smooth sizes, ${ma.length} in the classes, or in other columns (${scale}x ${view})`;
+        else { ten.marks += mb.length; ten.marksMoved += mb.filter((q, i) => q.y0 !== ma[i].y0 || q.y1 !== ma[i].y1).length; }
+        ten.pictures++;
+      }
+      ten.scenarios++;
+      if (found) { tenWrong++; fail(`smooth sizes at ${scale}x ${view}, ${sc.name}: ${found}`); }
+    }
+    // A far object ahead of a camera on track 1, swept away from it along two rays, straight ahead and 140 TRIG entries to the side (near the
+    // fan's edge): the game's record (its distance, size class and row table row: view.js projectPoint), placed in smooth sizes at the tick
+    // (scene.js placeSmooth) at 1x and 2x. The camera faces an eighth of a turn, along the diagonal of the game's box (view.js viewSetup: the
+    // box of the camera and the fan's two far corners), so straight ahead the game draws the object out to its farthest distance, 1122. Its
+    // contact shadow, in smooth sizes and in the classes (shadows.js casterOf on the drawn box, stampShadow), summed over the floor's rows
+    // (from its top row, its last sample's: the composite darkens the floor's pixels alone).
+    const w = loadTrack(dat, '1'), cam = { x: 2048, y: 2048, heading: 240 }, fan = viewSetup(w, cam), W0 = w.carShape[0].w, H0 = w.carShape[0].h; // @math the middle of the map; an eighth of the turn of 1920
+    const FL = models().floor, lastRow = w.rows[w.rows.length - 1], floorTop = FL.bottomRow - (FL.steps - 1), P0 = { car: {}, fx: {}, ai: { racers: [] } }, shadowsOn = { shadows: true };
+    const fine = { worst: 0, down: true }, sweep = [];
+    let sweepWrong = null, shadeRatio = Infinity;
+    for (let d = 700; d < 1122; d += 0.25) { const a = rowOfDepth(w, d), b = rowOfDepth(w, d + 0.25); fine.worst = Math.max(fine.worst, a - b); if (!(b < a)) fine.down = false; } // @math the sweep's distances in quarter units
+    if (!fine.down || fine.worst >= 0.01) sweepWrong = `the floor's rows from 700 to 1122: ${fine.down ? '' : 'not strictly decreasing, '}a step of ${fine.worst.toFixed(4)} rows a quarter unit`; // @math a hundredth of a row
+    for (const s of [1, 2]) for (const ray of [0, 140]) { // @math the scales; straight ahead and near the fan's edge
+      const G = geometryOf({ s, m: 0 }), seen = [], [vx, vy] = headingVector(w, cam.heading + ray), L = { shade: new Float32Array(G.W * G.H) };
+      const onFloor = c => { // the shade a contact shadow lays on the floor's rows (then cleared)
+        if (!c) return 0;
+        const b = shadowBox(c, s);
+        let sum = 0;
+        stampShadow(L, c, G.W, G.H, s);
+        for (let y = Math.max(b.y0, 0); y <= Math.min(b.y1, G.H - 1); y++) for (let x = Math.max(b.x0, 0); x <= Math.min(b.x1, G.W - 1); x++) { const o = y * G.W + x; if (y >= s * floorTop) sum += L.shade[o]; L.shade[o] = 0; }
+        return sum;
+      };
+      for (let D = 690; D <= 1300; D++) { // @math a little either side of the far distances
+        const hit = projectPoint(w, fan, cam, Math.round(cam.x + vx * D), Math.round(cam.y + vy * D), w.rows);
+        if (!hit || hit.distance < 700) continue; // @math from the far end of the class 8 on
+        const picture = w.carShape[hit.sizeClass], rec = { ...clipPicture(hit, picture), picture, frame: w.carFrames.cars.subarray(0, W0 * H0), distance: hit.distance, sizeClass: hit.sizeClass, type: 1, racer: 1, object: -1 }, p = placeSmooth(rec, w, cam, cam, null, G);
+        const shade = onFloor(casterOf(p, P0, null, 0, shadowsOn, { x: p.place.x, y: p.place.y, u: s, m: 0, box: { w: p.smooth.w, h: p.smooth.h, ax: p.smooth.w >> 1 } })), classesShade = onFloor(casterOf(rec, P0, null, 0, shadowsOn, { x: s * (rec.left - rec.firstColumn), y: s * rec.top, u: s, m: 0 })); // the own car's ground row (unused)
+        seen.push({ d: hit.distance, smooth: p.place.y + p.smooth.h, classes: s * (rec.top + picture.h), shade, classesShade });
+      }
+      seen.sort((a, b) => a.d - b.d);
+      const plateau = seen.filter(e => e.d >= 800), rows = new Set(plateau.map(e => e.smooth)), stuck = new Set(plateau.map(e => e.classes)); // @math the row table's plateau
+      const jump = seen.findIndex((e, i) => i > 0 && (e.smooth > seen[i - 1].smooth || seen[i - 1].smooth - e.smooth > 1));
+      if (jump > 0) sweepWrong ??= `${s}x, ${ray} entries off the heading: the bottom row jumps between the distances ${seen[jump - 1].d} and ${seen[jump].d} (output rows ${seen[jump - 1].smooth} and ${seen[jump].smooth})`;
+      else if (!plateau.length || rows.size < 2 || stuck.size !== 1) sweepWrong ??= `${s}x, ${ray} entries off the heading: ${rows.size} smooth rows and ${stuck.size} classes rows over the ${plateau.length} distances of the plateau`; // @math the smooth rows must move, the classes' must not
+      else if (seen.some(e => e.smooth < s * lastRow)) { const e = seen.find(x => x.smooth < s * lastRow); sweepWrong ??= `${s}x, ${ray} entries off the heading: at the distance ${e.d} the bottom stands on output row ${e.smooth}, above the row table's last row ${s * lastRow}, where the floor draws no ground`; }
+      else if (plateau.some(e => !(e.shade > 0))) { const e = plateau.find(x => !(x.shade > 0)); sweepWrong ??= `${s}x, ${ray} entries off the heading: at the distance ${e.d} (bottom on output row ${e.smooth}) its contact shadow lays nothing on the floor's rows (the classes' ${e.classesShade.toFixed(2)})`; }
+      else {
+        const settle = plateau.find(e => e.smooth === s * lastRow);
+        for (const e of plateau) if (e.classesShade > 0) shadeRatio = Math.min(shadeRatio, e.shade / e.classesShade);
+        sweep.push(`${s}x ${ray ? `${ray} entries to the side` : 'straight ahead'} from output row ${plateau[0].smooth} at ${plateau[0].d} to ${plateau[plateau.length - 1].smooth} at ${plateau[plateau.length - 1].d}${settle ? `, on it from ${settle.d}` : ''} (the classes ${[...stuck][0]} throughout)`);
+      }
+    }
+    if (sweepWrong) fail(`a far object across the row table's plateau: ${sweepWrong}`);
+    if (!ten.smooth) fail('smooth sizes: no record was drawn in smooth sizes');
+    else if (ten.splats && !ten.splatsMoved) fail(`smooth sizes: none of ${ten.splats} particle discs stands off the classes' rows (the standing rows never reached the particles)`);
+    else if (ten.marks && !ten.marksMoved) fail(`smooth sizes: none of ${ten.marks} skid mark quads stands on other rows than the classes' (the standing rows never reached the skid marks)`);
+    else if (!tenWrong && !sweepWrong) console.log(`ok   smooth sprite sizes at the tick against the classes at 1x, 2x and 1x wide: ${ten.scenarios} scenario runs, ${ten.pictures} pictures, ${ten.records} records (${ten.smooth} in smooth sizes); below the distance 800 every ground anchor within ${ten.worstX.toFixed(2)} reference columns and ${ten.worstY.toFixed(2)} rows of its classes place, the ${ten.far} records from 800 on within ${ten.worstFar.toFixed(2)}; ${ten.splats} particle discs on the standing rows (${ten.splatsMoved} of them off the classes' rows), ${ten.marks} skid mark quads in the classes' columns (${ten.marksMoved} on other rows); a far object: ${sweep.join(', ')}, never up, at most an output row between neighbouring distances, never above the row table's last row and its contact shadow on the floor at every distance from 800 on (at least ${(100 * shadeRatio).toFixed(0)} per cent of the classes'); the floor's rows strictly decreasing at quarter units, at most ${fine.worst.toFixed(4)} rows a step (${((performance.now() - tenth) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
+  }
+
   // ---- 11. the wide view (VIEW WIDE through the settings and the frame context, the display's default shape 4 BY 3: 53 columns a side), at 1x
   // and 2x, every scenario, the slides demo and the link race's second seat (neither ever wide). Each sample draws the same state at the same
   // blend in the standard view and the wide view, Enhanced with a sunset, the sky's layers, the relief and the water (a scenario's world and
@@ -659,7 +788,8 @@ if (timing) {
   const configs = [['reference renderer', null], ['smooth motion', { ...PRESETS.original, smooth: true }], ['+ shadows', { ...PRESETS.original, smooth: true, shadows: true, sceneryShadows: true }], ['+ sun shadows', { ...PRESETS.original, smooth: true, sunShadows: true }], ['+ particles', { ...PRESETS.original, smooth: true, particles: true }], ['+ skid marks', { ...PRESETS.original, smooth: true, skidMarks: true }], ['+ fog', { ...PRESETS.original, smooth: true, fog: true }], ['+ sky layers', { ...PRESETS.original, smooth: true, clouds: true }], ['+ sky, mountains', { ...PRESETS.original, smooth: true, clouds: true }, { range: 1, rangeShape: 'mountains' }], ['+ water', { ...PRESETS.original, smooth: true, water: true }], ['+ lighting (sunset)', { ...PRESETS.original, smooth: true, lighting: true }, { grade: 'sunset' }], ['Enhanced (all)', PRESETS.enhanced], ['Enhanced, sunset', PRESETS.enhanced, { grade: 'sunset' }], ['general paths 1x', PRESETS.enhanced, null, { caster: true, blit: true, composite: true }], // the last: Enhanced through Stage 4's general paths at the reference geometry (6)
     ['smooth only 2x', { ...PRESETS.original, smooth: true, scale: 2 }], ['Enhanced 2x', { ...PRESETS.enhanced, scale: 2 }], ['Enhanced 2x sunset', { ...PRESETS.enhanced, scale: 2 }, { grade: 'sunset' }], // Stage 4's 2x, the soft layers on the reference grid (HD.look 'reference')
     ['Enhanced 2x full', { ...PRESETS.enhanced, scale: 2 }, null, null, 'full'], ['Enhanced 2x sunset full', { ...PRESETS.enhanced, scale: 2 }, { grade: 'sunset' }, null, 'full'], // and with every soft layer at the output resolution ('full'), for comparison
-    ['Enhanced 1x wide', { ...PRESETS.enhanced, view: 'wide' }], ['Enhanced 2x wide', { ...PRESETS.enhanced, scale: 2, view: 'wide' }]]; // Stage 4's wide view on the display's default shape (4 BY 3: 426 and 852 columns)
+    ['Enhanced 1x wide', { ...PRESETS.enhanced, view: 'wide' }], ['Enhanced 2x wide', { ...PRESETS.enhanced, scale: 2, view: 'wide' }], // Stage 4's wide view on the display's default shape (4 BY 3: 426 and 852 columns)
+    ['Enhanced 1x smooth sizes', { ...PRESETS.enhanced, sizes: 'smooth' }], ['Enhanced 2x smooth sizes', { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }]]; // Stage 4's smooth sprite sizes (M7)
   console.log(`  (load average ${os.loadavg().map(v => v.toFixed(1)).join(' ')}: compare the rows against each other, a busy machine slows them all)`);
   for (const [label, cfg, atmosphere, force = null, look = undefined] of configs) {
     const times = [];

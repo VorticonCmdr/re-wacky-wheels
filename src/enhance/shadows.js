@@ -6,6 +6,8 @@
 // a fraction on the reference grid where the place is a fine one), and their footprints and silhouettes come from the blit on that grid
 // (blit.js blitAt: the output pixels, or the picture's reference samples), so a shadow stays under the picture as drawn. A reference
 // position x becomes u x + at's column, a row u y + at's row; at the reference geometry (no `at`) every number is the one it always was.
+// A picture in smooth sizes (Stage 4, M7) is not its class's: `at.box` gives its drawn width, height and anchor column on the grid, and
+// `at.row` the row law its ground stands on (geometry.js standingRow), which its sun cast's corners follow (castShadow).
 import { SHADOW, SUN } from './config.js';
 import { headingVector, cameraPointAt, fromCameraAt, pixelsPerUnit } from './project.js';
 import { fillQuad } from './raster.js';
@@ -13,7 +15,8 @@ import { models } from './models.js';
 
 // The shadow of a draw record, or null. `foot` is the opaque bottom of the drawn picture (objects), `ground` the own car's ground row (a
 // reference row). With `at` ({ x, y, u, m }: the unclipped picture's top left on a grid of u pixels a reference pixel, and the margin) the
-// shadow is on that grid, `foot` the blit's on it; the own car stands on u times its ground row.
+// shadow is on that grid, `foot` the blit's on it; the own car stands on u times its ground row. With `at.box` ({ w, h, ax } on the grid: a
+// picture in smooth sizes) the picture's drawn width, height and anchor column stand in for its class's.
 export function casterOf(r, P, foot, ground, opts, at = null) {
   const S = SHADOW, u = at ? at.u : 1;
   if (r.type === 0) { // the own car: at the ground row whatever its jump, smaller and lighter the higher it is; none while it falls in a pit, flies off a crash or is wrecked
@@ -26,12 +29,13 @@ export function casterOf(r, P, foot, ground, opts, at = null) {
     if (!opts.shadows) return null;
     const racer = P.versus && r.racer === 1 ? null : P.ai?.racers?.[r.racer];
     if (racer?.crashed) return null;
+    if (at?.box) return { x: at.x + at.box.ax, y: at.y + at.box.h, rx: (at.box.w * S.widthOfPicture) / 2, strength: 1 }; // @math the drawn picture's anchor column; half its width is the radius
     if (at) return { x: at.x + u * (r.picture.w >> 1), y: at.y + u * r.picture.h, rx: u * ((r.picture.w * S.widthOfPicture) / 2), strength: 1 }; // @math the anchor column; half the width is the radius
     return { x: r.left - r.firstColumn + (r.picture.w >> 1), y: r.top + r.picture.h, rx: (r.picture.w * S.widthOfPicture) / 2, strength: 1 }; // @math the anchor column; half the width is the radius
   }
   if (r.shot !== undefined || !opts.sceneryShadows || !foot) return null; // the shots fly; the scenery (the objects and the starter) by the footprint of its lowest rows
   const keep = 1 - Math.min((foot.lift ?? 0) / (S.liftFade * u), 1) / 2; // @math a bouncing frame's shadow stays on the anchor row, down to half
-  return { x: (foot.minX + foot.maxX + 1) / 2, y: at ? at.y + u * r.picture.h : r.top + r.picture.h, rx: ((foot.maxX - foot.minX + 1) * S.objectWidth * keep) / 2, strength: keep }; // @math the middle of the footprint; half its width is the radius
+  return { x: (foot.minX + foot.maxX + 1) / 2, y: at ? at.y + (at.box ? at.box.h : u * r.picture.h) : r.top + r.picture.h, rx: ((foot.maxX - foot.minX + 1) * S.objectWidth * keep) / 2, strength: keep }; // @math the middle of the footprint; half its width is the radius
 }
 
 // Stamps the ellipse into the shade layer (the larger of the shadows that overlap). `s` is the geometry's scale: the shadow `c` is in output
@@ -63,13 +67,16 @@ export function shadowBox(c, s = 1) {
 // pictures cast as have a contact shadow (racers, ducks, the other human, the own car on the ground, the scenery), never a shot. With `at`
 // (casterOf's: the unclipped picture's top left on a grid of u pixels a reference pixel, and the margin) everything is on that grid: `cols`
 // (the blit's silhouette on it, from the picture's first column), the ground row, the anchor column, the picture's `left` and `top`, and the
-// grid's scale `s` (u) and margin `m` for castShadow.
+// grid's scale `s` (u) and margin `m` for castShadow; with `at.box` (smooth sizes) the drawn picture's anchor column and bottom, its drawn
+// width in reference pixels (`width`) and the row law of its ground (`row`).
 export function castOf(r, P, drawn, ground, at = null) {
   if (!drawn?.cols || r.shot !== undefined) return null;
   if (r.type === 1 && !(P.versus && r.racer === 1) && P.ai?.racers?.[r.racer]?.crashed) return null;
   if (r.type === 0 && (P.fx?.pit || P.fx?.crash || P.car.crashed || P.car.wrecked)) return null;
   if (!at) return r.type === 0 ? { r, cols: drawn.cols, ground, anchor: r.left + (r.picture.w >> 1) } : { r, cols: drawn.cols, ground: r.top + r.picture.h, anchor: r.left - r.firstColumn + (r.picture.w >> 1) }; // @math the column is the left edge plus half the width
-  const { u, m } = at, anchor = at.x + u * (r.picture.w >> 1); // @math the column is the left edge plus half the width
+  const { u, m, box } = at;
+  if (box) return { r, cols: drawn.cols, ground: at.y + box.h, anchor: at.x + box.ax, left: at.x, top: at.y, s: u, m, width: box.w / u, row: at.row ?? null };
+  const anchor = at.x + u * (r.picture.w >> 1); // @math the column is the left edge plus half the width
   return { r, cols: drawn.cols, ground: r.type === 0 ? u * ground : at.y + u * r.picture.h, anchor, left: at.x, top: at.y, s: u, m };
 }
 
@@ -80,14 +87,15 @@ export function castOf(r, P, drawn, ground, at = null) {
 // { r, cols, ground, anchor } in reference pixels, as the garage's preview gives it); with its `s` and `m` the silhouette, the ground and the
 // anchor are output pixels, an output pixel is 1/s of a reference one and each output column casts its own band. With a margin (m > 0, the
 // wide view) the camera's ground is reached through the wide projection (project.js cameraPointAt and fromCameraAt: the pinhole inside the
-// reference fan, its equiangular continuation outside it), so a cast in the margins lies on the texels the floor draws there. Writes L.cast
-// and returns the box it touched (output pixels).
+// reference fan, its equiangular continuation outside it), so a cast in the margins lies on the texels the floor draws there. With `c.row` (a
+// picture in smooth sizes: geometry.js standingRow) the corners stand on that row law, as the picture does, and `c.width` is the picture's
+// drawn width in reference pixels. Writes L.cast and returns the box it touched (output pixels).
 export function castShadow(L, c, world, sun, width, height, box) {
-  const { r, cols } = c, s = c.s ?? 1, m = c.m ?? 0, left = c.left ?? r.left, top = c.top ?? r.top, d = r.distance, unit = pixelsPerUnit(d), ppu = unit * s, A = cameraPointAt(world, c.anchor / s - m, d, m), half = ((r.picture.w / unit) * SUN.depth) / 2; // @math half the depth either side of the point
+  const { r, cols } = c, s = c.s ?? 1, m = c.m ?? 0, left = c.left ?? r.left, top = c.top ?? r.top, d = r.distance, unit = pixelsPerUnit(d), ppu = unit * s, A = cameraPointAt(world, c.anchor / s - m, d, m), half = (((c.width ?? r.picture.w) / unit) * SUN.depth) / 2, row = c.row ?? null; // @math half the depth either side of the point
   for (let i = 0; i < cols.top.length; i++) {
     if (cols.top[i] < 0) continue;
     const u = (left + i - c.anchor) / ppu, zTop = (c.ground - (top + cols.top[i])) / ppu, zBottom = Math.max((c.ground - (top + cols.bottom[i] + 1)) / ppu, 0);
-    const at = (z, depth) => fromCameraAt(world, A.f + depth + z * sun.length * sun.f, A.l + u + z * sun.length * sun.l, true, m);
+    const at = (z, depth) => fromCameraAt(world, A.f + depth + z * sun.length * sun.f, A.l + u + z * sun.length * sun.l, true, m, row);
     const corners = [at(zBottom, -half), at(zTop, -half), at(zTop, half), at(zBottom, half)];
     if (corners.some(p => !p)) continue;
     const pts = corners.map(p => [s * (p.column + m), s * (p.bottom - 1)]); // the row above the ground row, as the picture's bottom row is

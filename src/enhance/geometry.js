@@ -11,8 +11,11 @@
 // - viewMargin(view, aspect, world): the margin of a view for the display's shape (0 for the standard view, and for a world that fails
 //   wideReport: its strip's period and its VIEW words against the cosine, viewWorst).
 // - cosT(trig, D): the cosine of D TRIG entries from the loaded table itself, without Math.cos.
+// - rowOfDepth(world, d): the floor's own row of a depth (the smooth sprite sizes, M7), rowReport, standingRow and rowLaw. (project.js
+//   imports cosT from here and this module rowAt from there: neither calls the other while its module is evaluated.)
 import { models } from './models.js';
 import { RENDER, DISPLAY, WIDE } from './config.js';
+import { rowAt } from './project.js';
 
 const geometries = new Map();
 export function geometryOf({ s = 1, m = 0 } = {}) {
@@ -108,3 +111,60 @@ export function cosT(trig, D) {
   const d = dotsOf(trig), n = d.length, f = Math.floor(D), t = D - f, a = ((f % n) + n) % n, b = (a + 1) % n;
   return t === 0 ? d[a] : d[a] + (d[b] - d[a]) * t;
 }
+
+// The floor's own row of a depth (Stage 4, M7: the smooth sprite sizes stand their pictures and the decals under them on it, up to the row
+// table's last row: standingRow below). rowOfDepth(world, d) is the screen row (a reference row, with its fraction) on which the floor
+// draws the depth d at its centre column. The floor's samples there are the depths D(k) = NDIST[centre][k] VIEW[centre] / 2^viewShift on
+// the rows bottomRow - k (a VIEW word of 0 is a scale of 1.0, as the floor's depths have it); between two samples the row goes linearly in
+// 1/d, as a ground plane's screen row does: k_f = k + (1/D(k) - 1/d) / (1/D(k) - 1/D(k + 1)), row = bottomRow - k_f. So at the sample
+// depths it is the floor's rows themselves (which are the row table's, but for row 130, which the table maps to 131), and it is continuous
+// and strictly decreasing. Beyond either end it goes on linearly in 1/d along the chord of the whole table, from (1/D(0), bottomRow) to
+// (1/D(last), bottomRow - last): the end segments alone carry NDIST's whole-unit rounding (115 to 116 over the first row would stand a
+// thing at the distance 80 on row 250, where the row table has 233 and the chord 233.2). Unlike the row table it has no plateau: the table
+// stands everything from 800 to 1122 on row 131 (its b rounded to 22 from 800 and to 21 from 838; from 879 on it would round lower and is
+// clamped to 21, rowMinimum), the floor puts those depths from row 132.0 up to 128.8. A world whose centre-column depths do not increase
+// strictly (none on the maintainer's archive) has no such rows: rowReport says so and rowOfDepth is the row table's row (project.js rowAt).
+// Cached per NDIST table (and the VIEW table it was made with).
+const depthRows = new WeakMap();
+function depthKnots(world) {
+  const known = depthRows.get(world.ndist);
+  if (known && known.view === world.view) return known;
+  const F = models().floor, V = models().view, word = world.view.getUint32(V.center * V.viewBytes, true) || 2 ** V.viewShift, inv = new Float64Array(F.steps); // @math the VIEW word is a 2.14 fixed-point scale
+  let ok = true;
+  for (let k = 0; k < F.steps; k++) {
+    const D = (world.ndist.getUint32((V.center * F.groupDwords + k) * F.ndistDwordBytes, true) * word) / 2 ** V.viewShift; // @math the VIEW word is a 2.14 fixed-point scale
+    inv[k] = 1 / D;
+    if (!(D > 0) || (k > 0 && !(inv[k] < inv[k - 1]))) ok = false;
+  }
+  const last = F.steps - 1, out = { view: world.view, ok, inv, last, slope: last / (inv[0] - inv[last]) }; // the chord's k per unit of 1/d
+  depthRows.set(world.ndist, out);
+  return out;
+}
+export function rowOfDepth(world, d) {
+  const T = depthKnots(world);
+  if (!T.ok) return rowAt(world.rows, d);
+  const { inv, last } = T, q = 1 / d;
+  let k;
+  if (q >= inv[0]) k = (inv[0] - q) * T.slope; // nearer than the first sample
+  else if (q <= inv[last]) k = last + (inv[last] - q) * T.slope; // beyond the last
+  else {
+    let lo = 0, hi = last; // inv[lo] >= q > inv[hi]
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (inv[mid] >= q) lo = mid; else hi = mid; }
+    k = lo + (inv[lo] - q) / (inv[lo] - inv[hi]);
+  }
+  return models().floor.bottomRow - k;
+}
+// Whether a world's floor gives rowOfDepth its rows: { ok } (its centre-column depths increase strictly; the checks print it per track).
+export const rowReport = world => ({ ok: depthKnots(world).ok });
+// The row a thing stands on in smooth sizes (its picture's bottom edge, and the decals under it): the floor's own row of its distance
+// (rowOfDepth), but never above the row table's last row, the row 131 on which the game stands everything from 800 on. Past the floor's
+// last sample (D(69), 972 on every track of the maintainer's archive: the floor's top row 130) the floor draws no ground, the horizon strip is
+// there, and rowOfDepth goes on up into it (to 128.8 at 1122), so a picture would hang over the strip with no floor under it, and its contact
+// shadow and sun cast (the composite lays them on the floor's pixels alone) would not show. The game refuses that rise too: its rounded b
+// would first fall below its clamp (rowMinimum) at 879, where the floor's own row passes 131 (878 on the archive). So in smooth sizes a
+// thing goes down the floor's rows from the camera to about 878 and stands on 131 beyond, as the classes do; rowOfDepth itself keeps no
+// plateau (the plan's "linear in 1/d beyond both ends"; docs/TODO.md has the choice).
+export const standingRow = (world, d) => Math.max(rowOfDepth(world, d), world.rows[world.rows.length - 1]);
+// The row law of the sprite sizes for the decals (the sun casts' corners, the skid marks, the particles: project.js fromCameraAt's `row`):
+// standingRow in smooth sizes, null (the row table, as always) in the classes.
+export const rowLaw = (world, sizes) => (sizes === 'smooth' ? d => standingRow(world, d) : null);

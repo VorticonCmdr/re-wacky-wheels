@@ -355,7 +355,7 @@ function previewRace(stem) {
   }
   function seek() { try { preview.seek(moment, settings); draw(); } catch (e) { status(e.message, true); } }
   function set(next) { // the settings, and every control showing them
-    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view;
+    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view; sizesSelect.value = settings.sizes;
     for (const k of EFFECTS) boxes[k].checked = settings[k];
     for (const k of Object.keys(LEVELS)) ranges[k].value = String(settings[k]);
     seek();
@@ -371,6 +371,7 @@ function previewRace(stem) {
   presetSelect.querySelector('option[value=custom]').disabled = true;
   const scaleSelect = selectControl('Resolution', RENDER.scales.map(n => [n, `${n}x`]), settings.scale, v => set(change(settings, 'scale', Number(v)))); // Stage 4: the Enhanced world at twice the samples; the preview shows it itself, WebGL or not
   const viewSelect = selectControl('View', [['standard', 'Standard'], ['wide', 'Wide (16:9)']], settings.view, v => set(change(settings, 'view', v))); // Stage 4: the wide view's margins, for the playtest page's display shape
+  const sizesSelect = selectControl('Sprite sizes', [['classes', 'Stepped, as the original'], ['smooth', 'Smooth']], settings.sizes, v => set(change(settings, 'sizes', v))); // Stage 4: the pictures at sizes between the game's classes, on the floor's own rows
   const boxes = Object.fromEntries(EFFECTS.map(k => [k, checkControl(EFFECT_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const ranges = Object.fromEntries(Object.keys(LEVELS).map(k => [k, rangeControl(LEVEL_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const use = el('button', 'Use these in the game'); use.onclick = () => { if (saveSettings(settings)) status('Saved: the playtest page draws with these graphics settings from now on.'); else status('This browser does not let the page keep settings.', true); }; field('Playtest', use);
@@ -385,7 +386,7 @@ function previewRace(stem) {
     state.raf = requestAnimationFrame(tick);
   }
   seek(); state.raf = requestAnimationFrame(tick);
-  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution and the view apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
+  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution, the view and the sprite sizes apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle; smooth sprite sizes draw the karts and the scenery at sizes between the game's ten steps, on the ground's own rows), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
 }
 
 function previewPos(entry) {

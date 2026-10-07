@@ -117,6 +117,12 @@ export const WIDE = { viewTolerance: 0.003, probeDistance: 400, seam: 8 };
 // at the picture's edge. Both are invented pixels (documented, never the art of the game); columns 0..319 are always the picture's own.
 export const SKY_MARGIN = { mode: 'redither', modes: ['redither', 'mirror'] };
 
+// Smooth sprite sizes (Stage 4, M7: docs/enhancements.md, Stage 4 as built; RENDER.sizes 'smooth'): a picture is its frame drawn at a size
+// between the game's classes, each output pixel reading the frame's texel nearest its middle (blit.js smoothMap). Such a map depends only on
+// the frame's size and the drawn size; the last `maps` of them are kept (a least recently used list), so a picture whose drawn size has not
+// changed since a recent frame needs none made again.
+export const SIZES = { maps: 256 };
+
 // The settings a visitor starts with: the Original preset, so the port plays as the game did until the player chooses otherwise.
 export const DEFAULTS = { preset: 'original', ...PRESETS.original, ...LEVELS, ...RENDER.defaults };
 export const STORAGE_KEY = 'wackywheels.graphics';

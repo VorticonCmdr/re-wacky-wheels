@@ -8,16 +8,16 @@ import { renderSky } from '../render/sky.js';
 import { clipPicture } from '../game/objects.js';
 import { playerGeometry } from '../game/player-car.js';
 import { starterPoint } from '../game/start.js';
-import { drawFloor, layerTemplate, projectFine, projectAt, roundWord, KIND } from './project.js';
+import { drawFloor, layerTemplate, projectFine, projectAt, roundWord, rowAt, KIND } from './project.js';
 import { drawFloorAt, floorTemplateAt } from './caster.js';
-import { blitAt, blitFlatAt } from './blit.js';
-import { IDENTITY } from './geometry.js';
+import { blitAt, blitFlatAt, shapeOf, smoothSize, smoothMap } from './blit.js';
+import { IDENTITY, standingRow, rowLaw } from './geometry.js';
 import { drawSkyAt, drawStripAt, upscaleRows } from './sky-hd.js';
 import { stampShadow, casterOf, castOf, castShadow, sunDirection, blurCast, boxBlurCast, shadowBox } from './shadows.js';
 import { waterShader, sunGlitter } from './water.js';
 import { groundLight, pictureLight, screenSun, paletteLuma } from './relief.js';
 import { SUN } from './config.js';
-import { mergeOrder } from './wide.js';
+import { mergeOrder, recordKey } from './wide.js';
 import { models } from './models.js';
 
 // The layers beside an indexed picture: the kind and the distance of every pixel, the contact shadows, the sun shadows and the skid marks
@@ -139,6 +139,43 @@ export function placeAt(r, world, camF, camI, a, G) {
   return { ...r, left, firstColumn: 0, width: r.picture.w, height: r.picture.h, place: { x: s * (left + m) + dx, y: s * r.top + dy } };
 }
 
+// A record in smooth sizes (Stage 4, M7: RENDER.sizes 'smooth'), or null where it keeps its class (the own car, which stands on its own row
+// at class 0 in both modes; a picture that is none of the world's shapes; a frame smaller than its shape's class 0): its whole frame drawn
+// at the size blit.js smoothSize gives at the record's fine distance, Wout = max(1, round(s w(d))) by Hout = max(1, round(s h(d))) output
+// pixels (blit.js smoothMap), with its ground anchor (the column floor(Wout / 2) of its bottom edge) on the fine column and on the floor's
+// own row of the fine distance, never above the row table's last row 131 (geometry.js standingRow): left = round(s (colFine + m)) -
+// floor(Wout / 2), top = round(s rowFine) - Hout (`place`, in output pixels; the blit cuts the picture per pixel). The fine column and
+// distance are the game's whole-camera place, the record's column and distance (view.js projectPoint's, or wide.js's for a margin record),
+// plus the shift of the record's point `a` between the fine and the whole camera's projections (project.js projectAt, the wide projection
+// with a margin), unrounded: refine's and placeAt's dc, and the distance's. So at the tick (no shift) they are the game's own: the anchor
+// is the classes place's column, and its row is within a reference row of the row table's at every distance (scripts/check-enhance.js
+// section 10). The pinhole's unrounded projection alone is up to 7.7 columns and 2.8 units off the game's near the camera, which works with
+// whole forward and lateral distances. A record that stands above its row-table row keeps that lift (none does today). The placed record's
+// distance is the fine one: the depth layer's and the order's (smoothOrder).
+export function placeSmooth(r, world, camF, camI, a, G) {
+  const info = r.type === 0 ? null : shapeOf(world, r.picture);
+  if (!info || info.W0 * info.H0 > r.frame.length) return null;
+  const { s, m } = G, half = r.picture.w >> 1, col0 = r.left - r.firstColumn + half, lift = rowAt(world.rows, r.distance) - (r.top + r.picture.h); // the whole camera's column (refine's recovery) and the record's height above its row
+  let dc = 0, dd = 0;
+  if (a) {
+    const f = projectAt(world, camF, a.x, a.y, G.m), i = projectAt(world, camI, roundWord(a.x), roundWord(a.y), G.m);
+    if (f && i) { dc = f.column - i.column; dd = f.distance - i.distance; }
+  }
+  const d = r.distance + dd, size = smoothSize(info.shape, d), w = Math.max(1, Math.round(s * size.w)), h = Math.max(1, Math.round(s * size.h));
+  const x = Math.round(s * (col0 + dc + m)) - (w >> 1), y = Math.round(s * (standingRow(world, d) - lift)) - h;
+  return { ...r, left: col0 - half, firstColumn: 0, width: r.picture.w, height: r.picture.h, distance: d, place: { x, y }, smooth: { w, h, map: smoothMap(info.W0, info.H0, w, h) } };
+}
+
+// The draw order in smooth sizes (Stage 4, M7): farthest first by the records' fine distances, and records of one distance in the queue order
+// of the frame routine (render/scene.js sceneRecords: the intro's human and the racers by index, the objects by index, the own car, the
+// starter, the shots by index), told by what each record shows, so a margin record of the wide view (wide.js) takes its place in that queue
+// too: one total order, whatever order the records come in. At the tick the fine distances are the game's whole ones and records of one
+// distance are common; the game's selection sort (render/draw-list.js sortDrawList), which the classes keep, is not stable, so there the order
+// of two such records may differ from the classes' (by design: overlapping pictures of one distance).
+const queueGroup = r => (r.type === 0 ? 2 : r.shot !== undefined ? 4 : r.object >= 0 ? 1 : r.type === 1 ? 0 : 3); // @math the queue's groups: racers, objects, the own car, the starter, shots
+const queueIndex = r => (r.shot !== undefined ? r.shot : r.object >= 0 ? r.object : r.type === 1 ? r.racer : 0);
+export const smoothOrder = records => records.slice().sort((a, b) => b.distance - a.distance || queueGroup(a) - queueGroup(b) || queueIndex(a) - queueIndex(b));
+
 // The fine camera's heading above 1x in detail mode 1 (Stage 4, M6): the blend's heading rounded to 1/s of a TRIG entry, round(h s) / s, so
 // the floor turns one output column at a time and the pictures with it (project.js headingVectorAt); in modes 2 and 3 (whose column blocks
 // are gameplay) and at 1x the whole heading of the tick's camera.
@@ -149,6 +186,15 @@ export function fineHeading(own, camI, G, mode) {
   while (h < 0) h += turn; // a blend is within a turn of the table (MOTION.snapTurn): one step puts it back, with no remainder's rounding
   while (h >= turn) h -= turn;
   return h;
+}
+
+// The checks' trace of a record drawn (opts.trace below), in output pixels: its picture's box, its ground anchor (the anchor column of its
+// picture's bottom edge) and what it shows; with a place (above 1x, or in smooth sizes) the drawn picture's, else the reference record's.
+function traceEntry(r, G) {
+  const pw = r.smooth ? r.smooth.w : G.s * r.picture.w, ph = r.smooth ? r.smooth.h : G.s * r.picture.h, ax = r.smooth ? r.smooth.w >> 1 : G.s * (r.picture.w >> 1);
+  const rect = r.place ? { x0: r.place.x, y0: r.place.y, x1: r.place.x + pw - 1, y1: r.place.y + ph - 1 } : { x0: r.left, y0: r.top, x1: r.left + r.width - 1, y1: r.top + r.height - 1 };
+  const anchor = r.place ? { x: r.place.x + ax, y: r.place.y + ph } : { x: r.left - r.firstColumn + (r.picture.w >> 1), y: r.top + r.picture.h };
+  return { margin: Boolean(r.margin), edge: Boolean(r.edge), rect, shade: null, cast: null, key: recordKey(r), anchor, distance: r.distance, smooth: Boolean(r.smooth) };
 }
 
 // Draws the viewer's world into `fb` (indexed) and `L` (kind, depth, contact and sun shadows, skid marks, liquids). `P` is the present state with the viewer's seat swapped in,
@@ -185,11 +231,19 @@ export function fineHeading(own, camI, G, mode) {
 // reference columns 0 and 319 show whole in the margins.
 // `opts.trace` ({ records: [], marks: [] }, the checks') gets, for every record drawn, { margin (a margin record), edge (the reference picture
 // reaches column 0 or 319: the standard view cuts it there or its relief sees an open side), rect (its picture's box), shade and cast (the
-// boxes its contact shadow and its sun cast, blurred, can touch) }, in output pixels, and the box of every skid mark quad (drawn on the soft
-// layers' grid, in output pixels too). At the reference geometry the boxes are the 320 x 200 picture's.
+// boxes its contact shadow and its sun cast, blurred, can touch), key (wide.js recordKey: what it shows), anchor (its ground anchor: the
+// anchor column of its picture's bottom edge), distance, smooth (drawn in smooth sizes) }, in output pixels, and the box of every skid mark
+// quad (drawn on the soft layers' grid, in output pixels too). At the reference geometry the boxes are the 320 x 200 picture's.
+// `opts.sizes` 'smooth' (Stage 4, M7: RENDER.sizes, at any geometry, the reference one included) draws every record but the own car at a
+// size between the game's classes (placeSmooth: the whole frame at the size of its fine distance, its ground anchor on the floor's own row
+// up to the row table's last row, geometry.js standingRow) through blit.js, in smoothOrder (the margin records of the wide view merged into
+// it by what they show); their contact shadows and sun casts follow the drawn picture (its box on the shadows' grid) and the casts'
+// corners, the skid marks and the particles (index.js) the floor's rows too, so the decals stay on the pictures. The floor is unchanged
+// (drawFloor at the reference geometry).
 // `opts.clock(stage)`, when given, is told as each stage ends (the stage times of createEnhancer({ stages })).
 export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = IDENTITY) {
-  const S = models().sky, at = !G.identity, width = at ? G.W : S.width, height = at ? G.H : fb.length / width, world = P.world, own = fine.seats[seat], force = opts.force ?? NO_FORCE, general = { caster: at || force.caster, blit: at || force.blit }, rows = general.blit ? opts.rows ?? null : null, clock = opts.clock ?? null;
+  const S = models().sky, at = !G.identity, width = at ? G.W : S.width, height = at ? G.H : fb.length / width, world = P.world, own = fine.seats[seat], force = opts.force ?? NO_FORCE, smooth = opts.sizes === 'smooth', general = { caster: at || force.caster, blit: at || force.blit || smooth }, rows = general.blit ? opts.rows ?? null : null, clock = opts.clock ?? null;
+  const law = rowLaw(world, opts.sizes); // the decals' row law: the pictures' standing rows in smooth sizes, else the row table (null)
   const soft = at ? opts.soft ?? null : null, from = at ? opts.from ?? 0 : 0, o0 = from * G.s * width, refW = G.refW, refH = models().floor.height, r0 = from * refW; // the first output pixel and reference cell drawn
   const camI = sceneCamera(P), camF = opts.subPixel && own ? { x: own.cx, y: own.cy, heading: at ? fineHeading(own, camI, G, mode) : camI.heading } : camI, horizon = { from: S.horizonRow, to: S.horizonRow + S.horizonRows };
   const template = force.caster && !at ? floorTemplateAt(world, mode, !sky, horizon, IDENTITY, true) : at ? floorTemplateAt(world, mode, !sky, horizon, G) : layerTemplate(world, mode, !sky, horizon);
@@ -211,27 +265,29 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
   clock?.('floor');
   const records = [], frames = own ? { heading: own.tickHeading } : null, main = sceneRecords(P, camI, frames), trace = opts.trace ?? null; // the racers' direction frames stay on the tick's heading
   for (const r of main) {
-    const a = camF !== camI ? anchorOf(r, P, fine, seat) : null;
-    if (at) { const placed = placeAt(r, world, camF, camI, a, G); if (trace) placed.edge = r.left - r.firstColumn <= 0 || r.left - r.firstColumn + r.picture.w >= S.width; records.push(placed); continue; }
+    const a = camF !== camI ? anchorOf(r, P, fine, seat) : null, sized = smooth ? placeSmooth(r, world, camF, camI, a, G) : null;
+    if (sized || at) { const placed = sized ?? placeAt(r, world, camF, camI, a, G); if (trace) placed.edge = r.left - r.firstColumn <= 0 || r.left - r.firstColumn + r.picture.w >= S.width; records.push(placed); continue; }
     const moved = a ? refine(r, world, camF, camI, a) : r;
     if (moved) { if (trace) moved.edge = r.left - r.firstColumn <= 0 || r.left - r.firstColumn + r.picture.w >= S.width; records.push(moved); }
   }
-  let ordered = sortDrawList(records);
-  if (at && G.m > 0 && opts.wide) { // the wide view's margins: the margin records, placed as the main ones, merged into the game's order by distance
-    const extra = opts.wide.records(P, camI, frames, main, G, seat).map(r => placeAt(r, world, camF, camI, camF !== camI ? anchorOf(r, P, fine, seat) : null, G));
-    ordered = mergeOrder(ordered, sortDrawList(extra));
-  }
+  const margins = at && G.m > 0 && opts.wide ? opts.wide.records(P, camI, frames, main, G, seat) : null; // the wide view's margins: the margin records, placed as the main ones
+  const placeMargin = r => { const a = camF !== camI ? anchorOf(r, P, fine, seat) : null; return (smooth ? placeSmooth(r, world, camF, camI, a, G) : null) ?? placeAt(r, world, camF, camI, a, G); };
+  let ordered;
+  if (smooth) ordered = smoothOrder(margins ? [...records, ...margins.map(placeMargin)] : records); // one stable order by the fine distances, the margin records in the queue
+  else { ordered = sortDrawList(records); if (margins) ordered = mergeOrder(ordered, sortDrawList(margins.map(placeMargin))); } // the game's sort; the margin records merged into it by distance
   const casters = [], casts = [], ground = playerGeometry(world).top + world.carShape[0].h; // the own car's ground row: the row-table bottom of its distance, before the jiggle and the jump
   const lightPictures = R ? { sun: screenSun(sunDirection(world, opts.sunAngle, camI.heading), R.length), luma: paletteLuma(world) } : null;
   const toOut = b => (soft ? { x0: G.s * b.x0, y0: G.s * b.y0, x1: G.s * b.x1 + G.s - 1, y1: G.s * b.y1 + G.s - 1 } : b); // a box of the soft layers' grid in output pixels
   for (const r of ordered) {
     if (!r.skip) {
-      const entry = trace ? { margin: Boolean(r.margin), edge: Boolean(r.edge), rect: r.place ? { x0: r.place.x, y0: r.place.y, x1: r.place.x + G.s * r.picture.w - 1, y1: r.place.y + G.s * r.picture.h - 1 } : { x0: r.left, y0: r.top, x1: r.left + r.width - 1, y1: r.top + r.height - 1 }, shade: null, cast: null } : null;
+      const entry = trace ? traceEntry(r, G) : null;
       if (entry) trace.records.push(entry);
       if (R) collect.count = 0;
       const drawn = general.blit ? blitAt(fb, L, r, opts.band, G, { world, collect: R ? collect : null, rows, at: r.place ?? null, sampled: Boolean(soft), from: G.s * from }) : blitLayers(fb, L, r, opts.band, width, height, R ? collect : null);
-      // The shadows' grid: the reference picture's (1x), the reference grid (the reference look: the picture's samples at its place over s), or the output's.
-      const grid = !at ? null : soft ? { x: r.place.x / G.s, y: r.place.y / G.s, u: 1, m: G.m } : { x: r.place.x, y: r.place.y, u: G.s, m: G.m }, shape = soft ? drawn?.sample ?? null : drawn;
+      // The shadows' grid: the reference picture's (1x, a record with no place), the reference grid (the reference look: the picture's samples at
+      // its place over s), or the output's; a picture in smooth sizes gives its drawn box on that grid and the row law its ground stands on.
+      const grid = !r.place ? null : soft ? { x: r.place.x / G.s, y: r.place.y / G.s, u: 1, m: G.m } : { x: r.place.x, y: r.place.y, u: G.s, m: G.m }, shape = soft ? drawn?.sample ?? null : drawn;
+      if (grid && r.smooth) { const k = grid.u / G.s; grid.box = { w: r.smooth.w * k, h: r.smooth.h * k, ax: (r.smooth.w >> 1) * k }; grid.row = law; } // grid pixels an output pixel
       const c = casterOf(r, P, shape?.foot, ground, opts, grid);
       if (R) pictureLight(L.relief, { drawn: collect.drawn, sources: collect.sources, count: collect.count, fb, width, luma: lightPictures.luma, sun: lightPictures.sun, strength: R.strength, heights: R.frameHeights?.(r.frame) ?? null, ...(at ? { scale: G.s, frame: r.frame } : {}) });
       if (c) { casters.push(c); if (entry) entry.shade = toOut(shadowBox(c, soft ? 1 : G.s)); }
@@ -257,7 +313,7 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
   clock?.('blur');
   if (opts.marks) { // the skid marks on the ground
     const quads = trace ? [] : null;
-    if (!at) opts.marks.stamp(L, world, camF, opts.now, width, height, null, L.kind, quads); else if (soft) opts.marks.stamp(soft, world, camF, opts.now, refW, refH, { s: 1, m: G.m }, null, quads); else opts.marks.stamp(L, world, camF, opts.now, width, height, G, L.kind, quads);
+    if (!at) opts.marks.stamp(L, world, camF, opts.now, width, height, null, L.kind, quads, law); else if (soft) opts.marks.stamp(soft, world, camF, opts.now, refW, refH, { s: 1, m: G.m }, null, quads, law); else opts.marks.stamp(L, world, camF, opts.now, width, height, G, L.kind, quads, law);
     if (quads) for (const q of quads) trace.marks.push(toOut({ x0: Math.floor(q.x0), y0: Math.floor(q.y0), x1: Math.ceil(q.x1), y1: Math.ceil(q.y1) }));
   }
   clock?.('marks');

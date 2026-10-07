@@ -304,20 +304,23 @@ test('Stage 4: the wide view stored lays the element out for the widest picture 
   } finally { page.restore(); }
 });
 
-test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIEW and LEAVE THIS MENU, the graphics settings\' words, Enter asking for the next scale or view', () => {
-  assert.equal(DISPLAY_MENU.rendering, RENDER_MENU.item); assert.equal(DISPLAY_MENU.resolution, RENDER_MENU.scale); assert.equal(DISPLAY_MENU.view, RENDER_MENU.view); // the menu's names are the config's
+test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIEW, SPRITE SIZES and LEAVE THIS MENU, the graphics settings\' words, Enter asking for the next scale, view or sizes', () => {
+  assert.equal(DISPLAY_MENU.rendering, RENDER_MENU.item); assert.equal(DISPLAY_MENU.resolution, RENDER_MENU.scale); assert.equal(DISPLAY_MENU.view, RENDER_MENU.view); assert.equal(DISPLAY_MENU.sizes, RENDER_MENU.sizes); // the menu's names are the config's
   const base = defaultSettings(1, true), line = (name, word) => name.padEnd(DISPLAY_MENU.width - word.length) + word;
-  for (const [s, ready, word, view] of [[resetSettings(), true, '1X', 'STANDARD'], [changeGraphics(resetSettings(), 'scale', 2), true, '2X', 'STANDARD'], [changeGraphics(resetSettings(), 'view', 'wide'), true, '1X', 'WIDE'], [changeGraphics(changeGraphics(resetSettings(), 'scale', 2), 'view', 'wide'), false, 'NONE', 'NONE']]) { // @math the second scale; the wide view; neither without WebGL 2
+  for (const [s, ready, word, view, sizes] of [[resetSettings(), true, '1X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'scale', 2), true, '2X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'view', 'wide'), true, '1X', 'WIDE', 'STEPPED'], [changeGraphics(changeGraphics(resetSettings(), 'scale', 2), 'view', 'wide'), false, 'NONE', 'NONE', 'STEPPED'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), true, '1X', 'STANDARD', 'SMOOTH'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), false, 'NONE', 'NONE', 'SMOOTH']]) { // @math the second scale; the wide view; neither without WebGL 2; smooth sizes, with and without it
     const def = menuDef('rendering', { ...base, graphics: menuView(s, { worldReady: ready }) });
-    assert.deepEqual(def.items, [line('RESOLUTION', word), line('VIEW', view), 'LEAVE THIS MENU']);
-    assert.deepEqual(def.actions, [{ graphics: { cycle: 'scale' } }, { graphics: { cycle: 'view' } }, { back: true }]);
-    def.items.forEach(drawable); assert.ok(layoutOf('sub', def.items).y0 >= gameTopBar());
+    assert.deepEqual(def.items, [line('RESOLUTION', word), line('VIEW', view), line('SPRITE SIZES', sizes), 'LEAVE THIS MENU']);
+    assert.deepEqual(def.actions, [{ graphics: { cycle: 'scale' } }, { graphics: { cycle: 'view' } }, { graphics: { cycle: 'sizes' } }, { back: true }]);
+    def.items.forEach(drawable); assert.ok(def.items.every(t => t.length <= DISPLAY_MENU.width)); assert.ok(layoutOf('sub', def.items).y0 >= gameTopBar());
   }
-  assert.deepEqual(menuDef('rendering', base).items.slice(0, 2), ['RESOLUTION'.padEnd(19) + '-', 'VIEW'.padEnd(19) + '-']); // @math before the page has handed in its words
-  assert.ok(isRenderChoice('scale') && isRenderChoice('view') && !isRenderChoice('shadowStrength') && !isRenderChoice('art'));
+  assert.equal(line('SPRITE SIZES', 'STEPPED'), 'SPRITE SIZES STEPPED', 'the longest line, exactly the bar'); // @math 20 characters
+  assert.deepEqual(menuDef('rendering', base).items.slice(0, 3), ['RESOLUTION'.padEnd(19) + '-', 'VIEW'.padEnd(19) + '-', 'SPRITE SIZES'.padEnd(19) + '-']); // @math before the page has handed in its words
+  assert.ok(isRenderChoice('scale') && isRenderChoice('view') && isRenderChoice('sizes') && !isRenderChoice('shadowStrength') && !isRenderChoice('art'));
   const s = resetSettings();
   assert.deepEqual([cycleRender(s, 'scale').scale, cycleRender(cycleRender(s, 'scale'), 'scale').scale], [2, 1]); // @math 1X to 2X and back
   assert.deepEqual([cycleRender(s, 'view').view, cycleRender(cycleRender(s, 'view'), 'view').view], ['wide', 'standard']); // STANDARD to WIDE and back
+  assert.deepEqual([cycleRender(s, 'sizes').sizes, cycleRender(cycleRender(s, 'sizes'), 'sizes').sizes], ['smooth', 'classes']); // STEPPED to SMOOTH and back
+  assert.equal(cycleRender(s, 'sizes').preset, 'custom', 'Original with smooth sizes is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'sizes').preset, 'enhanced');
   assert.equal(cycleRender(s, 'view').preset, 'custom', 'Original in the wide view is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'view').preset, 'enhanced');
   assert.equal(cycleRender(s, 'scale').preset, 'custom', 'Original at 2x is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'scale').preset, 'enhanced');
   let menu = settled(enterMenu('display', [{ id: 'main', cursor: 6 }, { id: 'options', cursor: 5 }, { id: 'graphics', cursor: 5 }], { ...base, graphics: menuView(s), display: displayView(resetDisplay()) })); // @math the cursors of GAME OPTIONS, DISPLAY AND EFFECTS and DISPLAY OPTIONS
@@ -326,4 +329,5 @@ test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIE
   assert.equal(opened.id, 'rendering');
   assert.deepEqual(stepFrame(opened, 'enter').chosen, { graphics: { cycle: 'scale' } });
   assert.deepEqual(stepFrame(settled(stepFrame(opened, 'down').menu), 'enter').chosen, { graphics: { cycle: 'view' } }); // the second line, VIEW
+  assert.deepEqual(stepFrame(settled(stepFrame(settled(stepFrame(opened, 'down').menu), 'down').menu), 'enter').chosen, { graphics: { cycle: 'sizes' } }); // the third line, SPRITE SIZES
 });

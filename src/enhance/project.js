@@ -105,14 +105,15 @@ export function toCamera(world, camera, x, y) {
 }
 
 // The column, the distance and the bottom row of a point of the camera's ground (f ahead, l to the right); null behind the camera.
-// `flip` is view.js's sign test of the world row, true whenever the camera's row is above 0 (every track).
-export function fromCamera(world, f, l, flip = true) {
+// `flip` is view.js's sign test of the world row, true whenever the camera's row is above 0 (every track). `row` (Stage 4, M7: geometry.js
+// rowLaw) gives the bottom row of a distance instead of the row table (rowAt): the floor's own rows in the smooth sprite sizes.
+export function fromCamera(world, f, l, flip = true, row = null) {
   if (f <= 0) return null;
   const V = models().view, div = ((f * V.tan) / 2 ** V.fixedBits) * (flip ? -1 : 1); // @math the tangent is 16.16
   const column = V.center - (l * V.center) / div, root = Math.hypot(f, l);
   const viewWord = world.view.getUint32(Math.min(Math.max(Math.round(column), 0), V.maxColumn) * V.viewBytes, true);
   const distance = viewWord ? (root * viewWord) / 2 ** V.viewShift : root; // @math the VIEW word is a 2.14 fixed-point scale
-  return { column, distance, bottom: rowAt(world.rows, distance) };
+  return { column, distance, bottom: row ? row(distance) : rowAt(world.rows, distance) };
 }
 
 // The point of the camera's ground a screen column and a distance stand for (fromCamera inverted, the VIEW word of the column).
@@ -124,10 +125,10 @@ export function cameraPoint(world, column, distance) {
 }
 
 // The projection of view.js's projectPoint without its rounding and culling: the column, the distance and the bottom row of a world point
-// for a camera (x and y may hold fractions, the heading is a TRIG entry, or between two above 1x); null behind the camera.
-export function projectFine(world, camera, x, y) {
+// for a camera (x and y may hold fractions, the heading is a TRIG entry, or between two above 1x); null behind the camera. `row` as fromCamera's.
+export function projectFine(world, camera, x, y, row = null) {
   const { f, l } = toCamera(world, camera, x, y);
-  return fromCamera(world, f, l, wrap16(y - camera.y) < wrap16(y)); // the routine's sign test (view.js)
+  return fromCamera(world, f, l, wrap16(y - camera.y) < wrap16(y), row); // the routine's sign test (view.js)
 }
 
 // Stage 4's wide view (M8: docs/enhancements.md, Stage 4 as built), the projection with m margin columns a side. Inside the reference fan
@@ -148,14 +149,14 @@ function viewWordAt(world, u) {
   const V = models().view, e = u < 0 ? 0 : V.maxColumn, word = world.view.getUint32(e * V.viewBytes, true) || 2 ** V.viewShift; // @math the VIEW word is a 2.14 fixed-point scale
   return (word * cosT(world.trig, u - V.center)) / cosT(world.trig, e - V.center);
 }
-// fromCamera with m margin columns a side.
-export function fromCameraAt(world, f, l, flip = true, m = 0) {
-  if (m === 0) return fromCamera(world, f, l, flip);
+// fromCamera with m margin columns a side (`row` as fromCamera's).
+export function fromCameraAt(world, f, l, flip = true, m = 0, row = null) {
+  if (m === 0) return fromCamera(world, f, l, flip, row);
   if (f <= 0) return null;
   const V = models().view, t = Math.atan2(l, f) * RADIAN(), te = fanEdge();
-  if (Math.abs(t) <= te) return fromCamera(world, f, l, flip);
+  if (Math.abs(t) <= te) return fromCamera(world, f, l, flip, row);
   const column = V.center + (flip ? 1 : -1) * Math.sign(t) * (V.center + Math.abs(t) - te), distance = (Math.hypot(f, l) * viewWordAt(world, column)) / 2 ** V.viewShift; // @math the VIEW word is a 2.14 fixed-point scale
-  return { column, distance, bottom: rowAt(world.rows, distance) };
+  return { column, distance, bottom: row ? row(distance) : rowAt(world.rows, distance) };
 }
 // cameraPoint with m margin columns a side: the pinhole's inverse inside the fan (columns 0 to 320), the equiangular one outside it.
 export function cameraPointAt(world, column, distance, m = 0) {
@@ -164,11 +165,11 @@ export function cameraPointAt(world, column, distance, m = 0) {
   const a = (Math.abs(column - V.center) - V.center + fanEdge()) / RADIAN(), root = (distance * 2 ** V.viewShift) / viewWordAt(world, column); // @math the VIEW word is a 2.14 fixed-point scale
   return { f: root * Math.cos(a), l: Math.sign(column - V.center) * root * Math.sin(a) };
 }
-// projectFine with m margin columns a side.
-export function projectAt(world, camera, x, y, m = 0) {
-  if (m === 0) return projectFine(world, camera, x, y);
+// projectFine with m margin columns a side (`row` as fromCamera's).
+export function projectAt(world, camera, x, y, m = 0, row = null) {
+  if (m === 0) return projectFine(world, camera, x, y, row);
   const { f, l } = toCamera(world, camera, x, y);
-  return fromCameraAt(world, f, l, wrap16(y - camera.y) < wrap16(y), m); // the routine's sign test (view.js)
+  return fromCameraAt(world, f, l, wrap16(y - camera.y) < wrap16(y), m, row); // the routine's sign test (view.js)
 }
 // The lateral over the forward distance of a screen column's ray (cameraPoint's r): the pinhole's inside the fan (columns 0 to 320), the
 // equiangular continuation's outside it (the wide view's margins: the water's sun glitter there, water.js sunGlitter).

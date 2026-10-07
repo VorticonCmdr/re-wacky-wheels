@@ -13,7 +13,11 @@
 // scripts/check-enhance.js section 6). Above 1x the scene hands it the whole picture (the window of every column and row) at the record's
 // finer place (scene.js placeAt: s times the whole camera's place plus the fine shift rounded to output pixels), and the per-pixel clip makes
 // the cuts at the screen's edges; at a whole place that is the reference window's set of pixels s times over.
+// In smooth sizes (Stage 4, M7: RENDER.sizes 'smooth') a picture is its whole frame drawn at the size of smoothSize, Wout x Hout output
+// pixels, through smoothMap (nearest and symmetric), placed by scene.js placeSmooth; blitAt draws it like any other picture.
 import { KIND } from './project.js';
+import { SIZES } from './config.js';
+import { models } from './models.js';
 
 // The shape of a picture of a world: { shape (its ten pictures), k (its size class), W0, H0 (the class 0 size, the frame's own) }, or null
 // for a picture that is none of the world's shapes (the cars', the shots', the pit's and every shape of the world's objects).
@@ -62,6 +66,39 @@ export function classMap(picture, s, info) {
   return map;
 }
 
+// The size of a picture of `shape` (its ten pictures, one a size class) at the distance d in smooth sizes (Stage 4, M7): the game's size law
+// (view.js projectPoint: the class trunc((d - sizeBase) / sizeStep), clamped to 0..maxSize) made continuous. Each class k stands for the
+// middle of its band of distances, d_k = sizeBase + sizeStep (k + 1/2), where the width and the height are the class's own (w_k, h_k);
+// between two band middles they go linearly from one class to the next, before the first middle and past the last they stay the first
+// class's and the last's. So it is the game's own law, which is not a perspective one (a perspective would make the far things up to 2.6
+// times smaller), without its steps; no fitted rate a class is used. { w, h } in reference pixels, with fractions.
+export function smoothSize(shape, d) {
+  const V = models().view, last = Math.min(V.maxSize, shape.length - 1), x = (d - V.sizeBase) / V.sizeStep - 0.5; // @math the band's middle: x is k at d_k
+  if (!(x > 0)) return { w: shape[0].w, h: shape[0].h };
+  if (x >= last) return { w: shape[last].w, h: shape[last].h };
+  const k = Math.floor(x), t = x - k, a = shape[k], b = shape[k + 1];
+  return { w: a.w + (b.w - a.w) * t, h: a.h + (b.h - a.h) * t };
+}
+
+// The source map of a frame of W0 x H0 bytes (column-major: a shape's class 0 size) drawn at w x h output pixels in smooth sizes: each output
+// pixel (I, J) reads the texel nearest its middle, U = floor((I + 1/2) W0 / w) and V = floor((J + 1/2) H0 / h), nearest and symmetric (the
+// same texels counted from either edge; at w = W0 the frame itself). In classMap's form: `cols` per output column the source column times H0,
+// `rows` per output row the source row. It depends on the four sizes alone, so the maps are kept by them, the last SIZES.maps used (a least
+// recently used list; at a hit the map moves to the end).
+const smoothMaps = new Map();
+export function smoothMap(W0, H0, w, h) {
+  const key = `${W0}x${H0}:${w}x${h}`, known = smoothMaps.get(key);
+  if (known) { smoothMaps.delete(key); smoothMaps.set(key, known); return known; }
+  const map = { separable: true, why: null, cols: new Int32Array(w), rows: new Int32Array(h), src: null, w, h };
+  for (let I = 0; I < w; I++) map.cols[I] = Math.floor(((2 * I + 1) * W0) / (2 * w)) * H0; // @math (I + 1/2) W0 / w in whole numbers
+  for (let J = 0; J < h; J++) map.rows[J] = Math.floor(((2 * J + 1) * H0) / (2 * h)); // @math (J + 1/2) H0 / h in whole numbers
+  smoothMaps.set(key, map);
+  if (smoothMaps.size > SIZES.maps) smoothMaps.delete(smoothMaps.keys().next().value); // the least recently used
+  return map;
+}
+// How many smooth maps are kept (the tests of the list's cap).
+export const smoothMapsKept = () => smoothMaps.size;
+
 // The pictures of a world's shapes (the cars', the shots', the pit's and its objects') that are drawn as blocks at a scale, for the checks'
 // report: [{ k, w, h, why }]. A drawn picture that is none of them takes blocks too but is not listed here.
 export function blockPictures(world, s) {
@@ -90,11 +127,15 @@ export function blockPictures(world, s) {
 // reference samples alone (the output pixels s i, s j of its window, at r = q = 0 the INF's own bytes, whatever the place), the footprint's
 // columns on the reference grid (the place over s plus the sample's column: a fraction where the place is a fine one) and per picture column
 // its highest and lowest opaque picture row, as blitLayers finds them for the 1x picture of the same window.
+// A record in smooth sizes (`rec.smooth`: { w, h, map }, scene.js placeSmooth) is its whole frame drawn at w x h output pixels through its
+// smooth map, at `at`; its reference samples are the output pixels s i, s j of the picture from its top left (ceil(w / s) x ceil(h / s) of
+// them: no INF samples to keep, the picture as the reference grid sees it), with the footprint's lift and band counted in those rows.
 export function blitAt(fb, L, rec, band, G, { world = null, collect = null, rows = null, at = null, sampled = false, from = 0 } = {}) {
-  const { picture, frame, distance } = rec, { s, W, H } = G, map = classMap(picture, s, shapeOf(world, picture));
-  const ox = at ? at.x : s * (rec.left + G.m), oy = at ? at.y : s * rec.top, ow = rec.width * s, oh = rec.height * s, hs = picture.h * s, first = rec.firstColumn * s, top = Math.max(from, 0);
+  const { picture, frame, distance } = rec, { s, W, H } = G, sm = rec.smooth ?? null, map = sm ? sm.map : classMap(picture, s, shapeOf(world, picture));
+  const ox = at ? at.x : s * (rec.left + G.m), oy = at ? at.y : s * rec.top, ow = sm ? sm.w : rec.width * s, oh = sm ? sm.h : rec.height * s, hs = sm ? sm.h : picture.h * s, first = sm ? 0 : rec.firstColumn * s, top = Math.max(from, 0);
+  const sw = sm ? Math.ceil(sm.w / s) : rec.width, sh = sm ? Math.ceil(sm.h / s) : picture.h; // the sampled columns of the window and rows of the picture
   const rowMin = new Int16Array(hs).fill(W), rowMax = new Int16Array(hs).fill(-1), cols = { top: new Int16Array(ow).fill(-1), bottom: new Int16Array(ow).fill(-1) };
-  const sRowMin = sampled ? new Float64Array(picture.h).fill(Infinity) : null, sRowMax = sampled ? new Float64Array(picture.h).fill(-Infinity) : null, sCols = sampled ? { top: new Int16Array(rec.width).fill(-1), bottom: new Int16Array(rec.width).fill(-1) } : null;
+  const sRowMin = sampled ? new Float64Array(sh).fill(Infinity) : null, sRowMax = sampled ? new Float64Array(sh).fill(-Infinity) : null, sCols = sampled ? { top: new Int16Array(sw).fill(-1), bottom: new Int16Array(sw).fill(-1) } : null;
   const { cols: colMap, rows: rowMap, src } = map;
   let low = -1, sLow = -1;
   for (let I = 0; I < ow; I++) {
@@ -133,8 +174,8 @@ export function blitAt(fb, L, rec, band, G, { world = null, collect = null, rows
   const out = { foot: { minX, maxX, lift: hs - 1 - low }, cols };
   if (sampled) {
     let a = Infinity, b = -Infinity;
-    for (let j = Math.max(sLow + 1 - Math.max(Math.round(picture.h * band), 1), 0); j <= sLow; j++) if (sRowMax[j] > -Infinity) { a = Math.min(a, sRowMin[j]); b = Math.max(b, sRowMax[j]); }
-    out.sample = sLow < 0 ? null : { foot: { minX: a, maxX: b, lift: picture.h - 1 - sLow }, cols: sCols };
+    for (let j = Math.max(sLow + 1 - Math.max(Math.round(sh * band), 1), 0); j <= sLow; j++) if (sRowMax[j] > -Infinity) { a = Math.min(a, sRowMin[j]); b = Math.max(b, sRowMax[j]); }
+    out.sample = sLow < 0 ? null : { foot: { minX: a, maxX: b, lift: sh - 1 - sLow }, cols: sCols };
   }
   return out;
 }

@@ -120,14 +120,15 @@ export function createParticles() {
     // geometry G (geometry.js) the discs are in output pixels: the reference place x, y and radius r become s (x + m), s y and s r (at the
     // reference geometry the very numbers they always were); with a margin (the wide view) a particle is placed through the wide projection
     // (project.js projectAt: the equiangular continuation outside the reference fan), so it stays over the ground the floor draws there.
-    splats(world, camera, now, G = null) {
+    // `row` (the smooth sprite sizes, M7: geometry.js rowLaw) stands it on the floor's own rows, where the pictures stand.
+    splats(world, camera, now, G = null, row = null) {
       const V = models().view, out = [], s = G ? G.s : 1, m = G ? G.m : 0;
       for (const p of pool) {
         const age = (now - p.born) / MS;
         if (age < 0 || age * MS > p.life) continue;
         const travel = p.drag ? (1 - Math.exp(-p.drag * age)) / p.drag : age;
         const x = p.x + p.vx * travel, y = p.y + p.vy * travel, z = p.drag ? p.vz * travel : Math.max(p.vz * age - (p.gravity * age * age) / 2, 0); // @math a puff billows up and slows, a drop or a spark falls under gravity
-        const at = projectAt(world, camera, x, y, m);
+        const at = projectAt(world, camera, x, y, m, row);
         if (!at || at.distance < V.minDistance || at.distance > V.maxDistance) continue;
         const ppu = pixelsPerUnit(at.distance), life = 1 - (age * MS) / p.life;
         const alpha = p.alpha * life * life * (p.fadeIn ? Math.min(age * MS / P.fadeInMs, 1) : 1) * Math.min((at.distance - V.minDistance) / P.nearFade, 1);
