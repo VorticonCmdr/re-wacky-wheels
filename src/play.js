@@ -442,7 +442,7 @@ function stepMenuClock(now) {
 
 // What the page does with an item that is not just another menu: the single player race starts, everything else says it is not ported.
 // The Info menu's halls (menu.famous-menus): the board or the hall of fame of a cup, then the menu again.
-function returnToMenu() { state.screen = 'menu'; state.keys.clear(); state.menuAccumulator = 0; }
+function returnToMenu() { if (state.hudArt) state.hudArt.dopeLoaded = false; state.screen = 'menu'; state.keys.clear(); state.menuAccumulator = 0; }
 // ---- the saved game (race.save-game): the record of a cup race's start, kept in this browser's storage as the game keeps it in WACKY.CFG
 const SAVE_KEY = 'wackywheels.save';
 function savedGame() { try { const kept = localStorage.getItem(SAVE_KEY); return kept ? JSON.parse(kept) : null; } catch { return null; } }

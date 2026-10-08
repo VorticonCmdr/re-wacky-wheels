@@ -7,6 +7,7 @@ import { drawText, nameAt } from './text.js';
 import { HUD as DUCK, PICTURES } from '../game/duck-rules.js';
 import { minimapRect } from '../game/minimap.js';
 import { WRONG_WAY } from '../game/laps.js';
+import { overlayDope, dopeScene } from '../game/dope.js';
 
 const SPEED = () => K({ samples: 6, placeRect: [25, 12, 22, 29], placeFrameBytes: 0x27e, placeFramesAt: 0, placeFrameSize: [22, 29], speedRect: [0, 181, 42, 19], panelAt: 0xccc, panelSize: [42, 19], digitsAt: 0xfea, digitBytes: 0x96, digitSize: [10, 15], digitColumns: [3, 15], digitRow: 2, hudBase: 0x8426, placeWord: 0x84bc, speedShownWord: 0x8438, speedTargetWord: 0x8436, riseStep: 2, fallStep: 4, rising: 3, falling: 3, numbers: [52, 38, 60, 60, 32, 62] }, 'hud.place-speed-observed');
 const BANNER = () => K({ records: 4, pictures: [{ at: 0x377c, size: [38, 41], where: [17, 6], exclude: [25, 12, 22, 29] }, { at: 0x3d92, size: [65, 19], where: [68, 6], exclude: [118, 11, 10, 9] }, { at: 0x4265, size: [61, 19], where: [146, 6], exclude: [181, 11, 20, 9] }], digitsAt: 0x46ec, digitBytes: 90, digitSize: [10, 9], row: 11, startDigit: [118], counterPlaces: [181, 191], counters: [7, 0, 42, 99], startDigitShown: 3, overwrittenWord: 5, counterWord: 0x847a, startWord: 0x847c }, 'hud.banner-observed');
@@ -19,7 +20,9 @@ const SCREEN = { width: 320, height: 200 }; // @math the VGA mode 13h screen the
 // The members the HUD draws from, by their archive names.
 export function loadHudArt(members) {
   const need = name => { const data = members.get(name); if (!data) throw new Error(`${name} is not in the archive`); return data; };
-  return { lap: need('LAP.SP'), icons: need('ICONS.SP'), genef: need('GENEF.SP'), ofont: need('OFONT.SP'), giggles: need('GIGGLES.SP') };
+  const art = { lap: need('LAP.SP'), icons: need('ICONS.SP'), genef: need('GENEF.SP'), ofont: need('OFONT.SP'), giggles: need('GIGGLES.SP'), dope: need('DOPE.SP'), gigglesDope: null, dopeLoaded: false };
+  art.gigglesDope = overlayDope(art.giggles, art.dope); // what the figure's pictures are cut from once the DOPE scene's loader has run (dope.scene)
+  return art;
 }
 
 // A column-major frame of `size` at `at` in `data`, drawn with its top left at (x, y); `opaque` stores the zero bytes too.
@@ -49,7 +52,14 @@ export function drawBanner(fb, art, counter) {
 export function drawFigure(fb, art, draw, entry, row = null, column = null) { // `row` and `column` replace the figure's base place (the halves of a split screen, a taunt)
   if (draw.picture === null) return;
   const D = DEVIL(), [w, h] = D.frame;
-  blit(fb, art.giggles, draw.picture * w * h, D.frame, (column ?? D.columnBase) + entry.x, (row ?? D.rowBase) + entry.y, false);
+  blit(fb, art.dopeLoaded ? art.gigglesDope : art.giggles, draw.picture * w * h, D.frame, (column ?? D.columnBase) + entry.x, (row ?? D.rowBase) + entry.y, false);
+}
+
+// The DOPE scene (game/dope.js stepDope): the face and the bubble of a draw, zero pixels transparent, the rows below the picture cut off.
+export function drawDope(fb, art, draw) {
+  const D = dopeScene();
+  if (draw.face) blit(fb, art.dope, draw.face.frame * D.face.frameBytes, D.face.size, draw.face.x, draw.face.y, false);
+  if (draw.bubble) blit(fb, art.dope, D.bubble.at, D.bubble.size, draw.bubble.x, draw.bubble.y, false);
 }
 
 // The driver's name under the place panel, and the lap text at the bottom left.

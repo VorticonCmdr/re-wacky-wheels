@@ -7,7 +7,7 @@ import { drawCrack } from './crack.js';
 import { demoModel } from '../game/demo.js';
 import { drawDemoSky, drawDemoLogo, drawDemoText } from './demo.js';
 import { drawLabels, drawMessage } from './finish.js';
-import { renderHud, drawMinimap } from './hud.js';
+import { renderHud, drawMinimap, drawDope } from './hud.js';
 import { driverName } from '../game/sounds.js';
 import { PLAYER_SLOT } from '../game/player-car.js';
 import { minimapOn, minimapPicture, minimapRace, minimapDots, minimapAllowed } from '../game/minimap.js';
@@ -42,5 +42,6 @@ export function drawRaceOverlays(state, index) {
   }
   if (state.labels?.length) drawLabels(index, state.hudArt.ofont, state.world, state.labels); // the first three finishers (race.finish-flow)
   if (state.message) drawMessage(index, state.hudArt.ofont, state.message); // the praise for the human's place, drawn by the HUD every frame once it is on
+  if (state.dopeDraw) drawDope(index, state.hudArt, state.dopeDraw); // the DOPE easter egg's face and bubble, after the HUD (dope.scene)
   if (state.fx?.cracked) drawCrack(index, state.world); // the crack of a single-player crash, over the HUD (effects.crash)
 }

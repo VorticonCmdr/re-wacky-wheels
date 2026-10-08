@@ -25,6 +25,7 @@ import { playerRef, refEntry, playerGeometry, playerRecord, PLAYER_SLOT } from '
 import { fallFrames } from './control.js';
 import { createLaps, stepLaps, stepWrongWay, gridValue, stepFinish, NO_KEYS, figureDriver } from './laps.js';
 import { startFigure, stepFigure } from './figure.js';
+import { createDope, triggerDope, stepDope, belchMember } from './dope.js';
 import { createAi, stepAi, progressAi, rankPlayer } from './ai.js';
 import { createHud, stepHud } from './hud.js';
 import { createVersus, stepVersus } from './versus.js';
@@ -47,7 +48,7 @@ export function startRace(state, world, total) {
   state.finishCount = 0; state.playerPlace = 0; state.labels = []; state.message = null; state.stage = { flag: 0, stamp: 0 }; state.race ??= 1; state.points = Array.from({ length: state.slots.length }, () => 0); state.leaderboard = false;
   state.tick = 0; state.hud = createHud(); state.detail ??= 1; state.pose = 0; // @math the detail level 1 is the highest (the steering rate 40)
   state.unproven = new Set(['the place digit from the ranking code (read, not observed; seen on screen only for the 8th place)', 'the computer cars: the slot (driver) of each is an arbitrary one here and their pictures are the CARS.SP frames (the game picks the drivers at random and fills two slots from the driver files)', 'the computer cars\' level 89, speed table VEL.TAB and the road assumed under the start line (the level word\'s source, the slow engine\'s table and other surfaces are not observed)', 'the count label (0) and the single digit (3) of the banner: their start values are read in fresh races, what they count is not known', 'the laps from the menu choice (6, 8 or 10 laps, read from the code)']);
-  state.laps = createLaps(state.world.pos, state.world.start.x, state.world.start.y); state.total = total; state.finished = false; state.finalTicks = 0; state.figure = null; state.figureDraw = null; state.ai = setup.trial ? null : createAi(state.world, { level: setup.level, threshold: setup.threshold }); state.place = state.ai ? 8 : 1; // @math the place word starts as 8 with several racers (every HUD record) and 1 alone (obj1+0x2021e)
+  state.laps = createLaps(state.world.pos, state.world.start.x, state.world.start.y); state.total = total; state.finished = false; state.finalTicks = 0; state.dope = createDope(); state.dopeDraw = null; state.figure = null; state.figureDraw = null; state.ai = setup.trial ? null : createAi(state.world, { level: setup.level, threshold: setup.threshold }); state.place = state.ai ? 8 : 1; // @math the place word starts as 8 with several racers (every HUD record) and 1 alone (obj1+0x2021e)
   if (state.ai && !state.duck && !state.versus) startSides(state); // the side the racers wait with
   if (!state.ai && !setup.trial) state.unproven.add('this track has no computer cars here: its start does not lie on the route (the shootout, duck shoot and bonus starts are other branches)');
   state.unproven.add('the waiting pictures of the racers that are out of view at the start (the game keeps the side they had in the race before; the port takes it from their mode word)');
@@ -237,6 +238,25 @@ export function stepRace(state, keys) {
   latchStarter(state); state.horizonCarry = state.car.horizon;
 }
 
+// The DOPE easter egg's trigger (the counter of the control routine, before the car's step) and its scene (one call a frame while it is on, after the HUD): hold left and the brake through the
+// countdown (dope.scene). The scene's loader makes the reaction figure read its pictures from the DOPE data until the menu is back (page: state.hudArt.dopeLoaded).
+function dopeTrigger(state, input) {
+  if (state.duck || state.demo) return; // the duck game has no starter and a demo cancels the steering word while the car stands (obj1+0x1939c)
+  const car = state.player.car, kb = sampleKeys(car, input, { racing: true, finished: state.finished, stunned: false });
+  const out = triggerDope(state.dope, { left: car.inverted !== 0 ? kb.right : kb.left, still: (car.stepWord ?? 0) === 0, starter: state.lionOn, accelerate: kb.accelerate, brake: kb.brake, alone: !state.versus }, state.tick);
+  state.dope = out.dope;
+  if (out.started && state.hudArt) state.hudArt.dopeLoaded = true;
+}
+
+function dopeFrame(state) {
+  state.dopeDraw = null;
+  if (!state.dope?.on) return;
+  const out = stepDope(state.dope, state.tick);
+  state.dope = out.dope; state.dopeDraw = out.draw;
+  if (out.belch) state.sounds.push({ member: belchMember() });
+  state.unproven.add('the DOPE scene (dope.scene: read from the code, not compared with the running game)');
+}
+
 function stepFrame(state, keys) {
   state.sounds = [];
   const modeBefore = state.start.mode, stepped = stepStart(state.start); state.racingBefore = modeBefore === MODE_RACING; // the car routine's jiggle and the dust see the race mode as the frame began (the demos' jiggle flag)
@@ -253,12 +273,14 @@ function stepFrame(state, keys) {
   }
   const input = state.finished ? NO_KEYS : keys, env = { detail: state.detail, tick: state.tick, finished: state.finished, pose: state.pose, child: Boolean(state.child), demo: Boolean(state.demo), duck: Boolean(state.duck) };
   const racers = state.ai ? state.ai.racers : [];
+  dopeTrigger(state, input);
   if (!stepped.racing) { // the countdown: the throttle and the speed word run on the keys, the car stands still, and the HUD routine zeroes the clock's tick word and shows no speed (car.drive-observed)
     const idle = stepPlayer(state.player, input, state.world, { racing: false, racers, ...env });
     state.player = idle.player; state.car = state.player.car; state.sounds.push(...idle.sounds);
     fire(state, input, false);
     const wait = stepHud(state.hud, state.car, false); state.hud = { ...wait.hud, ticks: 0, counter: state.car.counter }; if (!state.duck) state.laps = stepWrongWay(state.laps); drawEffects(state, false, false, !state.duck, state.start.mode === MODE_RACING); // the call that switches the mode word to the race is the last of the countdown's branch
     if (!state.duck) blinkPass(state); // the racers glance in the countdown too (the waiting pictures)
+    dopeFrame(state);
     return;
   }
   const { result, steps } = withSteps(() => stepPlayer(state.player, input, state.world, { racing: true, racers, ...env }));
@@ -301,4 +323,5 @@ function stepFrame(state, keys) {
   if (state.touching !== undefined) { const c = state.car; state.beforeAnswer = { cx: c.cx, cy: c.cy, heading: c.heading, throttle: c.throttle, speed: c.speed }; racerTouch(state, state.touching, headOn); state.touching = undefined; }
   drawSparks(state); // the answer starts a spark before the entry is drawn: its first picture is in the frame of the touch (race.blink grabs, three runs)
   blinkPass(state);
+  dopeFrame(state);
 }
