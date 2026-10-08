@@ -31,7 +31,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const { server } = createLanServer({ dir: values.dir });
   server.listen(Number(values.port), values.host, () => {
     console.log(`serving ${values.dir}/ with the local game signaling on port ${values.port}; players on this network can open:`);
-    for (const list of Object.values(networkInterfaces())) for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal) console.log(`  http://${a.address}:${values.port}/play.html`);
-    console.log(`  http://localhost:${values.port}/play.html`);
+    for (const list of Object.values(networkInterfaces())) for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal) console.log(`  http://${a.address}:${values.port}/`);
+    console.log(`  http://localhost:${values.port}/`);
   });
 }

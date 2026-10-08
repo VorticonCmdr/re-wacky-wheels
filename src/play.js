@@ -1388,5 +1388,5 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => { state.keys.delete(e.code); if (e.code === state.menuHeldCode) { state.menuHeld = null; state.menuHeldCode = null; } if (e.code === HELP_KEY && state.vehicle?.help) state.vehicle.help.armed = true; });
 addEventListener('blur', () => { state.keys.clear(); state.menuHeld = null; state.menuHeldCode = null; }); // a key released while the page is not focused would stay down
 
-// `play.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
+// `index.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
 if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, art, artCache, artInfo, reloadArt, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };

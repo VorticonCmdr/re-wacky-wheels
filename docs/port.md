@@ -1,6 +1,6 @@
-# The port (`src/game`, `src/render`, `play.html`)
+# The port (`src/game`, `src/render`, `index.html`)
 
-The first playable slice: drive one car on one track, seen from the driver's seat. Open `play.html` (dev: `npm run dev`, then *Load local game*; hosted: *Open WACKY.DAT*). Everything is decoded in the browser from the player's own archive. `play.html?debug` exposes `window.wackyDebug` (the race state and the frame functions) so a test can step the race by hand; browsers pause the animation frames of a hidden tab.
+The first playable slice: drive one car on one track, seen from the driver's seat. Open `index.html` (dev: `npm run dev`, then *Load local game*; hosted: *Open WACKY.DAT*). Everything is decoded in the browser from the player's own archive. `index.html?debug` exposes `window.wackyDebug` (the race state and the frame functions) so a test can step the race by hand; browsers pause the animation frames of a hidden tab.
 
 ## What is ported, and the evidence behind it
 

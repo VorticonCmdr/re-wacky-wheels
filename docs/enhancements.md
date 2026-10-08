@@ -160,7 +160,7 @@ Eventually replace racers and scenery with models while using original layouts a
 
 ### The first milestone as built
 
-Built 2026-10-05 in `src/enhance/` and the Graphics panel of `play.html`. Original is the default preset and draws the race exactly as before; Enhanced is opt-in.
+Built 2026-10-05 in `src/enhance/` and the Graphics panel of `index.html`. Original is the default preset and draws the race exactly as before; Enhanced is opt-in.
 
 **Using it.** In the game's own menus: GAME OPTIONS has the item DISPLAY AND EFFECTS (named ENHANCED GRAPHICS until the display options joined it; only in the page's menus, like KEYS AND SOUND; the game's records of its four-item menu are untouched). It opens:
 - PRESET, which Enter switches between ORIGINAL and ENHANCED (from CUSTOM, a mix of switches, back to ORIGINAL);

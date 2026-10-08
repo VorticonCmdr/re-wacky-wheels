@@ -4,6 +4,9 @@
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.45 system-ui, sans-serif; }
 .bar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--panel); }
 .brand { color: var(--ink); text-decoration: none; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.links { display: flex; gap: 16px; margin-right: auto; margin-left: 8px; }
+.links a { color: var(--dim); text-decoration: none; font-size: 14px; }
+.links a:hover { color: var(--ink); }
 .brand small { color: var(--dim); font-weight: 500; letter-spacing: .08em; }
 .icon { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 6px; background: var(--accent); color: #111; }
 button, select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--dim); border-radius: 6px; padding: 5px 10px; }
@@ -22,6 +25,7 @@ main { padding: 16px; max-width: 1100px; margin: 0 auto; }
 .close-up canvas { width: 240px; height: 150px; image-rendering: pixelated; background: #000; border: 1px solid var(--dim); }
 .close-up figcaption { color: var(--dim); font-size: 13px; }
 .panel { display: grid; gap: 8px; min-width: 240px; flex: 1; }
+.no-panel .panel { display: none; }
 .panel label { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; font-variant-numeric: tabular-nums; }
 dt { color: var(--dim); } dd { margin: 0; text-align: right; }
