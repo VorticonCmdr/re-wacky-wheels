@@ -1303,6 +1303,7 @@ async function load(vfs) {
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
+    document.activeElement?.blur?.(); // the button that loaded the game keeps the focus, and Enter or Space on a later screen would press it again and start the game over
   } catch (e) { state.dat = null; setMessage(`${e.message}`, true); }
 }
 
@@ -1312,7 +1313,7 @@ $('local').addEventListener('click', async () => { try { await load(await openDe
 document.addEventListener('dragover', e => e.preventDefault());
 document.addEventListener('drop', e => { e.preventDefault(); if (e.dataTransfer.files.length) load(openPicked(e.dataTransfer.files)); });
 for (const id of ['track', 'engine']) $(id).addEventListener('change', () => state.dat && !state.linkPlay && freeRace()); // a link race is not restarted by one machine
-$('reset').addEventListener('click', () => state.dat && !state.linkPlay && freeRace());
+$('reset').addEventListener('click', e => { e.currentTarget.blur(); if (state.dat && !state.linkPlay) freeRace(); }); // blurred so that Enter and Space on the game's screens do not press it
 // The browser keys the race reads: the first player's six keys, in a split screen game both players' (the layout of keys.js).
 const gameCodes = () => new Set((state.versus && !state.linkPlay ? [0, 1] : [0]).flatMap(p => SLOTS.flatMap((_, slot) => codesOf(state.menu.settings.keys, p, slot)))); // @math the players 0 and 1
 const vehicleKeys = next => { // the keys of the vehicle screen's passes: the player's steering keys, a button of the player (the first two buttons of the table, in the second player's pass the third as well), Enter and Space are a fire (obj1+0xb2d2, +0xb3a0, +0xb3b3); the second player's pass also takes the first player's fire key (versus.flow)
