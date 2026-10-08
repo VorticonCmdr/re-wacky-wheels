@@ -76,7 +76,7 @@ export function menuView(settings, { worldReady = true, packs = 0, angleSets = 0
     active: enhancedOn(s),
     render: {
       scale: worldReady ? R.scales[s.scale] : R.none,
-      view: worldReady ? R.views[s.view] : R.none, // the placement drawn: a stored 'edges' draws centred until M9 builds it, which brings back WIDE EDGES
+      view: worldReady ? R.views[viewStep(s).word] : R.none, // the view and, in the wide view, where the HUD goes: STANDARD, WIDE (the HUD centred) or WIDE EDGES
       sizes: R.sizeNames[s.sizes],
       angles: angleSets > 0 ? R.angleNames[s.angles] : R.none,
       art: s.art,
@@ -85,9 +85,17 @@ export function menuView(settings, { worldReady = true, packs = 0, angleSets = 0
   };
 }
 
+// The steps of the RENDERING list's VIEW (M9), which sets the view and the HUD's place together, so the place needs no line of its own: each a
+// { view, hudPlace, word } (`word` a key of RENDER_MENU.views), the standard view with the first place (the HUD's place matters only in a view with
+// margins), then every place in each other view: STANDARD, WIDE (the HUD centred), WIDE EDGES. The step of settings is the one of their view and,
+// in a view with margins, their place (a standard view with any place is STANDARD).
+const VIEW_STEPS = Object.keys(RENDER.views).flatMap(view => (RENDER.views[view] === null ? [{ view, hudPlace: RENDER.hudPlaces[0], word: view }] : RENDER.hudPlaces.map((hudPlace, n) => ({ view, hudPlace, word: n === 0 ? view : hudPlace }))));
+const viewStep = s => VIEW_STEPS.find(step => step.view === s.view && (RENDER.views[step.view] === null || step.hudPlace === s.hudPlace));
+
 // What Enter on a menu line does: the preset goes from Original to Enhanced and from either other to Original (which puts the rendering choices
 // back), a switch flips, a strength goes up a quarter (from full to off), the sun goes on an eighth of a turn, DEFAULT LEVELS puts the levels back,
-// a rendering choice (RENDERING: RESOLUTION, VIEW, SPRITE SIZES, KART ANGLES: locked, free, off) goes to its next value.
+// a rendering choice (RENDERING: RESOLUTION, VIEW, SPRITE SIZES, KART ANGLES: locked, free, off) goes to its next value; VIEW to its next step,
+// the view and the HUD's place together (VIEW_STEPS).
 export const nextPreset = settings => applyPreset(settings, settings.preset === 'original' ? 'enhanced' : 'original');
 export const toggle = (settings, key) => change(settings, key, !settings[key]);
 export function cycleLevel(settings, key) {
@@ -100,6 +108,7 @@ export const defaultLevels = settings => normalize({ ...settings, ...LEVELS });
 export const isRenderChoice = key => Object.hasOwn(ALLOWED, key) && key !== 'art';
 export function cycleRender(settings, key) {
   if (!isRenderChoice(key)) throw new Error(`no rendering choice '${key}'`);
+  if (key === 'view') { const s = normalize(settings), { view, hudPlace } = VIEW_STEPS[(VIEW_STEPS.indexOf(viewStep(s)) + 1) % VIEW_STEPS.length]; return normalize({ ...s, view, hudPlace }); }
   const list = ALLOWED[key], at = list.indexOf(settings[key]);
   return change(settings, key, list[(at + 1) % list.length]);
 }

@@ -15,6 +15,7 @@ import { loadBootArt, renderNotice as renderBootNotice, renderScene as renderBoo
 import { EFFECTS, LEVELS, RENDER, ART } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels, isRenderChoice, cycleRender } from './enhance/settings.js';
 import { createDisplay, overlayLayers } from './enhance/display.js';
+import { hudGroups, raceBase, raceForced } from './enhance/hud-place.js';
 import { SENTINEL } from './enhance/composite.js';
 import { minimapRect } from './game/minimap.js';
 import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
@@ -627,6 +628,11 @@ let gfxShown = 0;
 // The layers the display shows for an enhanced frame: the enhancer's own when the world was drawn at another size than the canvas's (Stage 4:
 // RESOLUTION 2X; the overlays in its HUD layer, or stamped into the world when the display has no HUD layer), else the page's HUD layers as before.
 function frameLayers(layers) { const l = enh.layers(); return l && (l.world.w !== screen.width || l.world.h !== screen.height) ? l : layers; }
+// The HUD at the edges of a wide frame (Stage 4, M9: VIEW WIDE EDGES, the panel's HUD place): the HUD art's group map (hud-place.js hudGroups,
+// measured from the game's HUD functions on the first frame that asks and kept with the art), the frame's overlays without the ones that stay
+// centred over the original's picture (`base`), and those (`forced`): the race frame's message and crack, and the in-race menu, drawn last as the
+// overlays closure draws them. Null while the HUD is centred.
+const edgesOf = () => (enh.settings.hudPlace === 'edges' && enh.settings.view === 'wide' ? { groups: hudGroups({ art: state.hudArt, mov: state.mov, world: state.world }), base: raceBase, forced: (s, fb) => { raceForced(s, fb); if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); } } : null);
 function drawEnhanced() {
   const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data, layers = display.hudLayer() ? hudLayers : null; // the HUD layer: the enhancer hands over the world and the overlays apart
   const worldReady = display.worldReady(), aspect = display.settings.aspect; // the frame context (Stage 4): the world at the settings' resolution only where the display can show it
@@ -640,7 +646,7 @@ function drawEnhanced() {
       if (L) { const cars = carsOf(s); s.minimapOthers = [{ x: cars[1 - L.seat].px, y: cars[1 - L.seat].py }, ...(s.ai ? s.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; } // the link race's overlay map: the other human, then the computer racers
       drawRaceOverlays(s, fb);
       if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); // the in-race menu over the frozen frame (race.pause-menu)
-    }, layers });
+    }, layers, edges: L ? null : edgesOf() });
     if (!state.minimap && P.minimap) state.minimap = P.minimap; // the overhead map's picture and rectangle are kept from the race's first frame (hud.minimap-draw)
     show(frameLayers(layers), true);
     if (L) { const [a, b] = carsOf(state); $('readout').innerHTML = `<dt>Link</dt><dd>${L.session.phase}, round trip ${Math.round(L.session.rtt ?? 0)} ms</dd><dt>Frame</dt><dd>${L.session.simFrame}</dd><dt>One</dt><dd>${a.cx}, ${a.cy} ${a.heading}</dd><dt>Two</dt><dd>${b.cx}, ${b.cy} ${b.heading}</dd>`; $('badge').className = 'badge bad'; $('badge').textContent = LINK_BADGE; } else raceReadout();
@@ -672,6 +678,7 @@ function showGraphics() {
   $('gfx-shadowStrength').disabled = !(s.shadows || s.sceneryShadows || s.sunShadows); $('gfx-fogStrength').disabled = !s.fog; $('gfx-particleAmount').disabled = !s.particles; $('gfx-sunAngle').disabled = !(s.sunShadows || s.water); // the sun lights the shadows and the water's glints
   const ready = display.crtReady(); // a world of another size needs WebGL 2 (the stored resolution and view are kept for when it is there again)
   $('gfx-scale').value = String(s.scale); $('gfx-scale').disabled = !ready; $('gfx-view').value = s.view; $('gfx-view').disabled = !ready; $('gfx-sizes').value = s.sizes; // the sprite sizes draw at 1x too: never disabled
+  $('gfx-hudPlace').value = s.hudPlace; $('gfx-hudPlace').disabled = !ready || s.view !== 'wide'; // the HUD's place matters only in the wide view (the menu's VIEW sets both: WIDE EDGES)
   if (!ready) $('gfx-render').textContent = resolutionNone(s);
   else if (!enh.active()) $('gfx-render').textContent = '';
   if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
@@ -689,6 +696,7 @@ for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphi
 for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
 $('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 'scale', Number(e.target.value)), e.target));
 $('gfx-view').addEventListener('change', e => setGraphics(change(enh.settings, 'view', e.target.value), e.target));
+$('gfx-hudPlace').addEventListener('change', e => setGraphics(change(enh.settings, 'hudPlace', e.target.value), e.target));
 $('gfx-sizes').addEventListener('change', e => setGraphics(change(enh.settings, 'sizes', e.target.value), e.target));
 $('gfx-art').addEventListener('change', e => setGraphics(change(enh.settings, 'art', e.target.checked), e.target));
 $('gfx-angles').addEventListener('change', e => setGraphics(change(enh.settings, 'angles', e.target.value), e.target));

@@ -23,7 +23,9 @@ Packs replace art in the race world only:
 
 They never replace the HUD, the overhead map, the finish labels (which keep the archive's CARS.SP beside packed racers), the messages, the
 crack, the menus, the loading cards, the boards, the winner screen, the credits, the vehicle screen or the start-up screens. Those are drawn
-by the reconstructed renderer (`src/render`), which reads the archive as the game does.
+by the reconstructed renderer (`src/render`), which reads the archive as the game does. Where the HUD stands (over the original's columns, or
+at the wide view's edges with VIEW WIDE EDGES) changes nothing for a pack: the HUD is never a pack's art, and the world under it is drawn the
+same either way (docs/enhancements.md, Stage 4 as built, M9).
 
 ## The package
 

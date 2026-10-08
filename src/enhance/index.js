@@ -16,7 +16,8 @@
 // are kept on the reference grid (config.js HD.look 'reference', scene.js createSoftLayers) unless the enhancer is made with look 'full'.
 // The wide view (RENDER: VIEW WIDE, M8) adds m margin columns a side (geometry.js viewMargin for the display's shape and the world): the
 // margins' records come from wide.js (aimed probes of the game's draw list), and the overlays are moved by m into the refW x 200 HUD layer
-// (hud-place.js: 'centred'). Smooth sprite sizes (RENDER: SPRITE SIZES SMOOTH, M7) draw the records at sizes between the game's classes on
+// (hud-place.js: 'centred'), or with VIEW WIDE EDGES (RENDER.hudPlace 'edges', M9) by their groups toward the picture's sides where the caller
+// hands the frame its HUD's group map (the frame context's `edges`). Smooth sprite sizes (RENDER: SPRITE SIZES SMOOTH, M7) draw the records at sizes between the game's classes on
 // the floor's own rows (up to the row table's last row) at any geometry, the reference one included (scene.js placeSmooth, the opts'
 // `sizes`), and stand the particles on those rows too (geometry.js rowLaw).
 import { frameMs } from '../game/clock.js';
@@ -32,7 +33,7 @@ import { createMarks } from './marks.js';
 import { composite, compositeAt, overlayMask, fogColor, fogRamp, SENTINEL } from './composite.js';
 import { IDENTITY, geometryOf, viewMargin, rowLaw } from './geometry.js';
 import { createWide } from './wide.js';
-import { hudPlaces } from './hud-place.js';
+import { hudPlaces, placeFrame, createPlaceScratch } from './hud-place.js';
 import { composeSplitAt, flipViewportAt, splitSample } from './split.js';
 import { models } from './models.js';
 import { loadAtmospheres, normalizeAtmosphere, sunAngleOf, sunLengthOf, fogTintOf } from './atmosphere.js';
@@ -128,6 +129,27 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
   // not allow one), and 0 where the screen may not be wide (`wideAllowed` false: a link race, which gives both players the same sight, a
   // slides demo; the split screen never asks).
   const geometryFor = (geometry, worldReady, world = null, aspect = null, wideAllowed = false) => geometry ?? (worldReady ? geometryOf({ s: settings.scale, m: wideAllowed && settings.view === 'wide' ? viewMargin(settings.view, aspect, world) : 0 }) : IDENTITY);
+  // Where the frame's overlay pixels go in its HUD layer and its world (hud-place.js): centred (moved by m: hudPlaces' `hud` and `world`), or with
+  // the settings' HUD place 'edges', a margin and the frame context's `edges` ({ groups: hud-place.js hudGroups' map, base(P, fb): the overlays
+  // without the forced ones (the frame's own overlays when not given), forced(P, fb): the overlays that stay centred, or none }) in `layers`, each
+  // { mask, values, hud, world }: the base placed by its groups (placeFrame), then the forced overlays centred over it. Both are drawn into
+  // sentinel buffers after the frame's own overlays (so the overhead map's rectangle is kept already), and their pixels that only put back the
+  // track's sky are left out as the frame's are (overlaid). A guard centres the frame whole (`guards` counts them).
+  const placeScratch = createPlaceScratch(), partSentinels = [new Uint16Array(size), new Uint16Array(size)], partMasks = [new Uint8Array(size), new Uint8Array(size)], guards = { tear: 0, collision: 0 };
+  const partOf = (k, draw, P, trackSky, kinds) => {
+    const values = partSentinels[k], m = partMasks[k];
+    values.fill(SENTINEL); draw(P, values);
+    for (let i = 0; i < size; i++) m[i] = values[i] !== SENTINEL && !(trackSky && kinds[i] === KIND.sky && values[i] === under[i]) ? 1 : 0;
+    return { mask: m, values };
+  };
+  const placeOf = (G, P, edges, overlays, trackSky, kinds) => {
+    const centred = { place: 'centred', guard: null, ...hudPlaces(G) };
+    if (!edges?.groups || settings.hudPlace !== 'edges' || G.m === 0) return centred;
+    const base = partOf(0, edges.base ?? overlays, P, trackSky, kinds), forcedPart = edges.forced ? partOf(1, edges.forced, P, trackSky, kinds) : null;
+    const r = placeFrame(G, edges.groups, base.mask, placeScratch);
+    if (r.guard) { guards[r.guard]++; return { ...centred, guard: r.guard }; }
+    return { place: 'edges', guard: null, layers: [{ ...base, hud: r.hud, world: r.world }, ...(forcedPart ? [{ ...forcedPart, ...hudPlaces(G) }] : [])] };
+  };
   let shown = null; // what the last frame drew: { G, out, layers (the caller's), B (the buffers away from the reference path) }
   const over = { world: new Uint8ClampedArray(0), hud: new Uint8ClampedArray(0) }; // drawOver's layers over a kept frame
 
@@ -174,20 +196,31 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
   // The frame's composite at a geometry (or at IDENTITY with `forced.pipeline`): the world composed everywhere into B.world from B.fb (the
   // world before the overlays: they draw on the reference index only), then the page's canvas `out` (the overlays' pixels from the palette, the
   // others the world's pixel of their sample `canvas`, G.sample or the split screen's mirrored map), and the HUD: with `layers` (the display's
-  // HUD layer) the overlays' pixels into B.hud at their place moved by m (and into the caller's 320 x 200 layers, with the world's samples),
-  // else stamped into the world as s x s blocks, so the world layer is the whole picture.
+  // HUD layer) the overlays' pixels into B.hud at their place (`place`: placeOf's, moved by m or by their groups; and into the caller's 320 x 200
+  // layers, with the world's samples), else stamped into the world as s x s blocks there, so the world layer is the whole picture.
   // Every pixel is moved as one 32-bit word (its four bytes, whatever their order): `paint` holds the palette's colours made opaque.
   const paintBytes = new Uint8ClampedArray(256 * 4), paint = new Uint32Array(paintBytes.buffer); // @math 256 colours of four bytes
   const paintOf = palette => { for (let p = 0; p < paintBytes.length; p += 4) { paintBytes[p] = palette[p]; paintBytes[p + 1] = palette[p + 1]; paintBytes[p + 2] = palette[p + 2]; paintBytes[p + 3] = 0xff; } return paint; }; // @math four bytes a colour, three components; opaque
   // The opaque pixels of a HUD layer (refW x 200 words) stamped into a world of s times its rows and columns as s x s blocks.
   const stampHud = (world32, hud32, s, W, refW) => { for (let y = 0, i = 0; y < F.height; y++) for (let x = 0; x < refW; x++, i++) { const c = hud32[i]; if (c === 0) continue; for (let q = 0, w = s * y * W + s * x; q < s; q++, w += W) for (let r = 0; r < s; r++) world32[w + r] = c; } }; // (an opaque colour is never the word 0: its alpha byte is 0xff)
-  const composeAt = (B, out, index, layers, args, canvas) => {
+  const composeAt = (B, out, index, layers, args, canvas, place = hudPlaces(B.G)) => {
     const { G, world, hud } = B, { s } = G, palette = args.palette;
     if (forced.composite || !G.identity || B.L.art) compositeAt(world, { ...args, fb: B.fb, mask: null, G, rows: G.identity && !forced.blit ? null : B.rows, slow: forced.slow, count: fastRows, soft: B.R }); else composite(world, { ...args, width: F.width, index: B.fb, mask: none });
     mark?.('composite');
     paintOf(palette);
-    const out32 = words(out), world32 = words(world), hud32 = words(hud), lw32 = layers ? words(layers.world) : null, lh32 = layers ? words(layers.hud) : null, place = hudPlaces(G);
-    if (layers) {
+    const out32 = words(out), world32 = words(world), hud32 = words(hud), lw32 = layers ? words(layers.world) : null, lh32 = layers ? words(layers.hud) : null;
+    if (place.place === 'edges') { // the HUD's base by its groups, then the forced overlays centred over it (placeOf): a pixel's block may be another pixel's sample, so the canvas is taken whole first
+      for (let i = 0; i < size; i++) {
+        if (mask[i]) { const c = paint[index[i]]; out32[i] = c; if (layers) { lh32[i] = c; lw32[i] = world32[canvas[i]]; } }
+        else { const v = world32[canvas[i]]; out32[i] = v; if (layers) { lw32[i] = v; lh32[i] = 0; } } // no overlay (premultiplied)
+      }
+      if (layers) hud32.fill(0);
+      for (const part of place.layers) for (let i = 0; i < size; i++) {
+        if (!part.mask[i]) continue;
+        const c = paint[part.values[i]];
+        if (layers) hud32[part.hud[i]] = c; else for (let q = 0, w = part.world[i]; q < s; q++, w += G.W) for (let r = 0; r < s; r++) world32[w + r] = c;
+      }
+    } else if (layers) {
       hud32.fill(0);
       for (let i = 0; i < size; i++) {
         if (mask[i]) { const c = paint[index[i]]; out32[i] = c; hud32[place.hud[i]] = c; lh32[i] = c; lw32[i] = world32[canvas[i]]; }
@@ -270,8 +303,9 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // wide (not a link race, not a slides demo), both for the wide view (M8: the margin for that shape); `geometry` (the checks' and
     // scripts/spike-2x.mjs's) overrides the settings' geometry (geometryFor above). Returns the present state; layers() then has the frame's
     // world and HUD.
-    // `useArt` false draws the frame without the artwork packs whatever the settings (the garage's comparisons).
-    drawSingle(state, alpha, { index, out, palette, mode, sky = null, overlays, seat = 0, cap = 255, layers = null, worldReady = false, aspect = null, wideAllowed = true, geometry = null, useArt = true }) { // @math the brightest 8-bit component
+    // `useArt` false draws the frame without the artwork packs whatever the settings (the garage's comparisons). `edges` ({ groups, base, forced }:
+    // placeOf above; M9) lets the settings' HUD place 'edges' move the overlays by their groups in a wide frame; without it they are centred.
+    drawSingle(state, alpha, { index, out, palette, mode, sky = null, overlays, seat = 0, cap = 255, layers = null, worldReady = false, aspect = null, wideAllowed = true, geometry = null, useArt = true, edges = null }) { // @math the brightest 8-bit component
       return timed(() => {
         clock?.start();
         const { fine, P } = view(state, alpha), G = geometryFor(geometry, worldReady, state.world, aspect, wideAllowed);
@@ -293,12 +327,13 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
         artLayersOf(B, Boolean(packs));
         const camera = renderEnhancedScene(P, fine, seat, B.fb, B.L, mode, sky, opts(fine, atmo, liquids, lit, B, B.rows, B.R, 0, packs), G);
         decimate(B, index); mark?.('decimate');
-        overlaid(P, overlays, index, !sky, B.kind); mark?.('overlays');
+        overlaid(P, overlays, index, !sky, B.kind);
+        const place = placeOf(G, P, edges, overlays, !sky, B.kind); mark?.('overlays');
         const splats = settings.particles ? particles.splats(P.world, camera, fine.time, G, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
         if (trace) splatted = splats;
         const look = lookOf(P.world, atmo, fine, seat, !sky, cap, liquids, B);
-        composeAt(B, out, index, layers, { L: B.L, palette, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, G.sample);
-        shown = { G, out, layers, B };
+        composeAt(B, out, index, layers, { L: B.L, palette, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, G.sample, place);
+        shown = { G, out, layers, B, placed: place };
         return P;
       });
     },
@@ -368,7 +403,9 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // `overlay(fb)` into `index`, and it runs here into the sentinel buffer; its pixels come from the palette, the others from `base`. With
     // `kept` (keepLayers: the layers of that frame drawn above the reference geometry) it also returns the layers the display shows, the
     // world kept at its own size with the overlay's pixels over it: in the HUD layer (`hudLayer`, over the HUD the frame had), else stamped into
-    // the world as s x s blocks (and the frame's own HUD layer with them). Without `kept` it returns `out`.
+    // the world as s x s blocks (and the frame's own HUD layer with them). The overlay is centred (moved by m) as the forced overlays of a frame
+    // are (it is a menu or a card's banner over the whole picture), whatever the HUD place; the kept frame's HUD keeps its places (M9's edges
+    // too). Without `kept` it returns `out`.
     drawOver({ out, base, index, palette, overlay, kept = null, hudLayer = false }) {
       sentinel.fill(SENTINEL); overlay(sentinel); overlayMask(sentinel, mask);
       for (let i = 0; i < mask.length; i++) { const o = i * 4, p = index[i] * 4; for (let k = 0; k < 4; k++) out[o + k] = mask[i] ? palette[p + k] : base[o + k]; } // @math four bytes a colour
@@ -406,8 +443,11 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // The last frame's layers, its overlay mask, its geometry, the kinds of its reference samples, its world's indices before the overlays
     // (`fb`: the geometry's own, or at the reference geometry the page's index as it was before the overlays drew), the soft layers of the
     // reference look (refW x 200, or null), the probes the wide view has taken since the enhancer was made, and with `trace` the frame's trace
-    // (scene.js opts.trace; the split screen's is its last viewer's) and particle discs, for the checks (scripts/check-enhance.js).
-    inspect: () => ({ ...(shown?.B ? { L: shown.B.L, mask, G: shown.G, kind: shown.B.kind, fb: shown.B.fb, R: shown.B.R } : { L, mask, G: IDENTITY, kind: L.kind, fb: under, R: null }), art: Boolean((shown?.B ? shown.B.L : L).art), probes: wide.probes, trace: traced, splats: splatted }),
+    // (scene.js opts.trace; the split screen's is its last viewer's) and particle discs, for the checks (scripts/check-enhance.js). `hud` is the
+    // placement of the last single view drawn away from the reference geometry (M9, placeOf's: its `place`, 'centred' or 'edges', the guard that
+    // centred it or null, and centred `hud` and `world`, or the edges' `layers`, the base and the forced overlays, each { mask, values, hud, world },
+    // only their pixels' entries the frame's), or null, with the frames the guards have centred since the enhancer was made (`guards`).
+    inspect: () => ({ ...(shown?.B ? { L: shown.B.L, mask, G: shown.G, kind: shown.B.kind, fb: shown.B.fb, R: shown.B.R } : { L, mask, G: IDENTITY, kind: L.kind, fb: under, R: null }), art: Boolean((shown?.B ? shown.B.L : L).art), probes: wide.probes, trace: traced, splats: splatted, hud: shown?.B && shown.placed ? shown.placed : null, guards: { ...guards } }),
 
     // The readout: the delay smooth motion adds (mean since the last call), the particles alive, the mean time of a frame's draw (`ms`, over the
     // frames of the window being counted, or the last window's before its first frame), the mean over the last whole window of TIMING_FRAMES

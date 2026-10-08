@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { defaultSettings, menuDef } from '../src/game/menus.js';
 import { enterMenu, stepFrame } from '../src/game/menu.js';
-import { menuView, resetSettings } from '../src/enhance/settings.js';
+import { menuView, resetSettings, normalize as normalizeGraphics } from '../src/enhance/settings.js';
 import { displayView, resetDisplay } from '../src/enhance/display-settings.js';
 import { firstBar, gameTopBar, pageMenus } from './menu-bars.js';
 
@@ -21,6 +21,8 @@ test('the page\'s display lists in Stage 4: CRT LOOK leads CRT AND HUD, DEFAULT 
   assert.ok(levels.items[0].startsWith('CRT LOOK') && !levels.items.includes('DEFAULT LEVELS') && levels.items.length === 6); // @math CRT LOOK, three levels, HUD, LEAVE THIS MENU
   assert.ok(!display.items.some(t => t.startsWith('CRT LOOK')) && display.items.length === 6 && display.items[4] === 'RENDERING'); // @math SCALING, ASPECT, FULL SCREEN, CRT AND HUD, RENDERING, LEAVE THIS MENU
   assert.deepEqual(menuDef('rendering', settings).items.length, 6); // @math RESOLUTION, VIEW (M8), SPRITE SIZES (M7), KART ANGLES (M4), ARTWORK (the packs) and LEAVE THIS MENU: the six-line limit
+  const edges = { ...settings, graphics: menuView(normalizeGraphics({ view: 'wide', hudPlace: 'edges' })) }, rendering = menuDef('rendering', edges);
+  assert.ok(rendering.items.length === 6 && rendering.items[1] === 'VIEW      WIDE EDGES' && firstBar('rendering', edges) >= gameTopBar(), 'M9: VIEW WIDE EDGES needs no line of its own, and fits its bar'); // @math the six lines; the second, VIEW, with WIDE EDGES in 20 characters
   assert.ok(menuDef('gfxLevels', settings).items.includes('DEFAULT LEVELS'), 'EFFECT LEVELS keeps its own DEFAULT LEVELS');
   const long = ['options', 'keysSound', 'keys', 'sound', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels', 'rendering'].filter(id => menuDef(id, settings).items.length > 6); // @math the page's own lists: six lines at most
   assert.deepEqual(long, []);

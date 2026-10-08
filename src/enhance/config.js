@@ -73,6 +73,24 @@ export const RENDER_MENU = {
   width: 20,
 };
 
+// The HUD at the screen's edges in the wide view (Stage 4, M9: RENDER.hudPlace 'edges', the RENDERING list's VIEW WIDE EDGES; docs/enhancements.md,
+// Stage 4 as built): which of the game's HUD elements go with which edge of the picture, and how far each group moves right in a picture of m
+// margin columns a side (`shift` times m). hud-place.js measures where each element can draw (its footprint: every place and every value it
+// can show, its pictures made opaque) and gives each pixel of the 320 x 200 grid the group whose footprint holds it.
+// - `left` stays at the picture's left edge (dx 0): the top banner (the place panel, the lap and count labels), the place digit, the driver's
+//   name, the speedometer, the lap text, the overhead map's rectangle, the attract demo's logo and the duck game's banner (its score, its icon
+//   and its hog counter; the duck game's name is the driver's name).
+// - `right` goes to the right edge (dx 2m): the timer (the duck game's too), the held item, the reaction figure, the attract demo's DEMO MODE and
+//   the finish labels. A pixel both groups claim is the right group's.
+// - Every other overlay pixel is the centre's (dx m, where 'centred' puts them all): the WRONG WAY sign, and whatever no footprint holds. The
+//   overlays that must stay whole over the original's picture (the in-race menu, the message box, the crack: the caller's forced overlays) are
+//   centred whatever their pixels' groups.
+export const HUD_PLACE = {
+  left: ['banner', 'place', 'name', 'speedometer', 'lapText', 'minimap', 'demoLogo', 'duckBanner'],
+  right: ['timer', 'held', 'figure', 'demoText', 'labels'],
+  shift: { centre: 1, left: 0, right: 2 },
+};
+
 // Stage 4's drawing above the reference geometry (docs/enhancements.md, Stage 4 as built, M5): the choices it is built with, the 2x spike's
 // decision for the next milestone (scripts/spike-2x.mjs), and the budget the spike measures against. The docs name the alternatives and what
 // would make them worth building.

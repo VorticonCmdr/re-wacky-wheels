@@ -112,7 +112,8 @@ test('settings, Stage 4: the RENDERING words fit a bar of the menu font, and NON
   assert.deepEqual(v.render, { scale: '1X', view: 'STANDARD', sizes: 'STEPPED', angles: 'NONE', art: false, artReady: false }); assert.equal(v.active, false);
   const w = menuView(normalize({ ...PRESETS.original, scale: 2, view: 'wide', hudPlace: 'edges', angles: 'free', art: true }), { worldReady: false, packs: 1, angleSets: 1 }); // @math one pack, with angles
   assert.deepEqual(w.render, { scale: 'NONE', view: 'NONE', sizes: 'STEPPED', angles: 'FREE', art: true, artReady: true }); assert.equal(w.active, true); assert.equal(w.preset, 'CUSTOM');
-  assert.equal(menuView(normalize({ view: 'wide', hudPlace: 'edges' })).render.view, 'WIDE', 'a stored edges place draws centred until M9: the word of the placement drawn'); assert.equal(menuView(normalize({ view: 'wide' })).render.view, 'WIDE');
+  assert.equal(menuView(normalize({ view: 'wide', hudPlace: 'edges' })).render.view, 'WIDE EDGES', 'M9: the HUD at the edges of the wide view'); assert.equal(menuView(normalize({ view: 'wide' })).render.view, 'WIDE');
+  assert.equal(menuView(normalize({ view: 'standard', hudPlace: 'edges' })).render.view, 'STANDARD', 'the HUD\'s place says nothing in the standard view');
 });
 
 const world = { name: 'w' };

@@ -8,7 +8,7 @@
 //     every effect on the overlays (HUD, map, labels, strips) still are;
 //  3. the largest steps between ticks stay under the discontinuity limits, particles and skid marks stay under their caps and a reset
 //     leaves none;
-//  4. the asset garage's race preview runs, draws, and reaches the same tick going back and forward;
+//  4. the asset garage's race preview runs, draws, and reaches the same tick going back and forward, and draws its HUD at the wide view's edges;
 //  4b. Stage 3: the sky's layers (the clouds and the far range), the track lighting and the moving water change the track's sky and world
 //     but never a demo's slide page, the split screen's strips or the overlays; the sky's layers alone change only the sky and the strip's
 //     sky-coloured pixels, the water alone only the liquid pixels of the ground, the relief alone only the ground and the pictures, and a
@@ -63,7 +63,11 @@
 //     mid-run too.
 //  11. Stage 4's wide view (VIEW WIDE through the settings and the frame context) at 1x and 2x against the standard view and the reference
 //     renderer, with and without the margins' probes (the full list at the section). Section 1 switches into and out of it mid-run too.
-// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,5,6,6b,7,8,9,10,11] (--only runs the sections named, for
+//  12. Stage 4's HUD at the edges of the wide view (VIEW WIDE EDGES, M9) at 1x and 2x on both display shapes, with the HUD layer and in the
+//     picture, over the demos, the races and the duck game with the finish labels, the figure, the message, the crack, WRONG WAY and the in-race
+//     menu set now and then: every element's pixels at its group's place, the forced overlays centred over them, the reference view unmoved,
+//     drawOver's menu centred over a kept frame, no guard (the full list at the section).
+// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,5,6,6b,7,8,9,10,11,12] (--only runs the sections named, for
 // a quick look; the gate is the run of every section)
 import { readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
@@ -117,6 +121,20 @@ import { racerFrame } from '../src/game/racers.js';
 import { carFrame } from '../src/game/control.js';
 import { viewRacers, viewSlots } from '../src/game/versus.js';
 import { sceneCamera } from '../src/render/scene.js';
+import { hudGroups, raceBase, raceForced } from '../src/enhance/hud-place.js';
+import { drawBanner, drawPlace, drawName, drawSpeedometer, drawLapText, drawHeld, drawTimer, drawFigure, drawDuckBanner, drawMinimap, drawWrongWay } from '../src/render/hud.js';
+import { drawDemoLogo, drawDemoText } from '../src/render/demo.js';
+import { drawLabels } from '../src/render/finish.js';
+import { drawCrack } from '../src/render/crack.js';
+import { loadMenuArt, renderMenuOverlay } from '../src/render/menu.js';
+import { createPause, viewOf as pauseView } from '../src/game/pause.js';
+import { messageOf } from '../src/game/finish.js';
+import { minimapAllowed, minimapOn, minimapDots } from '../src/game/minimap.js';
+import { demoModel } from '../src/game/demo.js';
+import { counterDigits, speedDigits, timerText, lapText } from '../src/game/hud.js';
+import { driverName } from '../src/game/sounds.js';
+import { PLAYER_SLOT } from '../src/game/player-car.js';
+import { startFigure, stepFigure } from '../src/game/figure.js';
 
 const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null, want = id => !only || only.includes(id);
@@ -356,7 +374,11 @@ if (want('3')) for (const track of ['2', '6', '12', '27']) {
     if (preview.race.laps.lap < 1) throw new Error(`the drive did not start a lap in 500 passes (${preview.driver})`); // @math the first lap
     const tick = preview.tick; preview.seek(200, PRESETS.enhanced); preview.seek(500, PRESETS.enhanced); // @math back, then forward to the same moment
     if (preview.tick !== tick) throw new Error('going back and forward did not reach the same tick');
-    console.log(`ok   preview of track ${track}: ${preview.driver}, lap ${preview.race.laps.lap} at pass 500, ${s.particles} particles, ${s.marks} skid mark segments`);
+    // The garage's View 'Wide, HUD at the edges' (M9): the preview places its HUD at the picture's edges on the playtest page's default shape.
+    preview.seek(500, { ...PRESETS.enhanced, view: 'wide', hudPlace: 'edges' }); // @math the same moment
+    const w = preview.draw({ alpha: 0.5, hud: true, detail: 1, aspect: ASPECT }, original, enhanced), placed = preview.enhancer.inspect(); // @math half way to the next pass
+    if (w.w !== WIDTH + 2 * WIDE_MARGIN[ASPECT] || placed.hud?.place !== 'edges' || placed.guards.tear || placed.guards.collision || !placed.hud.layers[0].mask.some(Boolean)) throw new Error(`the wide view with the HUD at the edges drew ${w.w} wide, ${placed.hud?.place}${placed.hud?.guard ? ` (the ${placed.hud.guard} guard)` : ''}`); // @math a margin either side
+    console.log(`ok   preview of track ${track}: ${preview.driver}, lap ${preview.race.laps.lap} at pass 500, ${s.particles} particles, ${s.marks} skid mark segments; ${w.w} x ${w.h} with the HUD at the edges`);
   } catch (e) { fail(`preview of track ${track}: ${e.message}`); }
 }
 
@@ -483,7 +505,7 @@ if (want('5')) {
 // check:identity, every scenario with the slides demo, the link race's second seat, a race at detail level 3 and the split screen with a viewer
 // upside down now and then (set on the state for both draws and put back before the next tick). The two enhancers draw the same
 // state at the same blends; the overhead map is kept from the dispatched draw only after both have drawn, so each captures it from its own world.
-if (want('6') || want('6b') || want('7') || want('8') || want('9') || want('10') || want('11')) {
+if (want('6') || want('6b') || want('7') || want('8') || want('9') || want('10') || want('11') || want('12')) {
   const ticks = Math.min(frames, 160), FORCE = { caster: true, blit: true, composite: true, pipeline: true }; // @math the fly-in, the start and some racing
   const darkFull = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math check:identity's B: every track night, cloudy, mountainous, its water and relief full
   const CONFIGS = { A: { settings: PRESETS.enhanced, atmosphere: null, layers: false }, B: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: false }, C: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: true }, D: { settings: { ...PRESETS.original, smooth: true }, atmosphere: null, layers: false } };
@@ -853,6 +875,146 @@ if (want('6') || want('6b') || want('7') || want('8') || want('9') || want('10')
     }
     if (!wc.compared || !wc.margin) fail(`the wide view: ${wc.compared} pixels compared, ${wc.margin} margin records drawn: nothing was checked`);
     else if (!elevenWrong) console.log(`ok   the wide view at 1x and 2x (${WIDTH + 2 * WIDE_MARGIN[ASPECT]} x 200 and ${2 * (WIDTH + 2 * WIDE_MARGIN[ASPECT])} x 400 on the display's shape ${ASPECT}, every draw that size or 320 columns where the view may not be wide): ${wc.scenarios} scenario runs, ${wc.pictures} samples (${wc.narrow} of them never wide); ${wc.compared} pixels of the centre the standard view's (${wc.excluded} left out: ${wc.margin} margin records and ${wc.edge} records cut at the reference edges with their shadows, the casts, marks and particles across a crop edge, the blur's border), its indices, kinds and depths the standard view's in ${wc.kinds} pixels (${wc.kindsOff} with the probes off); the page's index the reference picture in ${wc.reference} pixels outside the margin records (${wc.referenceOff} with the probes off, all of them); the HUD layer the reference overlays moved by the margin (${wc.hud} pixels); ${wc.probes} probes (${((performance.now() - eleventh) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
+  }
+
+  // ---- 12. the HUD at the edges of the wide view (VIEW WIDE EDGES, M9: src/enhance/hud-place.js), at 1x and 2x on both display shapes (53 and
+  // 18 columns a side), over the attract demos (DEMO MODE and the logo), the races and the duck game, with the finish labels, the reaction figure and
+  // a held item, the message, the crack, the WRONG WAY sign with the lap text and the in-race menu set on the drawn state now and then (put back
+  // before the next tick).
+  // Each sample draws the same state at the same blend with the HUD centred, at the edges with the HUD layer, and at the edges in the picture
+  // (smooth motion only; the page's base and forced parts, hud-place.js raceBase and raceForced with the menu), and checks:
+  //  - the check's own element-by-element draw of the frame's overlays (drawRaceOverlays' order and values, the page's menu last) is the frame's
+  //    overlays, so the elements below are the frame's own;
+  //  - the HUD layer is exactly the overlays without the forced ones, each element's pixels moved by its group's shift (the plan's groups, written
+  //    out here rather than read from hud-place.js), no two on one place, with the forced overlays (the menu, the message, the crack) moved by m over
+  //    them: shifting every pixel back by its shift gives the overlays' two parts;
+  //  - the picture's world is the HUD-layer frame's world with that HUD stamped as s x s blocks; the canvas, the index and the world under the HUD
+  //    layer are the centred frame's (the reference view does not move);
+  //  - drawOver (the menu of a lost race) over a kept edges frame puts its overlay centred over the kept HUD, in the layer and in the picture;
+  //  - no guard centred a frame (no tear, no collision), every frame was drawn at the edges, and every element was seen at its place.
+  if (want('12')) {
+    const twelfth = performance.now(), hc = { runs: 0, samples: 0, base: 0, forced: 0, stamped: 0, over: 0, narrow: 0, seen: {} }, SENT = SENTINEL;
+    let twelveWrong = 0;
+    const SHAPE_WORDS = { dos: '4 BY 3', wide: '16 BY 10' }; // the display's shapes, as its menu names them
+    const EDGE_SHIFT = { minimap: 0, banner: 0, place: 0, name: 0, speedometer: 0, lapText: 0, demoLogo: 0, duckBanner: 0, timer: 2, held: 2, figure: 2, demoText: 2, labels: 2, wrongWay: 1, message: 'forced', crack: 'forced', menu: 'forced' }; // @math the plan's groups: the margins each moves right (left 0, centre 1, right 2), the forced ones by one, drawn over
+    const HELD_KIND = 3; // @math the first held item's kind (pickups.js: 3 to 7)
+    const menuArt = loadMenuArt(members), groups = hudGroups({ art: hudArt, mov, world: packWorld });
+    const figureDraws = []; for (let d = 1; d <= 7; d++) for (let f = startFigure(d); f;) { const call = stepFigure(f, mov.count); if (call.draw.picture !== null) figureDraws.push({ draw: call.draw, entry: mov.entries[call.draw.entry] }); f = call.fig; } // @math the figure's drivers 1 to 7: every picture at every entry the game's sequence draws
+    const sentinel = () => new Uint16Array(SIZE).fill(SENT);
+    // The frame's overlays element by element (render/race-frame.js drawRaceOverlays with its values, in its order; the page's in-race menu last).
+    const elementsOf = (s, pause) => {
+      const out = [], add = (name, d) => out.push({ name, draw: d }), gates = hudGates(s.menu.settings), art = s.hudArt, name = driverName(s.humanSlot ?? PLAYER_SLOT);
+      if (minimapAllowed({ duck: s.duck, demo: s.demo, slides: demoModel().modes.slides }) && minimapOn(s.menu.settings) && s.minimap?.picture) add('minimap', fb => drawMinimap(fb, s.minimap, minimapDots([{ x: s.car.px, y: s.car.py }, ...(s.minimapOthers ?? (s.ai ? s.ai.racers.slice(1) : []))], s.world.mapxy)));
+      const common = () => { add('banner', fb => drawBanner(fb, art, counterDigits(s.hud.counter))); add('name', fb => drawName(fb, art, name)); if (s.place) add('place', fb => drawPlace(fb, art, s.place)); };
+      if (s.duck) { add('duckBanner', fb => drawDuckBanner(fb, art, counterDigits(s.hud.counter), counterDigits(s.duck.score))); add('name', fb => drawName(fb, art, name)); if (s.car.held) add('held', fb => drawHeld(fb, art, s.car.held)); add('timer', fb => drawTimer(fb, art, timerText(Math.max(duckRules().timer - s.hud.ticks, 0)))); }
+      else if (!s.demo) {
+        const text = s.laps.shown && !s.figure && !s.finished ? lapText(s.laps.lap, s.total, false) : null, wrong = s.laps.wrongShown ?? null;
+        common();
+        if (gates.speedometer) add('speedometer', fb => drawSpeedometer(fb, art, speedDigits(s.hud.shown)));
+        if (s.car.held) add('held', fb => drawHeld(fb, art, s.car.held));
+        if (gates.timer && !s.finished) add('timer', fb => drawTimer(fb, art, timerText(s.hud.timerShown)));
+        if (wrong !== null) add('wrongWay', fb => drawWrongWay(fb, art, wrong));
+        if (s.figureDraw) add('figure', fb => drawFigure(fb, art, s.figureDraw.draw, s.figureDraw.entry));
+        if (text) add('lapText', fb => drawLapText(fb, art, text));
+      } else {
+        if (s.demo.mode === demoModel().modes.attract) { common(); if (s.car.held) add('held', fb => drawHeld(fb, art, s.car.held)); if (gates.timer && !s.finished) add('timer', fb => drawTimer(fb, art, timerText(s.hud.timerShown))); add('demoText', fb => drawDemoText(fb, art.ofont)); }
+        add('demoLogo', fb => drawDemoLogo(fb, art.ofont));
+      }
+      if (s.labels?.length) add('labels', fb => drawLabels(fb, art.ofont, s.world, s.labels));
+      if (s.message) add('message', fb => drawMessage(fb, art.ofont, s.message));
+      if (s.fx?.cracked) add('crack', fb => drawCrack(fb, s.world));
+      if (pause) add('menu', fb => renderMenuOverlay(fb, menuArt, pauseView(pause)));
+      return out;
+    };
+    const bytesEqual = (a, b) => Buffer.from(a.buffer, a.byteOffset, a.byteLength).equals(Buffer.from(b.buffer, b.byteOffset, b.byteLength));
+    for (const [aspect, margin] of Object.entries(WIDE_MARGIN)) for (const scale of [1, 2]) for (const make of SCENARIOS) { // @math the two scales
+      const sc = make(), st = sc.state;
+      if (sc.split) continue; // the split screen is never wide
+      Math.random = lehmer(1212 + hc.runs); // @math a repeatable stand-in for the browser's random source, one seed a run
+      const pick = createRandom(1313 + hc.runs), cfg = { ...PRESETS.original, smooth: true, view: 'wide', scale }; // @math the checks' seed
+      const E = { centred: createEnhancer({ storage: memory() }), edges: createEnhancer({ storage: memory() }), picture: createEnhancer({ storage: memory() }) };
+      E.centred.configure({ ...cfg, hudPlace: 'centred' }); E.edges.configure({ ...cfg, hudPlace: 'edges' }); E.picture.configure({ ...cfg, hudPlace: 'edges' });
+      const buf = Object.fromEntries(Object.keys(E).map(k => [k, { index: new Uint8Array(SIZE), out: new Uint8ClampedArray(SIZE * 4), layers: k === 'picture' ? null : { world: new Uint8ClampedArray(SIZE * 4), hud: new Uint8ClampedArray(SIZE * 4) } }])); // @math four bytes a colour
+      const m = !sceneSky(st) && wideReport(st.world).ok ? margin : 0, G = geometryOf({ s: scale, m }), refW = WIDTH + 2 * m; // @math a margin either side
+      let found = null, k = 0, pause = null;
+      for (let t = 0; t < ticks && !found; t++) {
+        const input = sc.input(); if (input === null) break;
+        stepRace(st, input); for (const e of Object.values(E)) e.afterTick(st);
+        if (t % 7 !== 3) continue; // @math a sample now and then
+        k++;
+        // The overlays set on the drawn state for this sample (put back below): in turn the labels with the figure and a held item, the message,
+        // the crack, the WRONG WAY sign with the lap text, the in-race menu, and every eighth sample all of them at once.
+        const kept = { labels: st.labels, message: st.message, fx: st.fx, laps: st.laps, figureDraw: st.figureDraw, car: st.car }, turn = k % 6, all = k % 8 === 0; // @math six turns; every eighth sample all at once
+        if (turn === 1 || all) { st.labels = [1, 2, 3].map(place => ({ racer: place, place, slot: (k + place) % 8 })); st.figureDraw = figureDraws[k % figureDraws.length]; st.car = { ...st.car, held: HELD_KIND + (k % 5) }; } // @math the three places; eight slots; the five held kinds
+        if (turn === 2 || all) st.message = messageOf(1 + (k % 3), 1 + (k % 3), 1 + (k % 5)); // @math the classes, places and races of the messages
+        if ((turn === 3 || all) && st.fx) st.fx = { ...st.fx, cracked: true };
+        if ((turn === 4 || all) && st.laps) st.laps = { ...st.laps, wrongShown: k % 2, shown: true, lap: k % (st.total + 1) }; // @math the sign's two pictures; the lap text of every lap to the last (the scripted races cross no line in these ticks)
+        pause = turn === 5 || all ? createPause(Boolean(st.duck)) : null;
+        const palette = rgbaPalette(st.world.palette), alpha = k % 2 ? 1 : pick(); // @math every other sample at the tick
+        const overlays = (p, fb) => { drawRaceOverlays(p, fb); if (pause) renderMenuOverlay(fb, menuArt, pauseView(pause)); };
+        const edges = { groups, base: raceBase, forced: (p, fb) => { raceForced(p, fb); if (pause) renderMenuOverlay(fb, menuArt, pauseView(pause)); } };
+        const drawn = {};
+        for (const [key, e] of Object.entries(E)) { const b = buf[key]; drawn[key] = e.drawSingle(st, alpha, { index: b.index, out: b.out, palette, mode: st.detail, sky: sceneSky(st), overlays, layers: b.layers, worldReady: true, aspect, wideAllowed: true, edges: key === 'centred' ? null : edges }); if (!st.minimap && drawn[key].minimap) st.minimap = drawn[key].minimap; }
+        Object.assign(st, kept);
+        hc.samples++;
+        const L = { centred: E.centred.layers(), edges: E.edges.layers(), picture: E.picture.layers() };
+        if (L.edges.world.w !== scale * refW || L.edges.hud?.w !== refW || L.picture.world.w !== scale * refW) { found = `tick ${t}: drew ${L.edges.world.w} (HUD ${L.edges.hud?.w}) and ${L.picture.world.w} wide, not ${scale * refW} (${refW})`; break; }
+        if (!m) { hc.narrow++; continue; }
+        const I = E.edges.inspect(), Ip = E.picture.inspect();
+        if (I.hud?.place !== 'edges' || Ip.hud?.place !== 'edges') { found = `tick ${t}: drawn ${I.hud?.place} and ${Ip.hud?.place}${I.hud?.guard ? ` (the ${I.hud.guard} guard)` : ''}, not at the edges`; break; }
+        // The check's elements are the frame's overlays.
+        const P = drawn.edges, el = elementsOf(P, pause), whole = sentinel(), frame = sentinel();
+        for (const e of el) e.draw(whole);
+        overlays(P, frame);
+        if (!bytesEqual(whole, frame)) { found = `tick ${t}: the check's elements (${el.map(e => e.name).join(', ')}) are not the frame's overlays`; break; }
+        // The two parts, their owners and the pixels that only put back the track's sky (index.js overlaid).
+        const baseS = sentinel(), forcedS = sentinel(), owner = new Int16Array(SIZE).fill(-1), part = sentinel();
+        el.forEach((e, n) => { const forced = EDGE_SHIFT[e.name] === 'forced'; e.draw(forced ? forcedS : baseS); if (forced) return; part.fill(SENT); e.draw(part); for (let i = 0; i < SIZE; i++) if (part[i] !== SENT) owner[i] = n; });
+        const trackSky = !sceneSky(st), under = i => I.fb[G.sample[i]], through = (v, i) => trackSky && I.kind[i] === KIND.sky && v === under(i);
+        // The expected HUD layer: the base by the elements' shifts, then the forced overlays moved by m over it.
+        const want = new Uint8ClampedArray(refW * (SIZE / WIDTH) * 4), taken = new Uint8Array(refW * (SIZE / WIDTH)); // @math four bytes a colour
+        const paint = (h, v) => { want[h * 4] = palette[v * 4]; want[h * 4 + 1] = palette[v * 4 + 1]; want[h * 4 + 2] = palette[v * 4 + 2]; want[h * 4 + 3] = 0xff; }; // @math four bytes a colour; opaque
+        for (let i = 0; i < SIZE && !found; i++) {
+          const v = baseS[i]; if (v === SENT || through(v, i)) continue;
+          const name = el[owner[i]].name, x = i % WIDTH, y = Math.floor(i / WIDTH), h = y * refW + x + EDGE_SHIFT[name] * m;
+          if (taken[h]) { found = `tick ${t}: two pixels at ${h % refW},${y} (${name}'s from ${x})`; break; }
+          taken[h] = 1; paint(h, v); hc.base++; hc.seen[name] = (hc.seen[name] ?? 0) + 1;
+        }
+        for (let i = 0; i < SIZE; i++) { const v = forcedS[i]; if (v === SENT || through(v, i)) continue; const x = i % WIDTH, y = Math.floor(i / WIDTH); paint(y * refW + x + m, v); hc.forced++; }
+        for (const e of el) if (EDGE_SHIFT[e.name] === 'forced') hc.seen[e.name] = (hc.seen[e.name] ?? 0) + 1;
+        if (found) break;
+        const hud = L.edges.hud.data;
+        for (let h = 0; h < taken.length; h++) if ([0, 1, 2, 3].some(c => hud[h * 4 + c] !== want[h * 4 + c])) { const x = h % refW, y = Math.floor(h / refW); found = `tick ${t}: the HUD layer at ${x},${y} is ${[...hud.subarray(h * 4, h * 4 + 4)]}, the elements moved by their groups give ${[...want.subarray(h * 4, h * 4 + 4)]}`; break; } // @math four bytes a colour
+        if (found) break;
+        // The canvas, the index and the world under the HUD layer are the centred frame's; the picture's world is that world with the HUD stamped.
+        if (!bytesEqual(buf.edges.out, buf.centred.out) || !bytesEqual(buf.edges.index, buf.centred.index) || !bytesEqual(L.edges.world.data, L.centred.world.data)) { found = `tick ${t}: the canvas, the index or the world moved with the HUD`; break; }
+        if (!bytesEqual(buf.picture.out, buf.centred.out)) { found = `tick ${t}: the canvas of the HUD in the picture is not the centred frame's`; break; }
+        const stamped = Uint8ClampedArray.from(L.edges.world.data), W = L.edges.world.w, w32 = new Uint32Array(stamped.buffer), h32 = new Uint32Array(want.buffer);
+        for (let h = 0; h < h32.length; h++) { if (!h32[h]) continue; const x = h % refW, y = Math.floor(h / refW); for (let q = 0; q < scale; q++) for (let r = 0; r < scale; r++) w32[(scale * y + q) * W + scale * x + r] = h32[h]; hc.stamped++; }
+        if (!bytesEqual(stamped, L.picture.world.data)) { found = `tick ${t}: the picture's world is not the world with the HUD stamped at the edges' places`; break; }
+        // drawOver (the menu of a lost race) over the kept edges frames: its overlay centred over the kept HUD, in the layer and in the picture.
+        if (k % 5 === 4) for (const key of ['edges', 'picture']) { // @math one sample in five
+          const e = E[key], b = buf[key], keptLayers = e.keepLayers(), retry = createPause(), over = fb => renderMenuOverlay(fb, menuArt, pauseView(retry)), index = Uint8Array.from(b.index), menu = sentinel();
+          over(index); over(menu);
+          const r = e.drawOver({ out: new Uint8ClampedArray(SIZE * 4), base: b.out, index, palette, overlay: over, kept: keptLayers, hudLayer: key === 'edges' }); // @math four bytes a colour
+          const expect = key === 'edges' ? Uint8ClampedArray.from(keptLayers.hud.data) : Uint8ClampedArray.from(keptLayers.world.data), e32 = new Uint32Array(expect.buffer);
+          for (let i = 0; i < SIZE; i++) {
+            if (menu[i] === SENT) continue;
+            const x = i % WIDTH, y = Math.floor(i / WIDTH), v = index[i], c = new Uint32Array(Uint8ClampedArray.from([palette[v * 4], palette[v * 4 + 1], palette[v * 4 + 2], 0xff]).buffer)[0]; // @math four bytes a colour; opaque
+            if (key === 'edges') e32[y * refW + x + m] = c; else for (let q = 0; q < scale; q++) for (let s2 = 0; s2 < scale; s2++) e32[(scale * y + q) * W + scale * (x + m) + s2] = c;
+            hc.over++;
+          }
+          if (!bytesEqual(key === 'edges' ? r.hud.data : r.world.data, expect)) { found = `tick ${t}: drawOver over the kept edges frame (${key === 'edges' ? 'the HUD layer' : 'the picture'}) is not its menu centred over the kept HUD`; break; }
+        }
+      }
+      for (const key of ['edges', 'picture']) { const g = E[key].inspect().guards; if (!found && (g.tear || g.collision)) found = `${key}: ${g.tear} tears, ${g.collision} collisions centred frames`; }
+      hc.runs++;
+      if (found) { twelveWrong++; fail(`the HUD at the edges at ${scale}x on ${SHAPE_WORDS[aspect]} (${margin} columns a side), ${sc.name}: ${found}`); }
+    }
+    Math.random = keepRandom;
+    const unseen = Object.keys(EDGE_SHIFT).filter(n => !hc.seen[n]);
+    if (unseen.length || !hc.base || !hc.forced || !hc.over) fail(`the HUD at the edges: ${unseen.length ? `never saw ${unseen.join(', ')}` : ''}${!hc.base ? ' no base pixel' : ''}${!hc.forced ? ' no forced pixel' : ''}${!hc.over ? ' no drawOver' : ''}: nothing was checked`);
+    else if (!twelveWrong) console.log(`ok   the HUD at the edges of the wide view at 1x and 2x on ${Object.entries(WIDE_MARGIN).map(([a, mm]) => `${SHAPE_WORDS[a]} (${mm} columns a side)`).join(' and ')}, with the HUD layer and in the picture: ${hc.runs} scenario runs, ${hc.samples} samples (${hc.narrow} without a margin); ${hc.base} HUD pixels each at its element's group's place, no two on one place (${Object.entries(hc.seen).filter(([n]) => EDGE_SHIFT[n] !== 'forced').map(([n, c]) => `${n} ${c}`).join(', ')}), ${hc.forced} pixels of the forced overlays (${Object.entries(hc.seen).filter(([n]) => EDGE_SHIFT[n] === 'forced').map(([n, c]) => `${n} in ${c} frames`).join(', ')}) centred over them; the canvas, the index and the world the centred frame's; ${hc.stamped} HUD pixels stamped into the picture's world; ${hc.over} menu pixels of drawOver centred over kept edges frames; no frame centred by a guard (${((performance.now() - twelfth) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
   }
 
   // ---- 7. the artwork packs in the race: identity packs (built at run time from the local archive) draw the no-pack picture byte for byte

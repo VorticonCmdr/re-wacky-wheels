@@ -2,12 +2,13 @@
 // the same script runs against two source roots, this tree and a worktree of an earlier commit, and the two results must be equal frame for
 // frame. A regression gate, not evidence about the game. Every module is imported from `--root`; the archive is always this repository's own
 // (game/, or --archive), so both roots draw the same bytes. The hashes go only to `--out` (compare-enhance keeps them in a temporary directory).
-// - enhanced: fourteen configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
+// - enhanced: fifteen configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
 //   track: the night grade, clouds 0.9, mountains at full range, water 1, relief 1), C (B with the HUD layers handed in) and D (smooth motion
 //   only) always draw through the enhancer, with the frame context the page passes where its display can show a world of another size
 //   (worldReady true, the display's default shape, wideAllowed but in a link race and a slides demo; an earlier commit ignores it). N (Enhanced
 //   with RESOLUTION 2X stored) and W (Enhanced with VIEW WIDE stored) draw with worldReady false, as the page without WebGL 2: the world at 1x
-//   in the standard view, so A's pictures (an earlier commit drops the unknown setting). P (Enhanced with ARTWORK ON and no pack stored: A's pictures) and
+//   in the standard view, so A's pictures (an earlier commit drops the unknown setting); WE (Enhanced with VIEW WIDE EDGES stored, M9, the HUD
+//   layers handed in and the page's edges context: its group map and its two parts) too, so C's frames of A's settings: A's pictures. P (Enhanced with ARTWORK ON and no pack stored: A's pictures) and
 //   P2 (Original's switches with ARTWORK ON and no pack: the reference renderer's path, as O), Q (Enhanced, ARTWORK OFF with a tinted pack of
 //   the whole race world and kart angle sets of every slot stored: A's pictures), Q2 (Original's switches, ARTWORK OFF with that pack: O's),
 //   QF and Q2F (Q and Q2 with KART ANGLES FREE: A's and O's). O (the Original preset) and O2 (Original as stored before Stage 4, read from the storage) draw as
@@ -59,6 +60,7 @@ const { normalizeDisplay } = await from('enhance/display-settings.js');
 const { createRandom } = await from('enhance/particles.js');
 const artModule = await from('enhance/art.js').catch(() => null); // the artwork packs' provider (Stage 4); an earlier commit has none
 const templateModule = await from('enhance/art-template.js').catch(() => null), packModule = await from('enhance/pack-format.js').catch(() => null); // the template and the entries' checks (Stage 4), for Q's pack
+const hudPlaceModule = await from('enhance/hud-place.js').catch(() => null); // the HUD's places (Stage 4, M8; its edges' group map and parts M9); an earlier commit has none
 
 const dat = archivePath ? new Uint8Array(await readFile(archivePath)) : await (await openGameFolder(join(REPO, 'game'))).open('WACKY.DAT');
 const members = archiveMembers(dat), mov = parseMov(members.get('GIG.MOV')), hudArt = loadHudArt(members), SIZE = 64000, SCREEN = { w: 320, h: 200 }; // @math the 320 x 200 screen
@@ -139,13 +141,14 @@ function drawReference(s, sc, index) {
 // ---- enhanced: the configurations over the scenarios
 const dark = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math every track night, cloudy, mountainous, its water and relief full
 const STORED_ORIGINAL = { preset: 'original', ...PRESETS.original, ...LEVELS }; // the graphics settings a player of Original kept before Stage 4: the switches and the levels, no rendering choices
-// A to D, N and W always draw through the enhancer (N and W without a world of another size: worldReady false). O (the Original preset, configured) and O2 (STORED_ORIGINAL in the browser's storage, read by the
+// A to D, N, W and WE always draw through the enhancer (N, W and WE without a world of another size: worldReady false). O (the Original preset, configured) and O2 (STORED_ORIGINAL in the browser's storage, read by the
 // enhancer as the page's is) draw as the page decides: through the enhancer when it is active, else the reference renderer (drawReference),
 // and record which (`path`) with the picture.
 const CONFIGS = {
   A: { settings: PRESETS.enhanced, atmosphere: null, layers: false }, B: { settings: PRESETS.enhanced, atmosphere: dark, layers: false }, C: { settings: PRESETS.enhanced, atmosphere: dark, layers: true }, D: { settings: { ...PRESETS.original, smooth: true }, atmosphere: null, layers: false },
   N: { settings: { ...PRESETS.enhanced, scale: 2 }, atmosphere: null, layers: false, worldReady: false }, // @math RESOLUTION 2X
   W: { settings: { ...PRESETS.enhanced, view: 'wide' }, atmosphere: null, layers: false, worldReady: false }, // VIEW WIDE
+  WE: { settings: { ...PRESETS.enhanced, view: 'wide', hudPlace: 'edges' }, atmosphere: null, layers: true, worldReady: false, edges: true }, // VIEW WIDE EDGES (M9), with the HUD layers and the page's edges context
   O: { settings: PRESETS.original, atmosphere: null, layers: false, page: true }, O2: { settings: null, stored: STORED_ORIGINAL, atmosphere: null, layers: false, page: true },
   // The artwork packs (Stage 4) on with no pack stored, as the page has it before a pack is imported: P Enhanced with ARTWORK ON, P2 Original's
   // switches with ARTWORK ON (drawn as the page decides), each with an empty provider (an earlier commit drops the unknown setting and option).
@@ -213,7 +216,8 @@ function runEnhanced(config, make, n) {
         const { palette, cap } = paletteOf(s, t, sc.fade);
         if (sc.split) enh.drawSplit(s, alpha, { index, out, palette, cap, mode: s.menu.settings.detail.split, overlays: versusOverlays, layers, worldReady });
         else {
-          const P = enh.drawSingle(s, alpha, { index, out, palette, cap, mode: s.detail, sky: sceneSky(s), seat: sc.link ? sc.seat : 0, layers, worldReady, aspect, wideAllowed: !sc.link && !sceneSky(s), overlays: (p, fb) => {
+          const edges = config.edges && hudPlaceModule?.hudGroups && !sc.link ? { groups: hudPlaceModule.hudGroups({ art: s.hudArt, mov: s.mov, world: s.world }), base: hudPlaceModule.raceBase, forced: hudPlaceModule.raceForced } : null; // the page's context for VIEW WIDE EDGES (play.js edgesOf; no menu in these ticks)
+          const P = enh.drawSingle(s, alpha, { index, out, palette, cap, mode: s.detail, sky: sceneSky(s), seat: sc.link ? sc.seat : 0, layers, worldReady, aspect, wideAllowed: !sc.link && !sceneSky(s), edges, overlays: (p, fb) => {
             if (sc.link) { const cars = carsBySeat(p); p.minimapOthers = [{ x: cars[1 - sc.seat].px, y: cars[1 - sc.seat].py }, ...(p.ai ? p.ai.racers.slice(VERSUS_RACE().firstComputer) : [])]; } // the page's link race map: the other human, then the computer racers
             drawRaceOverlays(p, fb);
           } });

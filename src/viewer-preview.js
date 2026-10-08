@@ -22,6 +22,7 @@ import { createLayers } from './enhance/scene.js';
 import { stampShadow, castShadow, sunDirection, blurCast } from './enhance/shadows.js';
 import { composite } from './enhance/composite.js';
 import { KIND } from './enhance/project.js';
+import { hudGroups, raceBase, raceForced } from './enhance/hud-place.js';
 
 const WIDTH = 320, HEIGHT = 200, SIZE = WIDTH * HEIGHT; // @math the VGA mode 13h screen
 const TURN = 1920; // @math compass units in a turn (view.model)
@@ -113,7 +114,7 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
     // settings say). Fills `original` and `enhanced` (RGBA, 320 x 200: at a resolution above 1x or in the wide view the reference view of the
     // enhanced world, its samples with the overlays). Returns the enhancer's stats with the enhanced picture as drawn (Stage 4): `world` its
     // RGBA bytes at `w` x `h` (the settings' resolution and view: 640 x 400 at 2x, 426 x 200 wide on 4:3, the overlays in it, over the
-    // original's columns in the middle; 320 x 200 at 1x in the standard view, `enhanced` itself), `art` whether the packs were drawn and
+    // original's columns in the middle or, with the HUD place 'edges', at the picture's sides; 320 x 200 at 1x in the standard view, `enhanced` itself), `art` whether the packs were drawn and
     // `active` whether the enhancer drew at all (false: the reference renderer's picture, as with ARTWORK on and no pack among Original's switches).
     // `art` false draws the Enhanced picture without the artwork packs (the garage's comparisons of the packs); `original` null draws the
     // Enhanced picture alone.
@@ -125,7 +126,8 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
         for (let i = 0, o = 0; i < SIZE; i++, o += 4) { const p = ref[i] * 4; pic[o] = palette[p]; pic[o + 1] = palette[p + 1]; pic[o + 2] = palette[p + 2]; pic[o + 3] = 255; } // @math four bytes a colour
       }
       let world = { data: enhanced, w: WIDTH, h: HEIGHT };
-      if (enh.active()) { enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays, worldReady: true, aspect, wideAllowed: !sceneSky(state), useArt }); const l = enh.layers(); if (l.world.w !== WIDTH || l.world.h !== HEIGHT) world = l.world; } // the preview shows the world itself: no display to wait for; a demo's slides are never wide
+      const edges = enh.settings.hudPlace === 'edges' && enh.settings.view === 'wide' ? { groups: hudGroups({ art: hudArt, mov, world: state.world }), base: (s, fb) => { if (hud) raceBase({ ...s, demo: null }, fb); }, forced: (s, fb) => { if (hud) raceForced(s, fb); } } : null; // the HUD at the edges of the wide view (M9), as the playtest page places it
+      if (enh.active()) { enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays, worldReady: true, aspect, wideAllowed: !sceneSky(state), useArt, edges }); const l = enh.layers(); if (l.world.w !== WIDTH || l.world.h !== HEIGHT) world = l.world; } // the preview shows the world itself: no display to wait for; a demo's slides are never wide
       else if (original) enhanced.set(original);
       return { ...enh.stats(), world: world.data, w: world.w, h: world.h, art: enh.inspect().art, active: enh.active() };
     },

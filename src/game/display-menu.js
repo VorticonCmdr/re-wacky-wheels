@@ -16,7 +16,7 @@ export const DISPLAY_MENU = {
   none: 'NONE', // the CRT look where the browser has no WebGL 2
   rendering: 'RENDERING', // the list of the rendering choices (src/enhance/config.js RENDER_MENU has the same names: test/display.test.js)
   resolution: 'RESOLUTION', // the scale of the race world: 1X, 2X, or NONE without WebGL 2
-  view: 'VIEW', // the race world's view: STANDARD, WIDE, or NONE without WebGL 2
+  view: 'VIEW', // the race world's view and, wide, where its HUD goes: STANDARD, WIDE (the HUD in the middle), WIDE EDGES (the HUD at the picture's sides), or NONE without WebGL 2
   sizes: 'SPRITE SIZES', // the pictures' sizes: STEPPED (the game's size classes) or SMOOTH (between them), at any resolution, WebGL 2 or not
   angles: 'KART ANGLES', // how the karts of an artwork pack's angle sets turn: LOCKED (to the game's frame), FREE or OFF (the game's eight), NONE without an enabled set
   art: 'ARTWORK', // the player's artwork packs in the race world: ON, OFF, or NONE with no pack stored
@@ -30,7 +30,7 @@ const line = (name, word) => (name.length + 1 + word.length > DISPLAY_MENU.width
 
 // The menu 'display', 'crtLevels' or 'rendering': { items, actions }. `on`/`off` are the game's words for a switch, `leave` its LEAVE THIS MENU; `render` the
 // words of the rendering choices (menuView's `render`, or null before the page has handed them in). Enter on RESOLUTION asks the page to take the next scale
-// ({ graphics: { cycle: 'scale' } }), on VIEW the next view ({ graphics: { cycle: 'view' } }), on SPRITE SIZES the next sizes ({ graphics: { cycle: 'sizes' } }),
+// ({ graphics: { cycle: 'scale' } }), on VIEW the next view with its HUD place ({ graphics: { cycle: 'view' } }: STANDARD, WIDE, WIDE EDGES), on SPRITE SIZES the next sizes ({ graphics: { cycle: 'sizes' } }),
 // on KART ANGLES the next way the angle sets turn ({ graphics: { cycle: 'angles' } }: NONE while no enabled pack has an angle set), on ARTWORK the artwork
 // switch ({ graphics: { toggle: 'art' } }: ON or OFF, NONE while no pack is stored); the page does nothing while a line says NONE.
 export function displayMenu(id, view = BLANK, { on, off, leave }, render = null) {
