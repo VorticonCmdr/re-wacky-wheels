@@ -13,7 +13,7 @@
 import { models } from './models.js';
 import { stripPeriod, stripRepeats } from './geometry.js';
 import { bayer } from './clouds.js';
-import { SKY_MARGIN } from './config.js';
+import { SKY_MARGIN, ART } from './config.js';
 
 // The reference column of every output column, clamped to the picture (the edge column in the margins), per geometry.
 const columns = new Map();
@@ -82,22 +82,51 @@ export function skyMargins(sky, m, mode = SKY_MARGIN.mode) {
   return out;
 }
 
-// The track's sky picture (world.sky) at G: renderSky's rows from..skyRows - 1, its margins (m > 0) from skyMargins.
-export function drawSkyAt(sky, fb, G, from = 0) {
+// The track's sky picture (world.sky) at G: renderSky's rows from..skyRows - 1, its margins (m > 0) from skyMargins. `pack` (while an artwork
+// pack is drawn, scene.js: { sky: a pack sky's art or null, A: the art layers, rows: the output rows' flags }) draws a pack sky over it
+// (drawPackSky).
+export function drawSkyAt(sky, fb, G, from = 0, pack = null) {
   const S = models().sky;
-  if (G.m === 0) return upscaleRows(sky, S.skyRows, fb, G, from);
-  const { s, m, W, colRef } = G, ext = skyMargins(sky, m);
-  for (let y = from; y < S.skyRows; y++) {
-    const row = y * ext.refW + m, o = s * y * W;
-    for (let X = 0; X < W; X++) fb[o + X] = ext.pixels[row + colRef[X]];
-    for (let q = 1; q < s; q++) fb.copyWithin(o + q * W, o, o + W);
+  if (G.m === 0) upscaleRows(sky, S.skyRows, fb, G, from);
+  else {
+    const { s, m, W, colRef } = G, ext = skyMargins(sky, m);
+    for (let y = from; y < S.skyRows; y++) {
+      const row = y * ext.refW + m, o = s * y * W;
+      for (let X = 0; X < W; X++) fb[o + X] = ext.pixels[row + colRef[X]];
+      for (let q = 1; q < s; q++) fb.copyWithin(o + q * W, o, o + W);
+    }
   }
+  if (pack?.sky) drawPackSky(pack.sky, fb, G, from, 0, S.skyRows, pack);
   return fb;
 }
 
+// The pixels of a pack sky (art.js: (320 + 2 margin) p x 130 p) over rows y0..y1 - 1 (reference rows) of the output: each output pixel the pack
+// pixel at its reference place times p (nearest: (u + margin) p, v p, with u = X / s - m and v = Y / s), where the picture reaches (a margin of
+// the pack narrower than the view's leaves the made margins there). Indexed: its index (an index its tRNS makes transparent keeps the
+// archive's); RGBA: its colour in the art layers over the archive's index, which fb and `beneath` keep (alpha 0 keeps the archive's pixel). At
+// p > 1 a reference cell holds several pack pixels: its rows are flagged, so that compositeAt composes them per pixel (its sky-band fast path
+// takes a cell as one value).
+export function drawPackSky(art, fb, G, from, y0, y1, pack) {
+  const { s, m, W } = G, p = art.p, margin = art.entry.margin ?? 0, A = pack.A, flag = p > 1 && pack.rows;
+  for (let Y = s * Math.max(y0, from); Y < s * y1; Y++) {
+    const py = Math.floor((Y / s) * p), o0 = Y * W;
+    if (flag) pack.rows[Y] = 1;
+    for (let X = 0; X < W; X++) {
+      const px = Math.floor((X / s - m + margin) * p);
+      if (px < 0 || px >= art.width) continue;
+      const i = py * art.width + px, o = o0 + X;
+      if (art.ix) { const v = art.ix[i]; if (!art.clear[v]) fb[o] = v; continue; }
+      if (art.rgba[i * 4 + 3] === 0) continue; // @math four bytes a colour, the alpha last
+      A.px[o] = art.px[i]; A.direct[o] = 1; A.beneath[o] = fb[o];
+    }
+  }
+}
+
 // The horizon strip at a pixel offset (`offset` in strip bytes, a fraction allowed: the blend's) at G: rows horizonRow..horizonRow +
-// horizonRows - 1 (above).
-export function drawStripAt(par, offset, fb, G) {
+// horizonRows - 1 (above). `pack` (while an artwork pack is drawn: { strip, sky, A, flags (clouds.js stripSkyIndices), sky picture `back`
+// (the track's own sky picture, the strip's background rows under it) }) with a pack strip sets the art layers' `through` of every strip
+// pixel (the archive's sky indices') and draws the pack strip over the archive's (drawPackStrip).
+export function drawStripAt(par, offset, fb, G, pack = null) {
   const S = models().sky, { s, m, W } = G, P = stripPeriod();
   if (par.length !== S.parBytes) throw new Error(`.PAR file of ${par.length} bytes, expected ${S.parBytes}`);
   if (m > 0 && !stripRepeats(par)) throw new Error(`a horizon strip that does not repeat every ${P} pixels has no wide view`);
@@ -108,5 +137,40 @@ export function drawStripAt(par, offset, fb, G) {
     for (let X = 0; X < W; X++) fb[o + X] = par[from + at[X]];
     for (let q = 1; q < s; q++) fb.copyWithin(o + q * W, o, o + W);
   }
+  if (pack?.strip) { // the strip pixels' sky flags (the archive's sky indices'), then the pack strip over them
+    const { A, flags } = pack;
+    for (let Y = s * S.horizonRow; Y < s * (S.horizonRow + S.horizonRows); Y++) { const j = Math.floor(Y / s) - S.horizonRow; for (let o = Y * W, end = o + W; o < end; o++) A.through[o] = flags[j * 256 + fb[o]]; } // @math a flag for each palette index
+    drawPackStrip(pack.strip, fb, G, a, pack);
+  }
   return fb;
+}
+
+// A pack strip (art.js: P p x 20 p, one panorama of the strip's period P) over the archive's strip: the output pixel of the window's place
+// (a + X - s m) / s (the strip's pixels, in steps of 1/s) reads the pack pixel at that place times p, modulo the panorama, on the row of its
+// reference row times p. A pixel that says 'sky here' (RGBA: alpha below ART.alphaCut; indexed: an index its tRNS makes transparent) keeps the
+// archive's strip pixel where that is one of the strip's sky indices (so the archive's own dither stays), else takes the sky picture's pixel of
+// that strip row (the pack sky's rows 110..129 where a pack sky reaches, else the archive sky's, its margins made as the wide view makes them);
+// either way it is sky to the composite (`through` 1: the tint and the far range go on over it). Any other pixel is the pack's scenery: an
+// index (its `through` the archive's flag of that index, as an archive pixel of it has) or a colour in the art layers over the archive's index
+// (`through` 0).
+export function drawPackStrip(art, fb, G, a, pack) {
+  const S = models().sky, { s, m, W, colRef } = G, p = art.p, period = art.width, A = pack.A, flags = pack.flags, cut = ART.alphaCut;
+  const back = pack.back, ext = m > 0 ? skyMargins(back, m) : null, sky = pack.sky, skyMargin = sky?.entry.margin ?? 0;
+  for (let Y = s * S.horizonRow; Y < s * (S.horizonRow + S.horizonRows); Y++) {
+    const j = Math.floor(Y / s) - S.horizonRow, py = Math.floor(((Y / s) - S.horizonRow) * p), o0 = Y * W, row = S.horizonRow + j;
+    for (let X = 0; X < W; X++) {
+      const px = ((Math.floor(((a + X - s * m) / s) * p) % period) + period) % period, i = py * art.width + px, o = o0 + X;
+      let here;
+      if (art.ix) { const v = art.ix[i]; here = art.clear[v] === 1; if (!here) { fb[o] = v; A.direct[o] = 0; A.through[o] = flags[j * 256 + v]; continue; } } // @math a flag for each palette index
+      else { const alpha = art.rgba[i * 4 + 3]; here = alpha < cut; if (!here) { A.px[o] = art.px[i]; A.direct[o] = 1; A.beneath[o] = fb[o]; A.through[o] = 0; continue; } } // @math four bytes a colour, the alpha last
+      A.through[o] = 1;
+      if (flags[j * 256 + fb[o]]) { A.direct[o] = 0; continue; } // @math a flag for each palette index: the archive's own sky pixel
+      const sx = sky ? Math.floor((X / s - m + skyMargin) * sky.p) : -1, si = sx >= 0 && sx < sky.width ? Math.floor((Y / s) * sky.p) * sky.width + sx : -1;
+      if (si >= 0 && (sky.ix ? !sky.clear[sky.ix[si]] : sky.rgba[si * 4 + 3] !== 0)) { // @math four bytes a colour, the alpha last
+        if (sky.ix) { fb[o] = sky.ix[si]; A.direct[o] = 0; } else { A.beneath[o] = fb[o]; A.px[o] = sky.px[si]; A.direct[o] = 1; }
+        continue;
+      }
+      fb[o] = ext ? ext.pixels[row * ext.refW + colRef[X] + m] : back[row * S.width + Math.min(Math.max(colRef[X], 0), S.width - 1)]; A.direct[o] = 0; // the archive sky's pixel of the strip row
+    }
+  }
 }

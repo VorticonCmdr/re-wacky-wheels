@@ -7,6 +7,8 @@ import { ATMOSPHERE, GRADES, RANGE, PRESETS, LEVELS } from './enhance/config.js'
 import { normalize, loadSettings } from './enhance/settings.js';
 import { createRacePreview } from './viewer-preview.js';
 import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
+import { enabledArt } from './enhance/art-store.js';
+import { createArtProvider, createArtCache, wantedFor } from './enhance/art.js';
 import { patchArchive, trackChanges } from './track-model.js';
 
 const GRADE_LABELS = {
@@ -52,6 +54,23 @@ export function createAtmospherePanel({ $, context, status }) {
   const unsaved = new Set();
   const relief = createReliefProvider(() => built?.archive ?? null); // the player's own relief maps, by where the frames lie in the preview's archive
   loadReliefMaps().then(r => { relief.set(r); draw(); });
+  const art = createArtProvider(() => built?.archive ?? null), artCache = createArtCache(); // the player's artwork packs (Stage 4), drawn with ARTWORK on, by where the frames lie in the preview's archive (its unchanged members keep their places)
+  let artReads = 0;
+  // The enabled packs' pictures the view's race may draw (art.js wantedFor), read again whenever the view is built or the tab shown (the garage
+  // may have changed them in another tab) while ARTWORK is on (off, nothing is decoded); once they are set, the view is run again to its moment (the first pack
+  // changes what the enhancer keeps of the scene) and drawn. A newer read takes the place of one still running (art.js load).
+  function reloadArt() {
+    const mine = ++artReads, world = preview?.race?.world;
+    if (!settings.art || !world) return;
+    enabledArt()
+      .then(({ art: records }) => art.load(records, artCache, wantedFor(world)))
+      .then((set) => {
+        if (!set || mine !== artReads || !preview) return;
+        preview.seek(Number($('atmo-moment').value), settings);
+        draw();
+      })
+      .catch(() => {});
+  }
 
   // The browser's atmospheres, with those it did not keep in this session on top.
   function sync() {
@@ -183,10 +202,11 @@ export function createAtmospherePanel({ $, context, status }) {
       const changes = trackChanges(track);
       const archive = changes.size ? patchArchive(dat, changes) : dat;
       settings = viewSettings();
-      preview = createRacePreview(archive, track.stem, { atmosphere: atmosphereOf, demoControls: false, relief });
+      preview = createRacePreview(archive, track.stem, { atmosphere: atmosphereOf, demoControls: false, relief, art });
       built = { dat, archive, stem: track.stem, key, edited: changes.size > 0 };
       preview.seek(Number($('atmo-moment').value), settings);
       caption();
+      reloadArt();
       return true;
     } catch (error) {
       preview = null;
@@ -272,6 +292,7 @@ export function createAtmospherePanel({ $, context, status }) {
       if (stem !== null) values = normalizeAtmosphere(local[stem] ?? defaultAtmosphere());
       showValues();
       refreshSoon(0);
+      reloadArt(); // the packs again, for a view that is not built anew (a new one reads them itself)
     },
     hide() {
       visible = false;

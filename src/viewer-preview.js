@@ -67,10 +67,11 @@ function demoOf(track) {
 // changes), `step()` runs one more, `draw(...)` draws the reference and the enhanced picture of the moment. `atmosphere(name)` gives the
 // track's atmosphere (createEnhancer's); `demoControls` false drives with the pilot even where the track has a demo recording (the track
 // editor's preview of an edited track, whose layout the recording does not fit).
-export function createRacePreview(dat, track, { atmosphere = null, demoControls = true, relief = null } = {}) {
+// `relief` and `art` are the player's relief maps and artwork packs (relief-store.js, art.js providers), drawn as the playtest page draws them.
+export function createRacePreview(dat, track, { atmosphere = null, demoControls = true, relief = null, art = null } = {}) {
   const members = archiveMembers(dat), bmc = demoControls ? members.get(`${track}.BMC`) : null, hudArt = loadHudArt(members), mov = parseMov(members.get('GIG.MOV'));
   const recorded = bmc ? demoOf(track) : null, demo = recorded?.spec ?? null; // the demo's class, engine, laps and detail level (the detail sets the steering rate)
-  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${enhancedOn(s)}`; // the sky's layers, the lighting, the water and the rendering choices only colour or draw the picture (but with the enhanced path off the enhancer takes no snapshot)
+  const sceneSwitches = s => `${EFFECTS.filter(k => !LOOK_EFFECTS.includes(k)).map(k => s[k]).join()}|${enhancedOn(s.art && !(art?.size > 0) ? { ...s, art: false } : s)}`; // the sky's layers, the lighting, the water and the rendering choices only colour or draw the picture (but with the enhanced path off the enhancer takes no snapshot; the artwork counts with a pack only, as the enhancer has it)
   let state = null, enh = null, inputs = null, switches = null, controls = null;
   const index = new Uint8Array(SIZE), ref = new Uint8Array(SIZE);
 
@@ -87,7 +88,7 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
       if (s.controls.end) { controls = null; return pilot(state, memo); } // the recording is over: the pilot takes the wheel
       return s.controls;
     };
-    enh = createEnhancer({ storage: memoryStorage(), atmosphere, relief });
+    enh = createEnhancer({ storage: memoryStorage(), atmosphere, relief, art });
     enh.configure(settings);
     switches = sceneSwitches(settings);
   }
@@ -112,15 +113,21 @@ export function createRacePreview(dat, track, { atmosphere = null, demoControls 
     // settings say). Fills `original` and `enhanced` (RGBA, 320 x 200: at a resolution above 1x or in the wide view the reference view of the
     // enhanced world, its samples with the overlays). Returns the enhancer's stats with the enhanced picture as drawn (Stage 4): `world` its
     // RGBA bytes at `w` x `h` (the settings' resolution and view: 640 x 400 at 2x, 426 x 200 wide on 4:3, the overlays in it, over the
-    // original's columns in the middle; 320 x 200 at 1x in the standard view, `enhanced` itself).
-    draw({ alpha = 1, hud = true, detail = 1, aspect = null }, original, enhanced) { // `detail` is the drawing's; the race keeps its own (it sets the steering rate)
+    // original's columns in the middle; 320 x 200 at 1x in the standard view, `enhanced` itself), `art` whether the packs were drawn and
+    // `active` whether the enhancer drew at all (false: the reference renderer's picture, as with ARTWORK on and no pack among Original's switches).
+    // `art` false draws the Enhanced picture without the artwork packs (the garage's comparisons of the packs); `original` null draws the
+    // Enhanced picture alone.
+    draw({ alpha = 1, hud = true, detail = 1, aspect = null, art: useArt = true }, original, enhanced) { // `detail` is the drawing's; the race keeps its own (it sets the steering rate)
       const palette = framePalette(state), overlays = (s, fb) => { if (!hud) return; const v = { ...s, demo: null }; drawRaceOverlays(v, fb); if (!state.minimap && v.minimap) state.minimap = v.minimap; }; // the race's own HUD, also over a demo's controls
-      renderScene(state, ref, detail, sceneSky(state)); overlays(state, ref);
-      for (let i = 0, o = 0; i < SIZE; i++, o += 4) { const p = ref[i] * 4; original[o] = palette[p]; original[o + 1] = palette[p + 1]; original[o + 2] = palette[p + 2]; original[o + 3] = 255; } // @math four bytes a colour
+      if (original || !enh.active()) {
+        renderScene(state, ref, detail, sceneSky(state)); overlays(state, ref);
+        const pic = original ?? enhanced;
+        for (let i = 0, o = 0; i < SIZE; i++, o += 4) { const p = ref[i] * 4; pic[o] = palette[p]; pic[o + 1] = palette[p + 1]; pic[o + 2] = palette[p + 2]; pic[o + 3] = 255; } // @math four bytes a colour
+      }
       let world = { data: enhanced, w: WIDTH, h: HEIGHT };
-      if (enhancedOn(enh.settings)) { enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays, worldReady: true, aspect, wideAllowed: !sceneSky(state) }); const l = enh.layers(); if (l.world.w !== WIDTH || l.world.h !== HEIGHT) world = l.world; } // the preview shows the world itself: no display to wait for; a demo's slides are never wide
-      else enhanced.set(original);
-      return { ...enh.stats(), world: world.data, w: world.w, h: world.h };
+      if (enh.active()) { enh.drawSingle(state, alpha, { index, out: enhanced, palette, mode: detail, sky: sceneSky(state), overlays, worldReady: true, aspect, wideAllowed: !sceneSky(state), useArt }); const l = enh.layers(); if (l.world.w !== WIDTH || l.world.h !== HEIGHT) world = l.world; } // the preview shows the world itself: no display to wait for; a demo's slides are never wide
+      else if (original) enhanced.set(original);
+      return { ...enh.stats(), world: world.data, w: world.w, h: world.h, art: enh.inspect().art, active: enh.active() };
     },
     tickMs: frameMs(),
   };
@@ -143,7 +150,9 @@ export function spriteAnchor(frame, w, h) {
 // A sprite frame stood where the race draws the player's car (the middle of the screen, at the own car's distance) on a plain ground, with
 // its contact shadow and its sun shadow for a sun at `sunAngle` seen from a camera heading 0. `tables` are the bytes of TRIG.DAT and VIEW;
 // `palette` 768 bytes of 8-bit RGB. Returns { rgba (320 x 200), anchor, left, top, row }.
-export function anchorStage(tables, frame, w, h, palette, { sunAngle = 0.35, contact = true, sun = true, rule = 'scenery', ground = [118, 128, 112] } = {}) { // `rule` 'racer' sizes the contact shadow as the race sizes a car's (casterOf) // @math a neutral grey-green ground
+// `colours` (RGBA, w x h row by row: an artwork pack's frame at the logical size, the garage's Art packs) paints the frame's opaque pixels in its
+// own colours (the shadows are the frame's: its opaque pixels are the pack's).
+export function anchorStage(tables, frame, w, h, palette, { sunAngle = 0.35, contact = true, sun = true, rule = 'scenery', ground = [118, 128, 112], colours = null } = {}) { // `rule` 'racer' sizes the contact shadow as the race sizes a car's (casterOf) // @math a neutral grey-green ground
   const asView = b => new DataView(b.buffer, b.byteOffset, b.byteLength), world = { trig: asView(tables.trig), view: asView(tables.view), rows: buildRowTable() };
   const distance = 0x7c, row = world.rows[distance], left = (WIDTH >> 1) - (w >> 1), top = row - h, a = spriteAnchor(frame, w, h); // @math the own car's distance (view.player-car-draw); the middle column
   const L = createLayers(SIZE), index = new Uint8Array(SIZE), rgba = new Uint8ClampedArray(SIZE * 4), pal = new Uint8ClampedArray(256 * 4); // @math 256 colours of four bytes
@@ -161,6 +170,7 @@ export function anchorStage(tables, frame, w, h, palette, { sunAngle = 0.35, con
     blurCast(L, box, WIDTH, HEIGHT, L.scratch);
   }
   composite(rgba, { index, mask: new Uint8Array(SIZE), L, palette: pal, width: WIDTH, effects: { shadow: 1, fog: null }, splats: [] });
+  if (colours) for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) { const X = left + x, Y = top + y; if (frame[x * h + y] !== 0 && X >= 0 && X < WIDTH && Y >= 0 && Y < HEIGHT) rgba.set(colours.subarray((y * w + x) * 4, (y * w + x) * 4 + 4), (Y * WIDTH + X) * 4); } // @math four bytes a colour
   return { rgba, anchor: a, left, top, row };
 }
 

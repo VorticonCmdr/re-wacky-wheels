@@ -17,12 +17,19 @@ import { loadAtmospheres } from './enhance/atmosphere.js';
 import { loadDisplay } from './enhance/display-settings.js';
 import { loadReliefMaps, saveReliefMap, removeReliefMap, createReliefProvider } from './enhance/relief-store.js';
 import { tileSheetHeights, tilesToSheet, sheetToTiles, pictureHeights, shadeByHeights } from './enhance/relief.js';
-import { RELIEF } from './enhance/config.js';
-import { loadTrack } from './game/track-data.js';
+import { RELIEF, ART } from './enhance/config.js';
+import { loadTrack, archiveMembers } from './game/track-data.js';
+import { readZip, writeZip } from './zip.js';
+import { encodePng } from './enhance/png.js';
+import { packContext, readPack, frameCell, opaque, isLocalOnly, PACK } from './enhance/pack-format.js';
+import { buildTemplate, templateChoices, templateParts, cycledEntries } from './enhance/art-template.js';
+import { loadPacks, loadArt, enabledArt, savePack, setEnabled, setOrder, removePack } from './enhance/art-store.js';
+import { createArtProvider, createArtCache, decodeArt, wantedFor } from './enhance/art.js';
+import { skyMargins } from './enhance/sky-hd.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
-const state = { trackView: 'map', anchorView: false, gfx: null, gamePalette: false, entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
+const state = { trackView: 'map', anchorView: false, gfx: null, artView: null, gamePalette: false, entries: [], byName: new Map(), images: new Map(), category: 'All assets', selected: null, catalog: [], filter: '', worker: null, raf: 0, urls: [], renderId: 0, loadId: 0, canvas: null };
 function el(tag, text, className) { const node = document.createElement(tag); if (text !== undefined) node.textContent = text; if (className) node.className = className; return node; }
 function category(e) {
   const ext = extension(e.name);
@@ -49,6 +56,7 @@ function cleanup() {
   state.urls.forEach(u => URL.revokeObjectURL(u)); state.urls = [];
   state.canvas = null; $('export-png').hidden = true;
   $('export-sheet').hidden = true; $('export-sheet').onclick = null;
+  state.artView = null; // no race view decodes the artwork packs now
 }
 function download(data, name, type = 'application/octet-stream') {
   const url = URL.createObjectURL(new Blob([data], { type })), a = el('a'); a.href = url; a.download = name;
@@ -328,9 +336,9 @@ function previewRace(stem) {
   if (!dat || !get(stem + '.gam')) { $('preview').replaceChildren(el('p', 'The race view runs the game on your WACKY.DAT: open the complete archive.', 'preview-error')); return; }
   let preview;
   const atmospheres = loadAtmospheres(); // the tracks' atmospheres the track editor keeps (read here, never written)
-  try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name], relief: relief.provider }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
-  const saved = loadSettings();
-  let settings = state.gfx ??= enhancedOn(saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when they draw through the enhanced path, else the Enhanced preset
+  try { preview = createRacePreview(dat, stem, { atmosphere: name => atmospheres[name], relief: relief.provider, art: artPacks.provider }); } catch (e) { $('preview').replaceChildren(el('p', e.message, 'preview-error')); return; }
+  const saved = loadSettings(), packsOn = artPacks.packs.some(p => p.enabled);
+  let settings = state.gfx ??= enhancedOn(saved.art && !packsOn ? { ...saved, art: false } : saved) ? saved : applyPreset(saved, 'enhanced'); // the game's settings when they draw through the enhanced path (the artwork counts with a pack on only, as the enhancer has it), else the Enhanced preset
   let moment = 140, layout = 'both', hud = true, level = 1, playing = false, acc = 0, last = 0, alpha = 1; // @math a moment after the fly-in and the countdown
   const c = canvas(640, 200), ctx = c.getContext('2d'); c.style.width = '100%'; c.style.maxWidth = 'none'; c.style.imageRendering = 'pixelated'; // the screens as large as the preview allows, their pixels sharp
   const left = new Uint8ClampedArray(320 * 200 * 4), right = new Uint8ClampedArray(320 * 200 * 4), small = document.createElement('canvas'); // @math the two screens; the original's picture before it is enlarged
@@ -343,25 +351,35 @@ function previewRace(stem) {
   // shape the playtest page's display keeps: 53 columns a side on 4:3, 18 on 16:10) the Original stands in the middle of a screen as wide as
   // the Enhanced one, black either side, over the columns the Enhanced picture shares with it.
   const aspect = loadDisplay().aspect;
+  // The artwork packs' comparisons (Stage 4): 'packs' is Enhanced without and with the packs, 'originalPack' the Original beside Enhanced with
+  // the packs; both draw the packs whatever the Artwork switch says.
+  const packLayout = () => layout === 'packs' || layout === 'originalPack', effective = () => (packLayout() ? { ...settings, art: true } : settings);
   function draw() {
-    const s = preview.draw({ alpha: playing ? alpha : 1, hud, detail: level, aspect }, left, right), k = s.h / 200, both = layout === 'both', ow = 320 * k; // @math the screen's rows and columns
-    c.width = (both ? 2 : 1) * s.w; c.height = s.h; // @math one or two screens
-    if (layout !== 'enhanced') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, s.w, s.h); small.getContext('2d').putImageData(new ImageData(left, 320, 200), 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(small, (s.w - ow) / 2, 0, ow, s.h); } // @math the screen, in the middle of a wide one
-    if (layout !== 'original') ctx.putImageData(new ImageData(s.world, s.w, s.h), both ? s.w : 0, 0);
-    const wide = s.w > ow; // @math the Enhanced picture wider than the Original's columns
-    legend.hidden = !both; legendLeft.textContent = k > 1 ? `ORIGINAL · reference renderer, enlarged ${k} times` : 'ORIGINAL · reference renderer'; legendRight.textContent = k > 1 || wide ? `ENHANCED · ${s.w} x ${s.h}${wide ? `, ${(s.w - ow) / (2 * k)} more columns either side` : ''}` : 'ENHANCED';
+    const opts = { alpha: playing ? alpha : 1, hud, detail: level, aspect }, two = layout === 'both' || packLayout();
+    let s, first = null;
+    if (layout === 'packs') { const a = preview.draw({ ...opts, art: false }, null, left); first = { data: a.world === left ? left : a.world.slice(), w: a.w, h: a.h }; s = preview.draw({ ...opts, art: true }, null, right); }
+    else s = preview.draw(opts, layout === 'enhanced' ? null : left, right);
+    const k = s.h / 200, ow = 320 * k; // @math the screen's rows and columns
+    c.width = (two ? 2 : 1) * s.w; c.height = s.h; // @math one or two screens
+    if (first) ctx.putImageData(new ImageData(first.data, first.w, first.h), 0, 0);
+    else if (layout !== 'enhanced') { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, s.w, s.h); small.getContext('2d').putImageData(new ImageData(left, 320, 200), 0, 0); ctx.imageSmoothingEnabled = false; ctx.drawImage(small, (s.w - ow) / 2, 0, ow, s.h); } // @math the screen, in the middle of a wide one
+    if (layout !== 'original') ctx.putImageData(new ImageData(s.world, s.w, s.h), two ? s.w : 0, 0);
+    const on = artPacks.packs.some(p => p.enabled), wide = s.w > ow; // @math the Enhanced picture wider than the Original's columns
+    const packs = s.art ? 'with your packs' : !artPacks.packs.length ? 'no pack is stored: import one in Art packs' : !on ? 'every pack is switched off (Art packs)' : state.artView?.decoded ? 'your packs change nothing here' : 'your packs are being decoded';
+    const enhancedLabel = k > 1 || wide ? `ENHANCED · ${s.w} x ${s.h}${wide ? `, ${(s.w - ow) / (2 * k)} more columns either side` : ''}` : 'ENHANCED';
+    legend.hidden = !two; legendLeft.textContent = layout === 'packs' ? `${enhancedLabel} · without the packs` : k > 1 ? `ORIGINAL · reference renderer, enlarged ${k} times` : 'ORIGINAL · reference renderer'; legendRight.textContent = packLayout() ? `${enhancedLabel} · ${packs}` : enhancedLabel;
     momentLabel.textContent = `pass ${moment} · ${(moment * preview.tickMs / 1000).toFixed(1)} s`; // @math milliseconds in a second
-    stats.textContent = enhancedOn(settings) ? `${s.particles} particles · ${s.marks} skid mark segments · enhanced draw ${s.last.toFixed(1)} ms at ${s.w} x ${s.h}` : 'every effect off: the reference renderer';
+    stats.textContent = s.active ? `${s.particles} particles · ${s.marks} skid mark segments · enhanced draw ${s.last.toFixed(1)} ms at ${s.w} x ${s.h}` : 'every effect off: the reference renderer';
   }
-  function seek() { try { preview.seek(moment, settings); draw(); } catch (e) { status(e.message, true); } }
+  function seek() { try { preview.seek(moment, effective()); draw(); } catch (e) { status(e.message, true); } }
   function set(next) { // the settings, and every control showing them
-    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view; sizesSelect.value = settings.sizes;
+    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view; sizesSelect.value = settings.sizes; artBox.checked = settings.art;
     for (const k of EFFECTS) boxes[k].checked = settings[k];
     for (const k of Object.keys(LEVELS)) ranges[k].value = String(settings[k]);
     seek();
   }
   controls();
-  selectControl('Compare', [['both', 'Original | Enhanced'], ['enhanced', 'Enhanced only'], ['original', 'Original only']], layout, v => { layout = v; draw(); });
+  selectControl('Compare', [['both', 'Original | Enhanced'], ['enhanced', 'Enhanced only'], ['original', 'Original only'], ['packs', 'Enhanced | Enhanced + pack'], ['originalPack', 'Original | Enhanced + pack']], layout, v => { layout = v; seek(); });
   field('Moment', momentSlider); $('controls').append(momentLabel);
   momentSlider.oninput = () => { moment = Number(momentSlider.value); playing = false; playBox.checked = false; seek(); };
   const playBox = checkControl('Play', false, v => { playing = v; acc = 0; last = performance.now(); });
@@ -372,6 +390,7 @@ function previewRace(stem) {
   const scaleSelect = selectControl('Resolution', RENDER.scales.map(n => [n, `${n}x`]), settings.scale, v => set(change(settings, 'scale', Number(v)))); // Stage 4: the Enhanced world at twice the samples; the preview shows it itself, WebGL or not
   const viewSelect = selectControl('View', [['standard', 'Standard'], ['wide', 'Wide (16:9)']], settings.view, v => set(change(settings, 'view', v))); // Stage 4: the wide view's margins, for the playtest page's display shape
   const sizesSelect = selectControl('Sprite sizes', [['classes', 'Stepped, as the original'], ['smooth', 'Smooth']], settings.sizes, v => set(change(settings, 'sizes', v))); // Stage 4: the pictures at sizes between the game's classes, on the floor's own rows
+  const artBox = checkControl('Artwork packs', settings.art, v => set(change(settings, 'art', v))); // Stage 4: your enabled packs (Art packs) in the race world
   const boxes = Object.fromEntries(EFFECTS.map(k => [k, checkControl(EFFECT_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const ranges = Object.fromEntries(Object.keys(LEVELS).map(k => [k, rangeControl(LEVEL_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const use = el('button', 'Use these in the game'); use.onclick = () => { if (saveSettings(settings)) status('Saved: the playtest page draws with these graphics settings from now on.'); else status('This browser does not let the page keep settings.', true); }; field('Playtest', use);
@@ -386,9 +405,271 @@ function previewRace(stem) {
     state.raf = requestAnimationFrame(tick);
   }
   seek(); state.raf = requestAnimationFrame(tick);
-  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution, the view and the sprite sizes apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle; smooth sprite sizes draw the karts and the scenery at sizes between the game's ten steps, on the ground's own rows), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
+  // The artwork packs' pictures this race may draw, decoded now that the view is open; once they are set, the race is run to its moment again
+  // (the first pack changes what the enhancer keeps of the scene: viewer-preview.js sceneSwitches) and drawn.
+  const id = state.renderId, world = preview.race?.world;
+  if (world) { state.artView = { world, decoded: false, redraw: () => { if (state.renderId === id) seek(); } }; reloadGarageArt(); }
+  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution, the view and the sprite sizes apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle; smooth sprite sizes draw the karts and the scenery at sizes between the game's ten steps, on the ground's own rows; Artwork packs draws your enabled packs, and Compare's Enhanced | Enhanced + pack and Original | Enhanced + pack show them against the archive's art whatever the switch says), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
 }
 
+// ---- The artwork packs (Stage 4: docs/artpacks.md): the player's own art for the race world, imported here and kept in this browser
+// (art-store.js), drawn by the race views here and by the playtest page with ARTWORK on. The panel imports a pack (a zip, a folder or files)
+// with a report of every entry, lists the packs (on or off, their order: a later pack wins what two packs both replace, removal), exports a
+// template of the archive's own art to start from (local only: it holds the game's art), and compares a pack's entries with the archive's.
+const artPacks = { provider: createArtProvider(() => get('wacky.dat')?.data ?? null), cache: createArtCache(), packs: [], report: null };
+// The packs' list read again (the panel's table, the race view's fallback and legend); while a race view is open (`state.artView`: its world
+// and its redraw) the enabled packs' pictures that race may draw are decoded too (art.js wantedFor), and the view drawn again with them.
+// Nothing is decoded before a race view opens. A newer load takes the place of one still running (art.js load).
+async function reloadGarageArt() {
+  artPacks.packs = await loadPacks();
+  const view = state.artView;
+  if (!view) return;
+  const { art: records } = await enabledArt();
+  if (!(await artPacks.provider.load(records, artPacks.cache, wantedFor(view.world))) || state.artView !== view) return;
+  view.decoded = true; view.redraw();
+}
+reloadGarageArt();
+// The archive's members and a track of it (the registry's shapes and objects), kept per archive.
+function packWorld() {
+  const dat = get('wacky.dat')?.data;
+  if (!dat) return null;
+  if (state.packWorld?.dat !== dat) {
+    const members = archiveMembers(dat), first = [...members.keys()].filter(n => /^\d+\.GAM$/.test(n)).map(n => n.split('.')[0]).sort((a, b) => a - b)[0];
+    const world = loadTrack(dat, first);
+    state.packWorld = { dat, members, world, ctx: packContext(members, world, dat) };
+  }
+  return state.packWorld;
+}
+// The files of an input or a drop as a pack's files ([{ name, data }]): a zip's contents, or the files themselves by their paths in a folder.
+async function packFilesOf(list) {
+  const files = [];
+  for (const f of list) {
+    const data = new Uint8Array(await f.arrayBuffer()), name = f.webkitRelativePath || f.name;
+    if (/\.zip$/i.test(name)) files.push(...await readZip(data, { maxBytes: ART.maxFileBytes }));
+    else files.push({ name, data });
+  }
+  return files;
+}
+// An 8-bit palette of a PCX member (256 x 3), for showing indices.
+const palette8 = name => packWorld()?.ctx.palette(name) ?? null;
+// A line under the comparison's pictures.
+const note = text => $('preview').append(el('p', text, 'muted'));
+// A decoded art's picture (art.js) as RGBA, an indexed one through `pal`.
+function artRgba(art, pal) {
+  if (art.rgba) return new Uint8ClampedArray(art.rgba);
+  const out = new Uint8ClampedArray(art.width * art.height * 4); // @math four bytes a colour
+  for (let i = 0; i < art.ix.length; i++) { const v = art.ix[i]; out[i * 4] = pal[v * 3]; out[i * 4 + 1] = pal[v * 3 + 1]; out[i * 4 + 2] = pal[v * 3 + 2]; out[i * 4 + 3] = art.clear[v] ? 0 : 255; } // @math four bytes a colour, three components an entry
+  return out;
+}
+// Indices (row-major, `w` x `h`) enlarged `p` times as RGBA through `pal` (`transparent`: an index left transparent, or -1).
+function indicesRgba(indices, w, h, p, pal, transparent = -1) {
+  const W = w * p, H = h * p, out = new Uint8ClampedArray(W * H * 4); // @math four bytes a colour
+  for (let Y = 0; Y < H; Y++) for (let X = 0; X < W; X++) { const v = indices[Math.floor(Y / p) * w + Math.floor(X / p)], o = (Y * W + X) * 4; out[o] = pal[v * 3]; out[o + 1] = pal[v * 3 + 1]; out[o + 2] = pal[v * 3 + 2]; out[o + 3] = v === transparent ? 0 : 255; } // @math four bytes a colour, three components an entry
+  return { rgba: out, width: W, height: H };
+}
+// Draws RGBA pictures side by side on a canvas, a gap between: [{ rgba, width, height, label }]; returns the canvas's context and the left of each.
+function sideBySide(parts, gap = 16) { // @math the gap in pixels
+  const width = parts.reduce((n, p) => n + p.width, 0) + gap * (parts.length - 1), height = Math.max(...parts.map(p => p.height)), c = canvas(width, height), g = c.getContext('2d'), lefts = [];
+  let x = 0;
+  for (const p of parts) { g.putImageData(new ImageData(p.rgba, p.width, p.height), x, 0); lefts.push(x); x += p.width + gap; }
+  c.style.imageRendering = 'pixelated';
+  return { g, lefts, canvas: c };
+}
+
+function previewArtPacks() {
+  cleanup(); state.selected = null;
+  const renderId = state.renderId, gone = () => renderId !== state.renderId; // another entry chosen while a read or a decode was still running: it must not draw into that entry's panel
+  $('asset-category').textContent = 'ARTWORK PACKS'; $('asset-name').textContent = 'Art packs'; $('asset-meta').textContent = 'Your own art for the race world, kept in this browser apart from the game files';
+  $('preview').replaceChildren(); $('controls').replaceChildren(); $('details').replaceChildren(); $('download').disabled = true; $('hex').hidden = true;
+  for (const button of $('asset-list').querySelectorAll('button')) button.setAttribute('aria-pressed', 'false');
+  const W = packWorld();
+  if (!W) { $('preview').replaceChildren(el('p', 'Art packs are checked against your WACKY.DAT: open the complete archive first.', 'preview-error')); return; }
+  const ctx = W.ctx, parts = templateParts(W.members, W.world);
+  controls();
+  // Import: a zip, a folder or files.
+  const pick = (folder, accept) => { const input = el('input'); input.type = 'file'; input.multiple = true; if (folder) input.webkitdirectory = true; if (accept) input.accept = accept; input.onchange = async () => { if (input.files.length) await importPack([...input.files]); }; input.click(); };
+  const imports = [el('button', 'Import a zip'), el('button', 'Import a folder'), el('button', 'Import files')];
+  imports[0].onclick = () => pick(false, '.zip,application/zip'); imports[1].onclick = () => pick(true); imports[2].onclick = () => pick(false, '.json,.png,.txt,image/png,application/json');
+  const importBox = el('div', undefined, 'control'); importBox.append(el('span', 'Import a pack'), ...imports); $('controls').append(importBox); // a group, not a label: a label would click its first button
+  // The template export.
+  const choices = templateChoices(W.members, W.world), sheets = state.entries.filter(e => /^a_.*\.pcx$/.test(e.name)).map(e => [e.name.toUpperCase(), e.name.toUpperCase()]);
+  const what = selectControl('Template of', [['all', 'The whole race world'], ...choices.map(c => [c.member, c.label])], 'all', () => {});
+  const scale = selectControl('Scale', ART.templateScales.map(n => [n, `${n}x`]), ART.templateScales[0], () => {});
+  const colors = selectControl('Colours', [['rgba', 'RGBA'], ['indexed', 'Indexed: the game\'s palette']], 'rgba', () => {});
+  const pal = selectControl('Palette', [['default', 'Each member\'s first track\'s'], ...sheets], 'default', () => {});
+  const exp = el('button', 'Export template'); field('Template', exp);
+  exp.onclick = async () => {
+    exp.disabled = true; status('Making the template…');
+    try {
+      const t = buildTemplate(W.members, W.world, { select: what.value, scale: Number(scale.value), color: colors.value, palette: pal.value === 'default' ? null : pal.value, archive: W.dat });
+      const files = [{ name: PACK.manifest, data: new TextEncoder().encode(JSON.stringify(t.manifest, null, 1)) }, { name: PACK.notice, data: new TextEncoder().encode(t.notice) }];
+      for (const image of t.images) files.push({ name: image.path, data: await encodePng(image) });
+      const name = `wacky-template-${what.value === 'all' ? 'world' : what.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${scale.value}x-${colors.value}.zip`;
+      download(writeZip(files), name, 'application/zip');
+      status(`Exported ${t.images.length} pictures to ${name}. It holds the game's own art: keep it on your computer; a pack you share may hold only your own art (NOTICE.txt).`);
+    } catch (error) { status(error.message, true); } finally { exp.disabled = false; }
+  };
+  // Using the packs in the game.
+  const use = el('button', 'Use in the game'); field('Playtest', use);
+  use.onclick = () => { const s = loadSettings(); if (saveSettings(change(s, 'art', true))) status('Saved: the playtest page draws your enabled packs (ARTWORK ON, the panel\'s Artwork packs) from its next race on.'); else status('This browser does not let the page keep settings.', true); };
+  const compareBox = el('div', undefined, 'art-compare'); // the comparison's own controls
+  $('controls').append(compareBox);
+  async function importPack(list) {
+    status('Reading the pack…');
+    try {
+      const result = await readPack(await packFilesOf(list), ctx);
+      artPacks.report = result;
+      if (!result.pack) { status(`The pack was refused: ${result.reason}`, true); showList(); return; }
+      const kept = result.arts.length, refused = result.report.filter(r => r.status === 'refused').length;
+      if (!kept) { status(`Nothing of ${result.pack.name} was kept: every entry was refused (the report below).`, true); showList(); return; }
+      const saved = await savePack(result.pack, result.arts.map(a => ({ entry: a.entry, png: new Blob([a.png], { type: 'image/png' }), width: a.width, height: a.height })));
+      if (!saved.ok) { status(`The browser did not keep ${result.pack.name}: ${saved.reason}`, true); showList(); return; }
+      await reloadGarageArt(); if (gone()) return; showCompare();
+      status(`Imported ${result.pack.name}: ${kept} entr${kept === 1 ? 'y' : 'ies'} kept${refused ? `, ${refused} refused` : ''}${result.warnings.length ? `; ${result.warnings.join('; ')}` : ''}.`, Boolean(refused));
+    } catch (error) { status(error.message, true); }
+    showList();
+  }
+  // The packs list and the last import's report, in the details.
+  async function showList() {
+    artPacks.packs = await loadPacks();
+    const art = await loadArt();
+    if (gone()) return;
+    $('details').replaceChildren();
+    const packs = artPacks.packs, count = id => art.filter(a => a.pack === id).length;
+    if (!packs.length) detail('No pack is kept in this browser yet. Export a template to start from, paint your own art into its pictures (the same sizes), set its licence, and import it.');
+    else {
+      const wrap = el('div', undefined, 'table-wrap'), t = el('table'), head = el('tr'), body = el('tbody');
+      ['Order', 'Pack', 'Author', 'Licence', 'Entries', 'Imported', 'On', ''].forEach(c => head.append(el('th', c)));
+      const thead = el('thead'); thead.append(head); t.append(thead, body); wrap.append(t); $('details').append(wrap);
+      packs.forEach((p, i) => {
+        const row = el('tr'), on = el('input'), up = el('button', '↑'), down = el('button', '↓'), remove = el('button', 'Remove'), tools = el('td');
+        on.type = 'checkbox'; on.checked = p.enabled; on.onchange = async () => { const r = await setEnabled(p.id, on.checked); if (!r.ok) status(r.reason, true); await reloadGarageArt(); showList(); };
+        const move = async d => { const ids = packs.map(q => q.id), j = i + d; [ids[i], ids[j]] = [ids[j], ids[i]]; const r = await setOrder(ids); if (!r.ok) status(r.reason, true); await reloadGarageArt(); showList(); };
+        up.disabled = i === 0; down.disabled = i === packs.length - 1; up.onclick = () => move(-1); down.onclick = () => move(1);
+        remove.onclick = async () => { if (!confirm(`Remove ${p.name} and its pictures from this browser?`)) return; const r = await removePack(p.id); if (!r.ok) status(r.reason, true); else status(`Removed ${p.name}.`); await reloadGarageArt(); showList(); showCompare(); };
+        tools.append(up, down, remove);
+        const onCell = el('td'); onCell.append(on);
+        [String(i + 1), p.name, p.author || '—', isLocalOnly(p.licence) ? 'LOCAL ONLY (the game\'s art: never share it)' : p.licence, String(count(p.id)), new Date(p.saved).toLocaleString()].forEach(v => row.append(el('td', v)));
+        row.append(onCell, tools); body.append(row);
+      });
+      detail('A later pack in the order wins what two packs both replace; what no pack replaces is the archive\'s. Use in the game turns ARTWORK on for the playtest page.');
+    }
+    const rep = artPacks.report;
+    if (rep) {
+      detail(`The last import${rep.pack ? ` (${rep.pack.name})` : ''}: ${rep.reason ?? `${rep.report.filter(r => r.status !== 'refused').length} of ${rep.report.length} entries kept`}${rep.warnings?.length ? `. ${rep.warnings.join('. ')}` : ''}.`);
+      if (rep.report.length) table(['Entry', 'Result', 'Why'], rep.report.map(r => [r.entry, r.status, r.reasons.join('; ') || '—']));
+    }
+  }
+  // The comparison of a kept entry with the archive's art.
+  let compareToken = 0;
+  async function showCompare() {
+    const token = ++compareToken, art = await loadArt();
+    if (token !== compareToken || gone()) return;
+    compareBox.replaceChildren();
+    if (!art.length) { $('preview').replaceChildren(el('p', 'Import a pack to compare its art with the archive\'s here.', 'muted')); return; }
+    const names = new Map(artPacks.packs.map(p => [p.id, p.name])), label = r => `${names.get(r.pack) ?? r.pack} › ${r.kind} ${r.kind === 'strip' ? r.meta.members.join(', ') : r.member}${r.kind === 'frames' ? ` at ${r.meta.offset}` : ''}`;
+    const s = el('select'); art.forEach((r, i) => { const o = el('option', label(r)); o.value = String(i); s.append(o); });
+    const wrapper = el('label', undefined, 'control'); wrapper.append(el('span', 'Compare'), s); compareBox.append(wrapper);
+    const extra = el('div'); extra.style.display = 'contents'; compareBox.append(extra);
+    s.onchange = () => show(art[Number(s.value)]);
+    show(art[0]);
+    async function show(record) {
+      extra.replaceChildren();
+      let decoded;
+      try { decoded = await decodeArt(record.meta, record.png); } catch (error) { if (!gone()) $('preview').replaceChildren(el('p', error.message, 'preview-error')); return; }
+      if (gone()) return;
+      const e = record.meta, p = e.scale, palName = e.palette ?? (e.kind === 'frames' ? 'A_F1.PCX' : null), add = (labelText, control) => { const w = el('label', undefined, 'control'); w.append(el('span', labelText), control); extra.append(w); return control; };
+      if (e.kind === 'frames') compareFrames(record, decoded, add, palName, extra);
+      else if (e.kind === 'tiles') compareTiles(record, decoded);
+      else if (e.kind === 'sky') compareSky(record, decoded);
+      else if (e.kind === 'strip') compareStrip(record, decoded, add);
+    }
+  }
+  // Frames: the archive's frame and the pack's at one logical size (the archive's enlarged p times), the archive's ground row (red), the pack's
+  // lowest opaque row (cyan) and a declared anchor (yellow); under them each stood on the ground with its contact and sun shadows (anchorStage).
+  function compareFrames(record, art, add, palName, extra) { // `extra` holds the comparison's own controls (the slider, the caption)
+    const e = record.meta, p = e.scale, data = W.members.get(e.member), pal = palette8(e.palette ?? palName ?? 'A_F1.PCX') ?? palette8('A_F1.PCX');
+    let k = 0;
+    const slider = add('Frame', el('input')); slider.type = 'range'; slider.min = 0; slider.max = e.count - 1; slider.step = 1; slider.value = 0;
+    const caption = el('span', undefined, 'frame-label'); extra.append(caption);
+    const draw = () => {
+      const at = e.offset + k * e.stride, frame = data.subarray(at, at + e.width * e.height), rows = new Uint8Array(e.width * e.height);
+      for (let y = 0; y < e.height; y++) for (let x = 0; x < e.width; x++) rows[y * e.width + x] = frame[x * e.height + y];
+      const archive = indicesRgba(rows, e.width, e.height, p, pal, 0), cell = frameCell(e, k), packPic = artRgba(art, pal), cw = e.cell[0], ch = e.cell[1], pack = new Uint8ClampedArray(cw * ch * 4); // @math four bytes a colour
+      for (let y = 0; y < ch; y++) pack.set(packPic.subarray(((cell.y + y) * art.width + cell.x) * 4, ((cell.y + y) * art.width + cell.x + cw) * 4), y * cw * 4); // @math four bytes a colour
+      // the pack's frame at the logical size (the pack pixel under each original pixel's middle), for its stage
+      const logical = new Uint8Array(e.width * e.height), colours = new Uint8ClampedArray(e.width * e.height * 4); // @math four bytes a colour
+      let packLow = -1;
+      const image = art.ix ? { indices: art.ix, alpha: art.clear.map(c => (c ? 0 : 255)) } : { rgba: art.rgba }; // @math transparent or opaque
+      for (let y = 0; y < e.height; y++) for (let x = 0; x < e.width; x++) { const px = cell.x + e.box[0] + x * p + (p >> 1), py = cell.y + e.box[1] + y * p + (p >> 1), i = py * art.width + px; if (opaque(image, i)) { logical[x * e.height + y] = 1; colours.set(packPic.subarray(i * 4, i * 4 + 4), (y * e.width + x) * 4); } } // @math the middle of an original pixel's p x p; four bytes a colour
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (pack[(y * cw + x) * 4 + 3]) packLow = Math.max(packLow, y - e.box[1]); // @math the alpha of four bytes
+      let archiveLow = -1; for (let i = 0; i < frame.length; i++) if (frame[i]) archiveLow = Math.max(archiveLow, i % e.height);
+      const { g, lefts } = sideBySide([archive, { rgba: pack, width: cw, height: ch }]);
+      const line = (x0, w, row, colour) => { g.fillStyle = colour; g.fillRect(x0, row, w, Math.max(1, p >> 1)); };
+      if (archiveLow >= 0) { line(lefts[0], archive.width, (archiveLow + 1) * p - 1, '#ff5a5a'); line(lefts[1] + e.box[0], e.width * p, e.box[1] + (archiveLow + 1) * p - 1, '#ff5a5a'); } // @math the row under the lowest opaque one
+      if (packLow >= 0) line(lefts[1], cw, e.box[1] + packLow, '#5ae0ff');
+      const declared = e.anchors?.[k]; if (declared !== undefined && declared !== null) line(lefts[1] + e.box[0], e.width * p, e.box[1] + (declared + 1) * p - 1, '#ffd66b'); // @math the row under the declared one
+      caption.textContent = `frame ${k + 1} of ${e.count}, ${e.width} x ${e.height} at byte ${e.offset + k * e.stride} of ${e.member}; ground row: the archive's ${archiveLow}, the pack's ${packLow >= 0 ? (packLow / p).toFixed(2) : 'none'}${declared !== undefined && declared !== null ? `, declared ${declared}` : ''}`; // @math two decimals
+      // the stages, under the pictures
+      if (get('trig.dat') && get('view')) {
+        const tables = { trig: get('trig.dat').data, view: get('view').data }, stand = (fr, opts) => { const st = anchorStage(tables, fr, e.width, e.height, pal, { sunAngle: (state.gfx ?? loadSettings()).sunAngle, rule: /^(CARS|DIGGER|TIGER|PANDA|CAMEL|MOOSE|PELICAN|SHARK|RINGO|ELE)\.SP$/.test(e.member) ? 'racer' : 'scenery', ...opts }); return st; };
+        const a = stand(frame), b = stand(logical, { colours });
+        const crop = st => { const m = Math.max(e.width, e.height), x0 = Math.max(st.left - m, 0), y0 = Math.max(st.top - m, 0), x1 = Math.min(st.left + e.width + m, 320), y1 = Math.min(st.row + m, 200), cw2 = x1 - x0, ch2 = y1 - y0, out = new Uint8ClampedArray(cw2 * ch2 * 4); for (let y = 0; y < ch2; y++) out.set(st.rgba.subarray(((y0 + y) * 320 + x0) * 4, ((y0 + y) * 320 + x1) * 4), y * cw2 * 4); return { rgba: out, width: cw2, height: ch2, row: st.row - y0 }; }; // @math the screen's columns and rows, four bytes a colour
+        const sa = crop(a), sb = crop(b), stage = el('canvas'), zoom = Math.max(p, 2), sw = sa.width + sb.width + 8; // @math a gap of 8
+        stage.width = sw * zoom; stage.height = Math.max(sa.height, sb.height) * zoom; stage.style.imageRendering = 'pixelated'; stage.style.maxWidth = '100%';
+        const sg = stage.getContext('2d'), tmp = el('canvas'); sg.imageSmoothingEnabled = false;
+        [[sa, 0], [sb, sa.width + 8]].forEach(([pic, x]) => { tmp.width = pic.width; tmp.height = pic.height; tmp.getContext('2d').putImageData(new ImageData(pic.rgba, pic.width, pic.height), 0, 0); sg.drawImage(tmp, x * zoom, 0, pic.width * zoom, pic.height * zoom); sg.fillStyle = '#ff5a5a'; sg.fillRect(x * zoom, pic.row * zoom, pic.width * zoom, 1); }); // @math a gap of 8
+        const wrap = el('div', undefined, 'canvas-wrap'); wrap.append(stage); $('preview').append(wrap);
+      }
+    };
+    slider.oninput = () => { k = Number(slider.value); draw(); };
+    draw();
+  }
+  // Tiles: the archive's sheet enlarged p times and the pack's, the 32-pixel tile grid over both, the pixels of the palette cycle's entries
+  // marked (the archive's; the pack's alpha 0 pixels, which show the archive's cycling texel) and the tracks that use the sheet.
+  function compareTiles(record, art) {
+    const e = record.meta, p = e.scale, sheet = decodePcx(W.members.get(e.member)), users = parts.tiles.get(e.member) ?? [], pal = palette8(e.palette ?? users[0]?.tiles[0] ?? 'A_F1.PCX'), F = { tile: 32 }; // @math a tile's size
+    const archive = indicesRgba(sheet.indices, sheet.width, sheet.height, p, pal), pack = { rgba: artRgba(art, pal), width: art.width, height: art.height };
+    const { g, lefts } = sideBySide([archive, pack]);
+    g.strokeStyle = '#ffffff55'; g.lineWidth = 1;
+    for (const x0 of lefts) { g.beginPath(); for (let x = 0; x <= sheet.width; x += F.tile) { g.moveTo(x0 + x * p + 0.5, 0); g.lineTo(x0 + x * p + 0.5, archive.height); } for (let y = 0; y <= sheet.height; y += F.tile) { g.moveTo(x0, y * p + 0.5); g.lineTo(x0 + archive.width, y * p + 0.5); } g.stroke(); } // @math the middle of a pixel
+    g.fillStyle = '#ff40ff';
+    const cycled = new Set(users.flatMap(t => [...cycledEntries(W.members, t.gam)]));
+    for (let y = 0; y < sheet.height; y++) for (let x = 0; x < sheet.width; x++) if (cycled.has(sheet.indices[y * sheet.width + x])) g.fillRect(lefts[0] + x * p, y * p, Math.max(1, p >> 1), Math.max(1, p >> 1));
+    if (pack.rgba) for (let i = 0; i < art.width * art.height; i++) if (pack.rgba[i * 4 + 3] === 0) g.fillRect(lefts[1] + (i % art.width), Math.floor(i / art.width), 1, 1); // @math the alpha of four bytes
+    note(`${e.member}: the archive's sheet (left, enlarged ${p} times) and the pack's (right), the tiles' 32-pixel grid over both. Magenta marks the palette cycle's pixels: on the left the archive's (the beach tracks' water cycles), on the right the pack's alpha 0 pixels, which show the archive's texel and keep it cycling. Used by track${users.length === 1 ? '' : 's'} ${users.map(t => t.stem).join(', ') || 'none'}.`);
+  }
+  // Sky: the archive's sky with the wide view's made margins and the pack's, the picture's 320 columns marked.
+  function compareSky(record, art) {
+    const e = record.meta, p = e.scale, sky = decodePcx(W.members.get(e.member)).indices, ext = skyMargins(sky, e.margin), users = parts.skies.get(e.member) ?? [], pal = palette8(e.palette ?? users[0]?.tiles[0] ?? 'A_F1.PCX');
+    const archive = indicesRgba(ext.pixels, ext.refW, ext.rows, p, pal), pack = { rgba: artRgba(art, pal), width: art.width, height: art.height };
+    const top = { rgba: new Uint8ClampedArray(Math.max(archive.width, pack.width) * (archive.height + pack.height + 8) * 4), width: Math.max(archive.width, pack.width), height: archive.height + pack.height + 8 }; // @math a gap of 8 rows; four bytes a colour
+    for (let y = 0; y < archive.height; y++) top.rgba.set(archive.rgba.subarray(y * archive.width * 4, (y + 1) * archive.width * 4), y * top.width * 4); // @math four bytes a colour
+    for (let y = 0; y < pack.height; y++) top.rgba.set(pack.rgba.subarray(y * pack.width * 4, (y + 1) * pack.width * 4), (archive.height + 8 + y) * top.width * 4); // @math the gap; four bytes a colour
+    const { g } = sideBySide([top]);
+    g.fillStyle = '#ffd66b'; for (const x of [e.margin * p, (e.margin + 320) * p]) g.fillRect(x, 0, 1, top.height); // @math the picture's own 320 columns
+    note(`${e.member}: the archive's sky (top, enlarged ${p} times, its ${e.margin} columns a side of margin the wide view makes from each row's own colours) and the pack's (below). The yellow lines are the picture's own 320 columns; the rows under row 110 are the strip's background, which the strip's sky-coloured pixels show.`);
+  }
+  // Strip: the archive's panorama and the pack's from a scroll offset, twice their period, so the seam where the panorama wraps (yellow) shows.
+  function compareStrip(record, art, add) {
+    const e = record.meta, p = e.scale, par = W.members.get(e.member), P = e.period, users = parts.strips.get(e.memberCrc) ?? [], pal = palette8(e.palette ?? users[0]?.tiles[0] ?? 'A_F1.PCX');
+    const slider = add('Scroll', el('input')); slider.type = 'range'; slider.min = 0; slider.max = P - 1; slider.step = 1; slider.value = 0;
+    const draw = () => {
+      const off = Number(slider.value), w = 2 * P, H = 20, rows = new Uint8Array(w * H), pack = new Uint8ClampedArray(w * p * H * p * 4), packPic = artRgba(art, pal); // @math twice the period; the strip's 20 rows; four bytes a colour
+      for (let y = 0; y < H; y++) for (let x = 0; x < w; x++) rows[y * w + x] = par[1280 * y + ((off + x) % P)]; // @math a .PAR row's 1280 pixels
+      for (let y = 0; y < H * p; y++) for (let x = 0; x < w * p; x++) { const sx = (off * p + x) % art.width; pack.set(packPic.subarray((y * art.width + sx) * 4, (y * art.width + sx) * 4 + 4), (y * w * p + x) * 4); } // @math four bytes a colour
+      const archive = indicesRgba(rows, w, H, p, pal), both = { rgba: new Uint8ClampedArray(w * p * (2 * H * p + 8) * 4), width: w * p, height: 2 * H * p + 8 }; // @math the two strips and a gap of 8 rows; four bytes a colour
+      both.rgba.set(archive.rgba, 0); both.rgba.set(pack, (H * p + 8) * w * p * 4); // @math the gap; four bytes a colour
+      const { g } = sideBySide([both]);
+      g.fillStyle = '#ffd66b'; g.fillRect((P - off) * p, 0, 1, both.height);
+      note(text);
+    };
+    const text = (`${e.members.join(', ')}: the archive's strip (top, enlarged ${p} times) and the pack's (below) from the scroll offset, two periods of ${P} pixels; the yellow line is the seam where the panorama wraps. The pack's pixels of an alpha below ${ART.alphaCut} are 'sky here': the archive's sky indices stay, its scenery gives way to the sky picture.`);
+    slider.oninput = draw; draw();
+  }
+  showList(); showCompare();
+  $('preview').replaceChildren(el('p', 'Loading your packs…', 'muted'));
+}
 function previewPos(entry) {
   const c = canvas(64, 64); let offset = 0;
   function draw() { const values = numericValues(entry.data, 2, false, offset).slice(0, 4096), max = Math.max(...values, 1), rgba = new Uint8ClampedArray(4096 * 4); values.forEach((v, i) => { const t = v / max; rgba.set([t * 255, 60 + t * 150, 180 - t * 90, 255], i * 4); }); c.getContext('2d').putImageData(new ImageData(rgba, 64, 64), 0, 0); }
@@ -542,7 +823,8 @@ async function loadVfs(vfs, paths = vfs.list()) {
   for (const ext of [...new Set(state.entries.map(e => extension(e.name)))].filter(Boolean).sort()) { const opt = el('option', '.' + ext); opt.value = ext; $('format').append(opt); }
   $('asset-total').textContent = state.entries.length; renderList();
   status(`${state.entries.length} assets loaded. Originals are read only.${warnings.length ? ' Notes: ' + warnings.join('; ') : ''}`, !!warnings.length);
-  selectEntry(get('wintro.pcx') ?? get('a_f1.pcx') ?? state.entries[0]);
+  if (location.hash === '#art-packs' && get('wacky.dat')) previewArtPacks(); // the playtest page's link to the Art packs
+  else selectEntry(get('wintro.pcx') ?? get('a_f1.pcx') ?? state.entries[0]);
 }
 const loadFiles = files => loadVfs(openPicked(files));
 async function loadLocal() {
@@ -555,6 +837,7 @@ async function loadLocal() {
   } catch (e) { status(e.message, true); } finally { $('local').disabled = false; }
 }
 $('local').onclick = loadLocal; $('welcome-load').onclick = loadLocal;
+$('art-packs').onclick = () => { if (get('wacky.dat')) previewArtPacks(); else status('Open your WACKY.DAT first: the art packs are checked against it.', true); };
 for (const label of document.querySelectorAll('label.button')) {
   label.tabIndex = 0; label.setAttribute('role', 'button');
   label.onkeydown = event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); document.getElementById(label.htmlFor).click(); } };

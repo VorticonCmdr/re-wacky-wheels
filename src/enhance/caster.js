@@ -26,9 +26,9 @@
 //   the texel), so the ground's light is blocky per texel as its texture is ({ out, light }: the 'full' look). With `ref` instead of `out`
 //   (the reference look: config.js HD.look, a refW x 200 layer) only the sample is lit, once a cell, into the reference cells of its block
 //   (the block's reference columns, as drawFloor fills a block at 1x): at a whole camera and heading that is drawFloor's own relief layer.
-// - tile(id, texel, fu, fv, o) (optional, for an artwork pack's tiles): the palette index to write at the output pixel o instead of the
-//   sheet's, or a negative number for the sheet's; fu and fv are the sample's place inside its texel (0 to 1), the fractions of
-//   (vx n + fx) / 2^16 and (vy n + fy) / 2^16 the texel drops. A floor with a tile hook always takes the general path.
+// - tile(id, texel, fu, fv, o, pixel) (optional, for an artwork pack's tiles: art.js tileHook): the palette index to write at the output pixel
+//   o instead of the sheet's `pixel`, or a negative number for the sheet's; fu and fv are the sample's place inside its texel (0 to 1), the
+//   fractions of (vx n + fx) / 2^16 and (vy n + fy) / 2^16 the texel drops. A floor with a tile hook always takes the general path.
 import { models } from './models.js';
 import { drawFloor, layerTemplate, KIND } from './project.js';
 import { cosT } from './geometry.js';
@@ -154,7 +154,7 @@ export function castFloor(world, camera, mode, fb, G, { liquid = null, relief = 
           const row = (y >> F.tileShift) - F.mapOrigin, col = (x >> F.tileShift) - F.mapOrigin;
           const id = row >= 0 && row < F.mapRows && col >= 0 && col < F.mapColumns ? tiles[row * F.mapColumns + col] : 0, texel = ((y & F.tileMask) << F.tileShift) + (x & F.tileMask), at = id * F.tileBytes + texel;
           let pixel = sheets[at];
-          if (tile !== null) { const own = tile(id, texel, sx / unit - hx, sy / unit - hy, o); if (own >= 0) pixel = own; }
+          if (tile !== null) { const own = tile(id, texel, sx / unit - hx, sy / unit - hy, o, pixel); if (own >= 0) pixel = own; }
           fb[o] = pixel;
           if (texels !== null) {
             const kind = texels[at];

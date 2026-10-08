@@ -2,12 +2,14 @@
 // the same script runs against two source roots, this tree and a worktree of an earlier commit, and the two results must be equal frame for
 // frame. A regression gate, not evidence about the game. Every module is imported from `--root`; the archive is always this repository's own
 // (game/, or --archive), so both roots draw the same bytes. The hashes go only to `--out` (compare-enhance keeps them in a temporary directory).
-// - enhanced: eight configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
+// - enhanced: twelve configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
 //   track: the night grade, clouds 0.9, mountains at full range, water 1, relief 1), C (B with the HUD layers handed in) and D (smooth motion
 //   only) always draw through the enhancer, with the frame context the page passes where its display can show a world of another size
 //   (worldReady true, the display's default shape, wideAllowed but in a link race and a slides demo; an earlier commit ignores it). N (Enhanced
 //   with RESOLUTION 2X stored) and W (Enhanced with VIEW WIDE stored) draw with worldReady false, as the page without WebGL 2: the world at 1x
-//   in the standard view, so A's pictures (an earlier commit drops the unknown setting). O (the Original preset) and O2 (Original as stored before Stage 4, read from the storage) draw as
+//   in the standard view, so A's pictures (an earlier commit drops the unknown setting). P (Enhanced with ARTWORK ON and no pack stored: A's pictures) and
+//   P2 (Original's switches with ARTWORK ON and no pack: the reference renderer's path, as O), Q (Enhanced, ARTWORK OFF with a tinted pack of
+//   the whole race world stored: A's pictures) and Q2 (Original's switches, ARTWORK OFF with that pack: O's). O (the Original preset) and O2 (Original as stored before Stage 4, read from the storage) draw as
 //   the page's draw decides: through the enhancer when enh.active(), else the reference renderer's path, a replica of the page's (play.js
 //   cannot run in node); they guard the gate and that path, not an edit of play.js's draw itself. The scenarios: the attract demo of track 1
 //   (with its fade-in), races on tracks 2, 3, 6 and 7, the split screen, the duck game, a slides demo (the ORDERING pages over track 7) and
@@ -54,6 +56,8 @@ const { createEnhancer } = await from('enhance/index.js');
 const { PRESETS, ATMOSPHERE, LEVELS, STORAGE_KEY } = await from('enhance/config.js');
 const { normalizeDisplay } = await from('enhance/display-settings.js');
 const { createRandom } = await from('enhance/particles.js');
+const artModule = await from('enhance/art.js').catch(() => null); // the artwork packs' provider (Stage 4); an earlier commit has none
+const templateModule = await from('enhance/art-template.js').catch(() => null), packModule = await from('enhance/pack-format.js').catch(() => null); // the template and the entries' checks (Stage 4), for Q's pack
 
 const dat = archivePath ? new Uint8Array(await readFile(archivePath)) : await (await openGameFolder(join(REPO, 'game'))).open('WACKY.DAT');
 const members = archiveMembers(dat), mov = parseMov(members.get('GIG.MOV')), hudArt = loadHudArt(members), SIZE = 64000, SCREEN = { w: 320, h: 200 }; // @math the 320 x 200 screen
@@ -142,13 +146,39 @@ const CONFIGS = {
   N: { settings: { ...PRESETS.enhanced, scale: 2 }, atmosphere: null, layers: false, worldReady: false }, // @math RESOLUTION 2X
   W: { settings: { ...PRESETS.enhanced, view: 'wide' }, atmosphere: null, layers: false, worldReady: false }, // VIEW WIDE
   O: { settings: PRESETS.original, atmosphere: null, layers: false, page: true }, O2: { settings: null, stored: STORED_ORIGINAL, atmosphere: null, layers: false, page: true },
+  // The artwork packs (Stage 4) on with no pack stored, as the page has it before a pack is imported: P Enhanced with ARTWORK ON, P2 Original's
+  // switches with ARTWORK ON (drawn as the page decides), each with an empty provider (an earlier commit drops the unknown setting and option).
+  P: { settings: { ...PRESETS.enhanced, art: true }, atmosphere: null, layers: false, art: true }, P2: { settings: { ...PRESETS.original, art: true }, atmosphere: null, layers: false, page: true, art: true },
+  // A pack stored and ARTWORK OFF, as the page has it once a player has imported a pack and left the artwork off: Q Enhanced, Q2 Original's
+  // switches (drawn as the page decides), each with the tinted pack of the whole race world (tintedPack): A's and O's pictures.
+  Q: { settings: PRESETS.enhanced, atmosphere: null, layers: false, art: 'tinted' }, Q2: { settings: PRESETS.original, atmosphere: null, layers: false, page: true, art: 'tinted' },
 };
+// The tinted pack of Q and Q2, built at run time from the archive in memory (never written anywhere): the RGBA template at 1x of the whole race
+// world (every track's tile sheets, skies and strips, every picture of the region registry: art-template.js), red and blue swapped, each entry
+// checked as an import checks it. With the artwork on it changes every scenario's picture (check:enhance's section 7 shows a tinted pack does);
+// with it off it must change nothing. Null for an earlier commit (no packs).
+let tinted;
+function tintedPack() {
+  if (tinted !== undefined) return tinted;
+  if (!artModule || !templateModule || !packModule) return (tinted = null);
+  const world = loadTrack(dat, String(raceTracks[0])), ctx = packModule.packContext(members, world, dat), t = templateModule.buildTemplate(members, world, { scale: 1, color: 'rgba' });
+  tinted = t.manifest.entries.map((e, i) => {
+    const rgba = Uint8ClampedArray.from(t.images[i].rgba), image = { ...t.images[i], rgba };
+    for (let o = 0; o < rgba.length; o += 4) { const r = rgba[o]; rgba[o] = rgba[o + 2]; rgba[o + 2] = r; } // @math four bytes a colour, red and blue swapped
+    const checked = packModule.normalizeArtEntry(e, ctx, image);
+    if (!checked.entry) throw new Error(`the tinted pack: ${checked.reason}`);
+    return artModule.toArt(checked.entry, image);
+  });
+  return tinted;
+}
 function runEnhanced(config, make, n) {
   const keep = Math.random; Math.random = lcg(777 + n); // @math the checks' seed, one per scenario
   try {
-    const sc = make(), s = sc.state, enh = createEnhancer({ storage: memory(config.atmosphere, config.stored) }), pick = lcg(31 + n), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math the checks' seed; four bytes a colour
+    const art = config.art && artModule ? artModule.createArtProvider(() => dat).set(config.art === 'tinted' ? tintedPack() : []) : null; // a provider with no pack, or the tinted one
+    const sc = make(), s = sc.state, enh = createEnhancer({ storage: memory(config.atmosphere, config.stored), art }), pick = lcg(31 + n), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math the checks' seed; four bytes a colour
     const layers = config.layers ? { world: new Uint8ClampedArray(SIZE * 4), hud: new Uint8ClampedArray(SIZE * 4) } : null, record = { ...(config.page ? { path: [] } : {}), out: [], index: [], mask: [], size: [], ...(layers ? { world: [], hud: [] } : {}) }; // @math four bytes a colour
     if (config.settings) enh.configure(config.settings);
+    if (config.art === 'tinted' && art && !art.forWorld(s.world).any) throw new Error(`the tinted pack has no art of ${sc.name}'s world: Q would prove nothing`);
     const worldReady = config.worldReady ?? true, aspect = normalizeDisplay().aspect; // the page's frame context (play.js drawEnhanced): its display's worldReady() and shape
     for (let t = 0; t < TICKS; t++) {
       const input = sc.input(); if (input === null) break;

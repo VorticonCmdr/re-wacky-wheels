@@ -14,6 +14,8 @@ import { blitAt, blitFlatAt, shapeOf, smoothSize, smoothMap } from './blit.js';
 import { IDENTITY, standingRow, rowLaw } from './geometry.js';
 import { drawSkyAt, drawStripAt, upscaleRows } from './sky-hd.js';
 import { stampShadow, casterOf, castOf, castShadow, sunDirection, blurCast, boxBlurCast, shadowBox } from './shadows.js';
+import { stripSkyIndices } from './clouds.js';
+import { tileHook } from './art.js';
 import { waterShader, sunGlitter } from './water.js';
 import { groundLight, pictureLight, screenSun, paletteLuma } from './relief.js';
 import { SUN } from './config.js';
@@ -103,10 +105,11 @@ export function blitLayers(fb, L, rec, band, width, height, collect = null) {
 
 // The list of the pixels a picture draws and the source bytes it read, for its relief (pictureLight): empty until a picture is drawn, then as
 // long as the largest screen drawn so far (a picture never draws more pixels than its screen has).
-export const createCollect = () => ({ drawn: new Int32Array(0), sources: new Int32Array(0), count: 0 });
+// With an artwork pack's picture (blit.js blitArt) the list also holds each pixel's brightness (`lumas`) and `art` is set.
+export const createCollect = () => ({ drawn: new Int32Array(0), sources: new Int32Array(0), lumas: new Float32Array(0), count: 0, art: false });
 function collectFor(collect, size) {
-  if (collect.drawn.length < size) { collect.drawn = new Int32Array(size); collect.sources = new Int32Array(size); }
-  collect.count = 0;
+  if (collect.drawn.length < size) { collect.drawn = new Int32Array(size); collect.sources = new Int32Array(size); collect.lumas = new Float32Array(size); }
+  collect.count = 0; collect.art = false;
   return collect;
 }
 
@@ -241,8 +244,18 @@ function traceEntry(r, G) {
 // corners, the skid marks and the particles (index.js) the floor's rows too, so the decals stay on the pictures. The floor is unchanged
 // (drawFloor at the reference geometry).
 // `opts.clock(stage)`, when given, is told as each stage ends (the stage times of createEnhancer({ stages })).
+// `opts.art` (Stage 4, the artwork packs: index.js's bundle { provider (art.js createArtProvider), sky, strip } of the world's pack sky and strip,
+// with the art layers in L.art, art.js createArtLayers) draws the packs' art: the floor through the general caster with the provider's tile hook
+// where a sheet of the world has art, the sky and the strip through sky-hd.js (a pack sky and strip over the archive's, the strip pixels' sky
+// flags), and every record and after-blit through blit.js (a pack's picture of its bytes where the provider has one: provider.frame), at any
+// geometry, the reference one included (where the enhancer then takes the draw of a geometry: index.js). Without a pack's art for a picture the
+// pictures are the archive's, through the general blit (at the reference geometry blitLayers' own picture).
+// `opts.blits(bytes, width, height)` (the checks' region recorder, scripts/check-enhance.js section 5) is told every picture drawn: each record's
+// frame with its shape's class 0 size, each after-blit's bytes with its size.
 export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = IDENTITY) {
-  const S = models().sky, at = !G.identity, width = at ? G.W : S.width, height = at ? G.H : fb.length / width, world = P.world, own = fine.seats[seat], force = opts.force ?? NO_FORCE, smooth = opts.sizes === 'smooth', general = { caster: at || force.caster, blit: at || force.blit || smooth }, rows = general.blit ? opts.rows ?? null : null, clock = opts.clock ?? null;
+  const S = models().sky, at = !G.identity, width = at ? G.W : S.width, height = at ? G.H : fb.length / width, world = P.world, own = fine.seats[seat], force = opts.force ?? NO_FORCE, smooth = opts.sizes === 'smooth', clock = opts.clock ?? null;
+  const art = opts.art ?? null, A = art ? L.art : null, tile = art ? tileHook(world, art.provider, A) : null; // the artwork packs' art (above)
+  const general = { caster: at || force.caster || tile !== null, blit: at || force.blit || smooth || art !== null }, rows = general.blit ? opts.rows ?? null : null;
   const law = rowLaw(world, opts.sizes); // the decals' row law: the pictures' standing rows in smooth sizes, else the row table (null)
   const soft = at ? opts.soft ?? null : null, from = at ? opts.from ?? 0 : 0, o0 = from * G.s * width, refW = G.refW, refH = models().floor.height, r0 = from * refW; // the first output pixel and reference cell drawn
   const camI = sceneCamera(P), camF = opts.subPixel && own ? { x: own.cx, y: own.cy, heading: at ? fineHeading(own, camI, G, mode) : camI.heading } : camI, horizon = { from: S.horizonRow, to: S.horizonRow + S.horizonRows };
@@ -253,15 +266,21 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
     if (soft) { soft.shade.fill(0, r0); soft.cast.fill(0, r0); soft.mark.fill(0, r0); } else { L.shade.fill(0, o0); L.cast.fill(0, o0); L.mark.fill(0, o0); }
   }
   if (rows) rows.fill(0);
-  if (!at) { if (sky) sky(fb); else { renderSky(world.sky, fb); drawHorizonFine(world.par, own ? own.horizon : P.car.horizon, fb); } }
+  if (A) { A.direct.fill(0, o0); A.strip = false; }
+  if (!at && (!art || sky || (!art.sky && !art.strip))) { if (sky) sky(fb); else { renderSky(world.sky, fb); drawHorizonFine(world.par, own ? own.horizon : P.car.horizon, fb); } } // (at the reference geometry with no pack sky or strip, the reference's own)
   else if (sky) { const page = opts.page ?? new Uint8Array(S.width * models().floor.height); page.fill(0); sky(page); upscaleRows(page, S.horizonRow + S.horizonRows, fb, G, from); } // the slide's rows 0..129, drawn as the page draws them
-  else { drawSkyAt(world.sky, fb, G, from); drawStripAt(world.par, own ? own.horizon : P.car.horizon, fb, G); }
+  else {
+    const stripSky = art?.stripSky ?? world.sky, pack = A ? { sky: art.sky, strip: art.strip, A, rows, flags: art.strip ? stripSkyIndices(stripSky === world.sky ? world : { sky: stripSky }) : null, back: stripSky } : null; // the strip against the track's own sky (the split screen's world draws the strips' background)
+    if (pack?.sky) art.provider.hits.sky++;
+    if (pack?.strip) { art.provider.hits.strip++; A.strip = true; }
+    drawSkyAt(world.sky, fb, G, from, pack); drawStripAt(world.par, own ? own.horizon : P.car.horizon, fb, G, pack);
+  }
   clock?.('clear');
   const W = opts.water, sunNow = W ? sunDirection(world, opts.sunAngle, camI.heading) : null, glitter = W ? (G.m ? { glitter: sunGlitter(sunNow, new Float32Array(refW), -G.m), x0: -G.m } : { glitter: sunGlitter(sunNow, new Float32Array(S.width)) }) : null; // the glitter of each reference column (the margins' too): the hooks run at the reference samples
   const liquid = W ? { texels: W.liquids.texels, wet: L.wet, wave: L.wave, shade: waterShader(world, { time: opts.now, strength: W.strength, beach: W.beach, ...glitter }) } : null;
   const R = opts.relief, light = R ? groundLight(world, R.ground, { sun: R.sun, strength: R.strength }, at) : null, relief = R ? (soft ? { ref: soft.relief, light } : { out: L.relief, light }) : null, collect = R ? collectFor(opts.collect ?? createCollect(), fb.length) : null;
   if (R) { if (soft) soft.relief.fill(1, r0); else L.relief.fill(1); } // (the reference look's pictures write the output's light of every pixel they draw)
-  if (general.caster) drawFloorAt(world, camF, mode, fb, G, { liquid, relief }, true); else drawFloor(world, camF, mode, fb, { liquid, relief });
+  if (general.caster) drawFloorAt(world, camF, mode, fb, G, { liquid, relief, tile }, true); else drawFloor(world, camF, mode, fb, { liquid, relief });
   clock?.('floor');
   const records = [], frames = own ? { heading: own.tickHeading } : null, main = sceneRecords(P, camI, frames), trace = opts.trace ?? null; // the racers' direction frames stay on the tick's heading
   for (const r of main) {
@@ -282,18 +301,26 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
     if (!r.skip) {
       const entry = trace ? traceEntry(r, G) : null;
       if (entry) trace.records.push(entry);
-      if (R) collect.count = 0;
-      const drawn = general.blit ? blitAt(fb, L, r, opts.band, G, { world, collect: R ? collect : null, rows, at: r.place ?? null, sampled: Boolean(soft), from: G.s * from }) : blitLayers(fb, L, r, opts.band, width, height, R ? collect : null);
+      if (R) { collect.count = 0; collect.art = false; }
+      const hit = art ? art.provider.frame(r.frame) : null; // a pack's picture of the record's bytes
+      if (hit) art.provider.hits.frames++;
+      if (opts.blits) { const info = shapeOf(world, r.picture); opts.blits(r.frame, info?.W0 ?? r.picture.w, info?.H0 ?? r.picture.h); }
+      const drawn = general.blit ? blitAt(fb, L, r, opts.band, G, { world, collect: R ? collect : null, rows, at: r.place ?? null, sampled: Boolean(soft), from: G.s * from, art: hit, luma: lightPictures?.luma ?? null }) : blitLayers(fb, L, r, opts.band, width, height, R ? collect : null);
       // The shadows' grid: the reference picture's (1x, a record with no place), the reference grid (the reference look: the picture's samples at
       // its place over s), or the output's; a picture in smooth sizes gives its drawn box on that grid and the row law its ground stands on.
       const grid = !r.place ? null : soft ? { x: r.place.x / G.s, y: r.place.y / G.s, u: 1, m: G.m } : { x: r.place.x, y: r.place.y, u: G.s, m: G.m }, shape = soft ? drawn?.sample ?? null : drawn;
       if (grid && r.smooth) { const k = grid.u / G.s; grid.box = { w: r.smooth.w * k, h: r.smooth.h * k, ax: (r.smooth.w >> 1) * k }; grid.row = law; } // grid pixels an output pixel
       const c = casterOf(r, P, shape?.foot, ground, opts, grid);
-      if (R) pictureLight(L.relief, { drawn: collect.drawn, sources: collect.sources, count: collect.count, fb, width, luma: lightPictures.luma, sun: lightPictures.sun, strength: R.strength, heights: R.frameHeights?.(r.frame) ?? null, ...(at ? { scale: G.s, frame: r.frame } : {}) });
+      if (R) pictureLight(L.relief, { drawn: collect.drawn, sources: collect.sources, count: collect.count, fb, width, luma: lightPictures.luma, sun: lightPictures.sun, strength: R.strength, heights: R.frameHeights?.(r.frame) ?? null, lumas: collect.art ? collect.lumas : null, ...(at ? { scale: G.s, frame: r.frame } : {}) });
       if (c) { casters.push(c); if (entry) entry.shade = toOut(shadowBox(c, soft ? 1 : G.s)); }
       if (opts.sunShadows) { const s = castOf(r, P, shape, ground, grid); if (s) { casts.push(s); if (entry) s.entry = entry; } }
     }
-    if (r.after) for (const d of r.after) { if (general.blit) blitFlatAt(fb, L, d, r.distance, G, Boolean(R), rows, G.s * from); else blitFlatLayers(fb, L, d, r.distance, width, height, Boolean(R)); }
+    if (r.after) for (const d of r.after) {
+      if (opts.blits) opts.blits(d.bytes, d.width, d.height);
+      const flatArt = art ? art.provider.frame(d.bytes) : null;
+      if (flatArt) art.provider.hits.frames++;
+      if (general.blit) blitFlatAt(fb, L, d, r.distance, G, Boolean(R), rows, G.s * from, flatArt); else blitFlatLayers(fb, L, d, r.distance, width, height, Boolean(R));
+    }
   }
   clock?.('records');
   const target = soft ?? L, gw = soft ? refW : width, gh = soft ? refH : height; // where the soft layers are drawn

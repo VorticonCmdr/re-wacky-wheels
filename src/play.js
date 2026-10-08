@@ -12,12 +12,14 @@ import { drawRaceOverlays, sceneSky } from './render/race-frame.js';
 import { createEnhancer } from './enhance/index.js';
 import { createBoot, stepBoot, stageView, noticeLines, introModel, fadedOut, fadeOutSteps } from './game/boot.js';
 import { loadBootArt, renderNotice as renderBootNotice, renderScene as renderBootScene, renderPicture as renderBootPicture, renderTitle as renderBootTitle } from './render/boot.js';
-import { EFFECTS, LEVELS, RENDER } from './enhance/config.js';
+import { EFFECTS, LEVELS, RENDER, ART } from './enhance/config.js';
 import { applyPreset, change, resetSettings, menuView, nextPreset, toggle, cycleLevel, defaultLevels, isRenderChoice, cycleRender } from './enhance/settings.js';
 import { createDisplay, overlayLayers } from './enhance/display.js';
 import { SENTINEL } from './enhance/composite.js';
 import { minimapRect } from './game/minimap.js';
 import { loadReliefMaps, createReliefProvider } from './enhance/relief-store.js';
+import { createArtProvider, createArtCache, wantedFor } from './enhance/art.js';
+import { loadPacks, enabledArt } from './enhance/art-store.js';
 import { describeAtmosphere } from './enhance/atmosphere.js';
 import { loadDisplay, saveDisplay, resetDisplay, changeDisplay, displayView, nextAspect, nextScaling, nextHud, toggleCrt, cycleCrtLevel, CRT_LEVELS } from './enhance/display-settings.js';
 import { loadDevices, saveDevices } from './game/sound-devices.js';
@@ -91,7 +93,29 @@ const state = { running: false, screen: 'menu', menu: createMenu(), menuKey: nul
 const screen = $('screen'), ctx = screen.getContext('2d'), image = ctx.createImageData(screen.width, screen.height), index = new Uint8Array(screen.width * screen.height);
 let rgba = null;
 const relief = createReliefProvider(() => state.dat); // the player's own relief maps (imported in the asset garage), read again at every race start
-const enh = createEnhancer({ relief, stages: true }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer (the stage times are the panel's readout)
+// The player's artwork packs (Stage 4: docs/artpacks.md, imported in the asset garage): the enabled packs' pictures decoded (kept across races in
+// an LRU of ART.cacheBytes), drawn by the enhancer while ARTWORK is on. The list is read again at every race start (the garage may have changed
+// it in another tab) and when the page opens (the ARTWORK line says NONE without a stored pack); while ARTWORK is on, the pictures that race
+// may draw are decoded too (its own tile sheets, sky and strip, and every picture: art.js wantedFor), and the race waits for them up to
+// ART.decodeTimeoutMs (artWait in frame()), so its art does not pop in once it runs. With ARTWORK off nothing is decoded until it is switched
+// on (setGraphics). Reads may overlap (a race started while the last one's pictures are decoded): only the newest one's answer is shown, and
+// the provider sets only its newest load's pictures (art.js load).
+const art = createArtProvider(() => state.dat), artCache = createArtCache(), artInfo = { packs: 0, enabled: [], records: 0, decoded: false, loading: false, error: null };
+let artReads = 0;
+function reloadArt(world = state.world, decode = enh.settings.art && Boolean(world)) {
+  const mine = ++artReads, current = () => mine === artReads;
+  artInfo.loading = decode; showArtStatus();
+  const done = (async () => {
+    const all = await loadPacks(), { packs, art: records } = await enabledArt(), wanted = world ? wantedFor(world) : null;
+    if (!current()) return;
+    Object.assign(artInfo, { packs: all.length, enabled: packs.map(p => p.name), records: wanted ? records.filter(r => wanted(r.meta)).length : records.length, decoded: false });
+    if (decode && !(await art.load(records, artCache, wanted))) return; // a newer read's load took its place
+    if (current()) Object.assign(artInfo, { decoded: decode, loading: false, error: null });
+  })().catch(error => { if (current()) Object.assign(artInfo, { loading: false, error: error.message }); });
+  done.then(() => { if (current()) { showArtStatus(); showGraphics(); } });
+  return done;
+}
+const enh = createEnhancer({ relief, art, stages: true }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer (the stage times are the panel's readout)
 const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => showDisplay() }); // how the finished picture is put on the screen (docs/enhancements.md, Stage 1): it reads the canvas and never draws into it
 // A finished picture: into the canvas, then onto the screen through the display (`layers`: a race screen's world and overlays for the HUD layer,
 // or Stage 4's layers of a world drawn at another size). `enhanced`: the picture is a race frame of the enhancer's (snapshotScreen keeps it).
@@ -194,6 +218,9 @@ function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusM
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
   startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
   state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); showAtmosphere(); loadReliefMaps().then(r => relief.set(r)); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
+  const loading = reloadArt(); // the artwork packs' list, and with ARTWORK on their pictures decoded before the race runs (not in a link race: the other player does not wait; not with no pack stored when the list was last read)
+  state.artWait = enh.settings.art && !state.linkPlay && artInfo.packs > 0 ? { since: performance.now(), done: false } : null;
+  if (state.artWait) { const wait = state.artWait; loading.then(() => { wait.done = true; }); }
   if (state.cup && state.carry) { const car = { ...state.car, counter: state.carry.counter, held: state.carry.held }; state.car = car; state.player = { ...state.player, car }; } // the pickups go from one race of a cup to the next (obj1+0x2006a)
   rgba = rgbaPalette(state.world.palette);
   state.audio?.stopAll(); state.audio?.engineStart(); // a race starts with the engine running (obj1+0xd04)
@@ -504,6 +531,7 @@ function chooseItem(action) {
   if (action.graphics) { // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js) and DISPLAY OPTIONS > RENDERING (display-menu.js): the same settings as the panel's
     const g = action.graphics, s = enh.settings;
     if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) do nothing; SPRITE SIZES draws at 1x too
+    if (g.toggle === 'art' && !(artInfo.packs > 0)) return; // ARTWORK NONE: no pack stored
     setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return;
   }
   if (action.link) { startLink(action.link); return; } // COMM-BAT PLAY: WEBRTC PEERJS and WEBRTC LOCAL (play-link.js)
@@ -647,11 +675,12 @@ function showGraphics() {
   if (!ready) $('gfx-render').textContent = resolutionNone(s);
   else if (!enh.active()) $('gfx-render').textContent = '';
   if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
+  $('gfx-art').checked = s.art && artInfo.packs > 0; $('gfx-art').disabled = !(artInfo.packs > 0); // the artwork switch: NONE (disabled) with no pack stored
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready, packs: artInfo.packs }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
 }
 // The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the sky's layers, the water, the lighting and the fog draw this track with.
 function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
-function setGraphics(next, control) { enh.configure(next); display.setRendering(renderingOf(enh.settings)); showGraphics(); control?.blur(); } // a focused control would take the race's keys (Space toggles a box, the arrows move a slider); the display draws with the graphics card while the resolution is above 1x or the view is wide
+function setGraphics(next, control) { const was = enh.settings.art; enh.configure(next); if (enh.settings.art && !was) reloadArt(); display.setRendering(renderingOf(enh.settings)); showGraphics(); control?.blur(); } // ARTWORK switched on: the packs' pictures decoded for the race (they apply from the frame they are ready on); a focused control would take the race's keys (Space toggles a box, the arrows move a slider); the display draws with the graphics card while the resolution is above 1x or the view is wide
 // What the display is told of the stored rendering choices (display.setRendering): the scale, and whether the view is wide (its element is then laid out for the wide picture).
 function renderingOf(s) { return { scale: s.scale, wide: s.view === 'wide' }; }
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
@@ -660,8 +689,18 @@ for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGr
 $('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 'scale', Number(e.target.value)), e.target));
 $('gfx-view').addEventListener('change', e => setGraphics(change(enh.settings, 'view', e.target.value), e.target));
 $('gfx-sizes').addEventListener('change', e => setGraphics(change(enh.settings, 'sizes', e.target.value), e.target));
+$('gfx-art').addEventListener('change', e => setGraphics(change(enh.settings, 'art', e.target.checked), e.target));
+// The artwork packs' status line: the packs in use (the enabled ones, in their order), their pictures decoded, or what kept them.
+function showArtStatus() {
+  const el = $('gfx-art-status');
+  if (!el) return;
+  const i = artInfo, s = enh.settings;
+  const pictures = i.decoded ? `${art.size} of ${i.records} pictures decoded${art.size < i.records ? '; the others could not be read' : ''}` : `${i.records} picture${i.records === 1 ? '' : 's'}, decoded ${s.art ? 'when a race starts' : 'when Artwork packs is switched on'}`; // ARTWORK off decodes nothing; with no race yet there is no world to decode for
+  el.textContent = i.error ? `Artwork packs: the browser did not give them (${i.error}).` : i.loading ? 'Artwork packs: decoding...' : !i.packs ? 'No artwork pack is stored: make and import one in the asset garage (Art packs).' : `${i.enabled.length ? `Packs in use${s.art ? '' : ' when Artwork packs is on'}: ${i.enabled.join(', ')} (${pictures}).` : 'Every stored pack is switched off (asset garage, Art packs).'} ${i.packs} pack${i.packs === 1 ? '' : 's'} stored.`;
+}
 $('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
 showGraphics();
+reloadArt(null, false); // the packs' list when the page opens (the ARTWORK line and the panel's switch, before the first race): nothing decoded yet
 
 // The display panel: the scaling, the shape, full screen, the CRT look and its levels, kept in this browser apart from the graphics settings.
 let dspShown = 0;
@@ -672,7 +711,7 @@ function showDisplay() {
   $('dsp-hud').value = ready ? s.hud : 'picture'; $('dsp-hud').disabled = !ready;
   $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
   showDisplayStats(true);
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready, packs: artInfo.packs }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
   showGraphics();
 }
 function showDisplayStats(now = false) {
@@ -1217,6 +1256,10 @@ function frame(now) {
   if (state.screen === 'board') { if (state.board.key) { state.board.key = false; leaveBoard(); } state.last = now; if (state.screen === 'board') drawBoard(now); requestAnimationFrame(frame); return; }
   if (state.screen === 'retry') { stepRetryClock(now); state.last = now; if (state.screen === 'retry') drawRetry(); requestAnimationFrame(frame); return; }
   if (state.screen === 'menu') { stepMenuClock(now); state.last = now; if (state.screen === 'menu') drawMenu(); requestAnimationFrame(frame); return; }
+  if (state.artWait) { // the race waits for its artwork packs (reloadArt), the screen before it kept, at most ART.decodeTimeoutMs
+    if (!state.artWait.done && now - state.artWait.since < ART.decodeTimeoutMs) { state.last = now; state.accumulator = 0; requestAnimationFrame(frame); return; }
+    state.artWait = null; state.last = now;
+  }
   if (state.fadeIn) { // the game does not run while the first frame fades in (demo.fade-in)
     state.fadeIn.since ??= now; state.last = now; state.accumulator = 0;
     if (Math.floor((now - state.fadeIn.since) / FADE_STEP_MS) >= fadeSteps()) state.fadeIn = null;
@@ -1246,7 +1289,7 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady() }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady(), packs: artInfo.packs }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
@@ -1335,4 +1378,4 @@ addEventListener('keyup', e => { state.keys.delete(e.code); if (e.code === state
 addEventListener('blur', () => { state.keys.clear(); state.menuHeld = null; state.menuHeldCode = null; }); // a key released while the page is not focused would stay down
 
 // `play.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
-if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };
+if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, art, artCache, artInfo, reloadArt, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };

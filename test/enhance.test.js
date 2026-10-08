@@ -1,5 +1,6 @@
 // The Enhanced presentation (src/enhance) on synthetic data: settings, smooth motion's blend and its discontinuities, the floor adapter
 // against the reference floor, the compositor's masks and layers, the shadows and the lint rules of the directory. No game files.
+import { createArtProvider } from '../src/enhance/art.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalize, presetOf, applyPreset, change, resetSettings, anyEffect, loadSettings, saveSettings, renderActive, enhancedOn, renderDefault, nextPreset, menuView } from '../src/enhance/settings.js';
@@ -74,7 +75,8 @@ test('settings, Stage 4: the rendering choices (RENDER) beside the switches, the
     const s = change(resetSettings(), k, away[k]), enh = createEnhancer({ storage: memoryStorage() }), drawing = !['hudPlace', 'angles'].includes(k);
     assert.equal(s.preset, drawing ? 'custom' : 'original', k); assert.equal(s[k], away[k]);
     enh.configure(s);
-    assert.equal(renderActive(s), drawing, k); assert.equal(enhancedOn(s), drawing, k); assert.equal(enh.active(), drawing, `${k}: active()`);
+    assert.equal(renderActive(s), drawing, k); assert.equal(enhancedOn(s), drawing, k); assert.equal(enh.active(), drawing && k !== 'art', `${k}: active()`); // the artwork draws only with a pack stored
+    if (k === 'art') { const packed = createEnhancer({ storage: memoryStorage(), art: createArtProvider(() => null).set([{ entry: { kind: 'tiles', member: 'A_F1.PCX' }, bytes: 0 }]) }); packed.configure(s); assert.equal(packed.active(), true, 'art: active() with a pack'); }
     assert.equal(presetOf({ ...s, ...PRESETS.enhanced }), 'enhanced', `${k}: Enhanced whatever the rendering choices`);
   }
   // applyPreset('original') puts the choices back, applyPreset('enhanced') keeps them; Enter from CUSTOM goes to Original and puts them back.

@@ -43,11 +43,31 @@ export function openStore() {
   });
 }
 
+// Why a transaction failed: the failed request's error (an error event bubbles to the transaction before the transaction's own error is set:
+// that happens at the abort which follows it), else the transaction's, else a reason of the page's own.
+const failure = (event, tx) => event?.target?.error ?? tx.error ?? new Error('The browser gave up the change.');
+
 // One transaction on the store `name` ('readonly' or 'readwrite'): `work(store)` makes the request whose result the promise gives once the
 // transaction is complete. The connection is closed afterwards, whatever happened.
 export async function withStore(name, mode, work) {
   const db = await openStore();
   try {
-    return await new Promise((resolve, reject) => { const tx = db.transaction(name, mode), request = work(tx.objectStore(name)); tx.oncomplete = () => resolve(request?.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error); });
+    return await new Promise((resolve, reject) => { const tx = db.transaction(name, mode), request = work(tx.objectStore(name)); tx.oncomplete = () => resolve(request?.result); tx.onerror = e => reject(failure(e, tx)); tx.onabort = () => reject(failure(null, tx)); });
+  } finally { db.close(); }
+}
+
+// One transaction on several stores (`names`, 'readonly' or 'readwrite'): `work(stores)` (the stores by name) makes the requests; the promise
+// gives what `work` returned (a request's result once the transaction is complete, or the value itself) and fails with the transaction's
+// error (a full quota is QuotaExceededError) when it aborts, nothing of it kept. The connection is closed afterwards, whatever happened.
+export async function withStores(names, mode, work) {
+  const db = await openStore();
+  try {
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction(names, mode), stores = Object.fromEntries(names.map(n => [n, tx.objectStore(n)]));
+      let made;
+      try { made = work(stores); } catch (error) { try { tx.abort(); } catch { /* already over */ } reject(error); return; }
+      tx.oncomplete = () => resolve(made && typeof made === 'object' && 'result' in made && 'readyState' in made ? made.result : made);
+      tx.onerror = e => reject(failure(e, tx)); tx.onabort = () => reject(failure(null, tx));
+    });
   } finally { db.close(); }
 }

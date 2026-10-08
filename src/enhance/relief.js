@@ -138,10 +138,12 @@ export function screenSun(direction, length) {
 // the picture drawn at s output pixels a reference pixel, `width` the output's; HD.look 'reference'): above 1x the picture is lit on the
 // reference grid (pictureLightAt below), so at its reference samples the light is the 1x picture's. `frame` (above 1x: the picture's source
 // frame, which `sources` index) gives the pixels' indices instead of fb, for pixels listed where nothing was written (blit.js blitAt's `from`).
+// `lumas` (an artwork pack's picture, blit.js blitArt: the brightness of each listed pixel, its pack index's or its colour's) stands in for the
+// brightness of fb's index.
 const scratch = { size: 0, mask: null, dist: null, height: null };
-export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun, strength, heights = null, scale = 1, frame = null }) {
+export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun, strength, heights = null, scale = 1, frame = null, lumas = null }) {
   if (!count) return;
-  if (scale > 1) { pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale, frame }); return; }
+  if (scale > 1) { pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale, frame, lumas }); return; }
   let x0 = Infinity, y0 = Infinity, x1 = -1, y1 = -1;
   for (let n = 0; n < count; n++) { const o = drawn[n], x = o % width, y = (o - x) / width; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
   const bw = x1 - x0 + 3, bh = y1 - y0 + 3, size = bw * bh; // @math a border of one pixel around the box: outside the picture
@@ -164,7 +166,7 @@ export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun,
     const o = drawn[n], i = at(o), mapped = heights && sources ? heights(sources[n]) : null;
     if (mapped !== null && mapped !== undefined) { height[i] = mapped / 0xff; continue; } // @math 0 to 255 to 0 to 1
     const t = Math.min(dist[i] / R, 1);
-    height[i] = (1 - (1 - t) * (1 - t)) * (1 - RELIEF.spriteDetail) + luma[fb[o]] * RELIEF.spriteDetail; // @math eased toward the middle
+    height[i] = (1 - (1 - t) * (1 - t)) * (1 - RELIEF.spriteDetail) + (lumas ? lumas[n] : luma[fb[o]]) * RELIEF.spriteDetail; // @math eased toward the middle
   }
   across((border, inside) => { if (mask[inside]) height[border] = height[inside]; }); // no step down at a cut edge
   const depth = RELIEF.spriteDepth / 2, [low, high] = RELIEF.range; // @math the central difference spans two pixels
@@ -183,19 +185,19 @@ export function pictureLight(out, { drawn, sources, count, fb, width, luma, sun,
 // the light of the drawn sample to its left, right, above or below, the first found, else none (1). A split viewer's picture lists its pixels
 // above the viewer's first row too (blitAt's `from`), where fb holds the last frame's: their indices are read from `frame` by their source bytes
 // (the same as fb's where the blit wrote), so the whole picture is lit as the 1x split screen lights it before its cut, with no rim at that row.
-const grid = { size: 0, drawn: null, sources: null, fb: null, light: null, on: null };
-function pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale: s, frame }) {
+const grid = { size: 0, drawn: null, sources: null, fb: null, light: null, on: null, lumas: null };
+function pictureLightAt(out, { drawn, sources, count, fb, width, luma, sun, strength, heights, scale: s, frame, lumas = null }) {
   const rw = width / s, rh = fb.length / width / s, size = rw * rh;
-  if (grid.size < size) { grid.size = size; grid.drawn = new Int32Array(size); grid.sources = new Int32Array(size); grid.fb = new Uint8Array(size); grid.light = new Float32Array(size); grid.on = new Uint8Array(size); }
+  if (grid.size < size) { grid.size = size; grid.drawn = new Int32Array(size); grid.sources = new Int32Array(size); grid.fb = new Uint8Array(size); grid.light = new Float32Array(size); grid.on = new Uint8Array(size); grid.lumas = new Float32Array(size); }
   const { light, on } = grid;
   let k = 0;
   for (let n = 0; n < count; n++) {
     const o = drawn[n], x = o % width, y = (o - x) / width;
     if (x % s || y % s) continue;
     const r = (y / s) * rw + x / s;
-    grid.drawn[k] = r; if (sources) grid.sources[k] = sources[n]; grid.fb[r] = frame && sources ? frame[sources[n]] : fb[o]; on[r] = 1; k++;
+    grid.drawn[k] = r; if (sources) grid.sources[k] = sources[n]; if (lumas) grid.lumas[k] = lumas[n]; grid.fb[r] = frame && sources && sources[n] >= 0 ? frame[sources[n]] : fb[o]; on[r] = 1; k++;
   }
-  pictureLight(light, { drawn: grid.drawn, sources: sources ? grid.sources : null, count: k, fb: grid.fb.subarray(0, size), width: rw, luma, sun, strength, heights });
+  pictureLight(light, { drawn: grid.drawn, sources: sources ? grid.sources : null, count: k, fb: grid.fb.subarray(0, size), width: rw, luma, sun, strength, heights, lumas: lumas ? grid.lumas : null });
   for (let n = 0; n < count; n++) {
     const o = drawn[n], x = o % width, y = (o - x) / width, cx = Math.floor(x / s), cy = Math.floor(y / s), r = cy * rw + cx;
     out[o] = on[r] ? light[r] : cx > 0 && on[r - 1] ? light[r - 1] : cx < rw - 1 && on[r + 1] ? light[r + 1] : cy > 0 && on[r - rw] ? light[r - rw] : cy < rh - 1 && on[r + rw] ? light[r + rw] : 1;

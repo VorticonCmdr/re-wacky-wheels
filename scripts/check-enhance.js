@@ -15,9 +15,18 @@
 //     relief map of the player's for the cars only the pictures' pixels;
 //  4c. the HUD layer: the enhancer's world and overlay layers give the very same picture as its draw without them, the overlays' layer
 //     holds exactly the masked pixels, and the reference renderer's layers put back together are its picture;
-//  5. with --time, the mean, median and 95th percentile draw time of each effect on the demos, on this machine (and of the general paths of
+//  time. with --time, the mean, median and 95th percentile draw time of each effect on the demos, on this machine (and of the general paths of
 //     6, and of 2x: smooth motion only, Enhanced, Enhanced with a sunset, and both again with every soft layer at the output resolution; the
-//     wide view at 1x and 2x; the smooth sprite sizes at 1x and 2x);
+//     wide view at 1x and 2x; the smooth sprite sizes at 1x and 2x; Enhanced with an artwork pack of CARS.SP and the track's tile sheets);
+//  5. Stage 4's region registry of the artwork packs (src/enhance/regions.js): every picture the scenarios' enhanced draws blit (standard
+//     and wide, a recorder of the enhancer's) is a region of the registry, and the template of the local archive (src/enhance/art-template.js,
+//     RGBA and indexed) validates with no entry refused;
+//  7. Stage 4's artwork packs in the race: identity packs built at run time from the local archive (indexed at p = 1 and RGBA at p = 2, the
+//     palette cycle's tile entries and the strip's sky-coloured pixels at alpha 0) give the no-pack picture byte for byte, Enhanced with the
+//     dark full atmosphere, at 1x in every scenario (the beach tracks, the demos' fade-in and the split screen among them) and at 2x and in the
+//     wide view in some; the packs' lookups reach the tiles, the skies, the strips, the pictures, the starter lion, the explosions, pictures at
+//     byte offsets of no frame grid and the effects drawn after the own car; a tinted pack changes the picture. Section 1 switches the artwork
+//     of a tinted pack on and off mid-run too.
 //  6. Stage 4's general paths (caster.js, blit.js, composite.js compositeAt) and the draw of a geometry (the enhancer's own buffers, the
 //     decimation, the split screen's general cut and flip, the world composed under the overlays, the canvas and the HUD built from it) forced
 //     at the reference geometry (createEnhancer's `force`): every scenario, the slides demo, the link race's second seat, a race at detail
@@ -47,7 +56,7 @@
 //     mid-run too.
 //  11. Stage 4's wide view (VIEW WIDE through the settings and the frame context) at 1x and 2x against the standard view and the reference
 //     renderer, with and without the margins' probes (the full list at the section). Section 1 switches into and out of it mid-run too.
-// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,6,6b,9,10,11] (--only runs the sections named, for
+// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,5,6,6b,7,9,10,11] (--only runs the sections named, for
 // a quick look; the gate is the run of every section)
 import { readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
@@ -58,7 +67,7 @@ import { lionBytes } from '../src/game/start.js';
 import { parseMov } from '../src/game/figure.js';
 import { startRace, stepRace, beginIntro, shownCycle } from '../src/game/race.js';
 import { demoSpec, parseBmc, bmcStart, bmcStep } from '../src/game/demo.js';
-import { duckTrack, duckRules } from '../src/game/duck.js';
+import { duckTrack, duckRules, duckPictures } from '../src/game/duck.js';
 import { swapSeat, stripValues, raceValues, messageAt, carsBySeat } from '../src/game/versus.js';
 import { defaultSettings } from '../src/game/menus.js';
 import { hudGates } from '../src/game/hud.js';
@@ -92,6 +101,10 @@ import { normalizeDisplay } from '../src/enhance/display-settings.js';
 import { WIDE, SUN } from '../src/enhance/config.js';
 import { splitSample } from '../src/enhance/split.js';
 import { RACE as VERSUS_RACE } from '../src/game/versus-rules.js';
+import { worldRegions } from '../src/enhance/regions.js';
+import { buildTemplate, templateParts, cycledEntries } from '../src/enhance/art-template.js';
+import { normalizeArtEntry, packContext } from '../src/enhance/pack-format.js';
+import { createArtProvider, toArt } from '../src/enhance/art.js';
 
 const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null, want = id => !only || only.includes(id);
@@ -167,20 +180,36 @@ const marginOf = (enh, sc) => (enh.settings.view !== 'wide' || sc.split || sc.li
 // or in the standard view).
 const sizeWrong = (enh, sc) => { const l = enh.layers(), s = enh.settings.scale, m = marginOf(enh, sc); return l && (l.world.w !== s * (WIDTH + 2 * m) || l.world.h !== s * (SIZE / WIDTH) || l.logical.w !== WIDTH + 2 * m) ? `drew ${l.world.w} x ${l.world.h} (logical ${l.logical.w}) at ${s}x with a margin of ${m}` : null; }; // @math a margin either side
 
+// ---- the artwork packs of the checks (Stage 4): built at run time from the local archive, in memory, never written anywhere.
+const packWorld = loadTrack(dat, String(raceTracks[0])), packCtx = packContext(members, packWorld, dat), packCache = new Map();
+// The template's entries (art-template.js) made art, each checked against the archive and its picture as an import checks it (a refusal fails).
+// `keep(entry)` leaves entries out of the pack.
+function packArts(options, change = null, keep = null) {
+  const key = JSON.stringify(options);
+  if (!change && !keep && packCache.has(key)) return packCache.get(key);
+  const t = buildTemplate(members, packWorld, options), arts = [];
+  t.manifest.entries.forEach((e, i) => { if (keep && !keep(e)) return; const image = change ? change(t.images[i], e) : t.images[i], r = normalizeArtEntry(e, packCtx, image); if (!r.entry) fail(`the pack ${key}: ${r.reason}`); else arts.push(toArt(r.entry, image)); });
+  if (!change && !keep) packCache.set(key, arts);
+  return arts;
+}
+// A tinted pack (the RGBA template of CARS.SP, track 1's tile sheets and its strip, red and blue swapped): it changes the picture, never the race.
+let tintedOnce = null;
+const tinted = () => (tintedOnce ??= (() => { const swap = img => { const rgba = Uint8ClampedArray.from(img.rgba); for (let o = 0; o < rgba.length; o += 4) { const r = rgba[o]; rgba[o] = rgba[o + 2]; rgba[o + 2] = r; } return { ...img, rgba }; }; return createArtProvider(() => dat).set(['CARS.SP', ...templateParts(members, packWorld).tracks[0].tiles, templateParts(members, packWorld).tracks[0].par].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: templateParts(members, packWorld).tracks[0].stem }, swap))); })()); // @math four bytes a colour, red and blue swapped
+
 // ---- 1. the same simulation whatever is drawn
 const SKIP = new Set(['world', 'dat', 'hudArt', 'mov', 'menu', 'unproven', 'minimap', 'steps']);
 const hashState = s => crc32(new TextEncoder().encode(JSON.stringify(s, (k, v) => (SKIP.has(k) ? undefined : ArrayBuffer.isView(v) ? `#${v.length}` : typeof v === 'function' ? undefined : v instanceof Set ? undefined : v))));
 const lehmer = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147483647); // @math a repeatable stand-in for the browser's random source
 const keepRandom = Math.random;
 const guarded = fn => { const r = Math.random; Math.random = () => { throw new Error('the enhanced presentation used Math.random'); }; try { return fn(); } finally { Math.random = r; } };
-const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.enhanced, sizes: 'smooth' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }, { ...PRESETS.original, sizes: 'smooth' }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }]; // Stage 4: 2x, the wide view and the smooth sprite sizes (1x, 2x, and alone with Original's switches) among them, switched to and from mid-run
+const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.enhanced, sizes: 'smooth' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }, { ...PRESETS.original, sizes: 'smooth' }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }, { ...PRESETS.enhanced, art: true }]; // Stage 4: 2x, the wide view, the smooth sprite sizes (1x, 2x, and alone with Original's switches) and a tinted artwork pack among them, switched to and from mid-run
 // A settings change every `EVERY` ticks, so that a run of `frames` ticks applies every entry, Original's reference renderer back to the enhanced
 // path (its reset) among them; a run that goes past the last change and misses one fails.
 const EVERY = Math.max(Math.floor(frames / (SWITCHES.length + 1)), 1);
 
 function runScenario(make, regime) {
   Math.random = lehmer(777);
-  const sc = make(), s = sc.state, hashes = [], enh = regime === 'enhanced' ? createEnhancer({ storage: memory() }) : null, pick = createRandom(31), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+  const sc = make(), s = sc.state, hashes = [], enh = regime === 'enhanced' ? createEnhancer({ storage: memory(), art: tinted() }) : null, pick = createRandom(31), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
   const steps = { camera: 0, turn: 0, racer: 0, snaps: 0 }, cap = { particles: 0, marks: 0, scales: new Set(), applied: new Set(), revived: 0 }; // `applied`: the entries of SWITCHES configured; `revived`: the changes from the reference renderer to the enhanced path
   if (enh) enh.configure(PRESETS.enhanced);
   let prev = null;
@@ -404,11 +433,32 @@ if (want('3c')) {
   }
 }
 
+// ---- 5. the region registry of the artwork packs: every picture the scenarios draw is a region of it, and the archive's template validates
+if (want('5')) {
+  const fifth = performance.now(), registry = worldRegions(members, packWorld), drawnRegions = new Set(), outside = new Map();
+  let blits = 0, pictures = 0;
+  const record = (bytes, w, h) => { blits++; const key = `${bytes.byteOffset}:${w}x${h}`; if (bytes.buffer === dat.buffer && registry.hasAt(bytes.byteOffset, w, h)) drawnRegions.add(key); else if (!outside.has(key)) { const m = [...members].find(([, d]) => d.buffer === bytes.buffer && bytes.byteOffset >= d.byteOffset && bytes.byteOffset < d.byteOffset + d.length); outside.set(key, m ? `${m[0]} at ${bytes.byteOffset - m[1].byteOffset}, ${w} x ${h}` : `bytes of another buffer, ${w} x ${h}`); } };
+  for (const view of ['standard', 'wide']) for (const make of SCENARIOS) { // the wide view's margins draw the things the standard view culls
+    const sc = make(), s = sc.state, enh = createEnhancer({ storage: memory(), blits: record }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+    enh.configure({ ...PRESETS.original, smooth: true, view }); // smooth motion only: the same records as any preset draws, at a fraction of the time
+    for (let t = 0; t < frames; t++) { const input = sc.input(); if (input === null) break; stepRace(s, input); enh.afterTick(s); drawEnhanced(enh, sc, 1, index, out); pictures++; }
+  }
+  if (outside.size) fail(`regions: ${outside.size} pictures drawn outside the registry: ${[...outside.values()].slice(0, 8).join('; ')}`); // @math the first few
+  else if (!blits || !drawnRegions.size) fail(`regions: no picture was recorded (${blits} blits, ${drawnRegions.size} of the registry's pictures): nothing was checked`);
+  else console.log(`ok   regions: ${blits} pictures blitted in ${pictures} draws of ${SCENARIOS.length} scenarios (standard and wide), ${drawnRegions.size} of the registry's ${registry.size} pictures among them, none outside it (${((performance.now() - fifth) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
+  for (const color of ['rgba', 'indexed']) {
+    const t = buildTemplate(members, packWorld, { scale: 1, color, archive: dat }), refused = [];
+    t.manifest.entries.forEach((e, i) => { const r = normalizeArtEntry(e, packCtx, t.images[i]); if (!r.entry) refused.push(r.reason); });
+    if (refused.length) fail(`regions: the ${color} template refuses ${refused.length} of its ${t.manifest.entries.length} entries: ${refused.slice(0, 4).join('; ')}`); // @math the first few
+    else console.log(`ok   regions: the ${color} template of the archive (${t.manifest.entries.length} entries, ${t.images.reduce((n, im) => n + im.width * im.height, 0)} pixels) validates with no entry refused`);
+  }
+}
+
 // ---- 6. Stage 4's general paths forced at the reference geometry: the same frame as the dispatched functions, configurations A to D of
 // check:identity, every scenario with the slides demo, the link race's second seat, a race at detail level 3 and the split screen with a viewer
 // upside down now and then (set on the state for both draws and put back before the next tick). The two enhancers draw the same
 // state at the same blends; the overhead map is kept from the dispatched draw only after both have drawn, so each captures it from its own world.
-if (want('6') || want('6b') || want('9') || want('10') || want('11')) {
+if (want('6') || want('6b') || want('7') || want('9') || want('10') || want('11')) {
   const ticks = Math.min(frames, 160), FORCE = { caster: true, blit: true, composite: true, pipeline: true }; // @math the fly-in, the start and some racing
   const darkFull = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math check:identity's B: every track night, cloudy, mountainous, its water and relief full
   const CONFIGS = { A: { settings: PRESETS.enhanced, atmosphere: null, layers: false }, B: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: false }, C: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: true }, D: { settings: { ...PRESETS.original, smooth: true }, atmosphere: null, layers: false } };
@@ -779,6 +829,79 @@ if (want('6') || want('6b') || want('9') || want('10') || want('11')) {
     if (!wc.compared || !wc.margin) fail(`the wide view: ${wc.compared} pixels compared, ${wc.margin} margin records drawn: nothing was checked`);
     else if (!elevenWrong) console.log(`ok   the wide view at 1x and 2x (${WIDTH + 2 * WIDE_MARGIN[ASPECT]} x 200 and ${2 * (WIDTH + 2 * WIDE_MARGIN[ASPECT])} x 400 on the display's shape ${ASPECT}, every draw that size or 320 columns where the view may not be wide): ${wc.scenarios} scenario runs, ${wc.pictures} samples (${wc.narrow} of them never wide); ${wc.compared} pixels of the centre the standard view's (${wc.excluded} left out: ${wc.margin} margin records and ${wc.edge} records cut at the reference edges with their shadows, the casts, marks and particles across a crop edge, the blur's border), its indices, kinds and depths the standard view's in ${wc.kinds} pixels (${wc.kindsOff} with the probes off); the page's index the reference picture in ${wc.reference} pixels outside the margin records (${wc.referenceOff} with the probes off, all of them); the HUD layer the reference overlays moved by the margin (${wc.hud} pixels); ${wc.probes} probes (${((performance.now() - eleventh) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
   }
+
+  // ---- 7. the artwork packs in the race: identity packs (built at run time from the local archive) draw the no-pack picture byte for byte
+  if (want('7')) {
+    const seventh = performance.now(), dark = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math check:identity's B: every track night, cloudy, mountainous, its water and relief full
+    const PACKS = [['indexed', 1], ['rgba', 2]], got = { pictures: 0, runs: 0, beach: new Set(), fade: 0, split: 0, hd: 0, wide: 0, tiles: 0, sky: 0, strip: 0, frames: 0 }, offsets = new Set(); // @math indexed at p = 1, RGBA at p = 2
+    const genef = members.get('GENEF.SP'), at = name => members.get(name)?.byteOffset ?? -1, lionAt = at('GENEF.SP') + 4449, explosions = [0, 1, 2, 3].map(k => at('GENEF.SP') + 7641 + k * 1064); // @math the lion's first frame and the explosions' four (the plan's offsets, written out: the registry is under test)
+    const effectsMembers = ['EFFECTS.SP', 'SPARK.SP'].map(n => members.get(n)).filter(Boolean);
+    let wrong7 = 0, nonAligned = 0, afterBlits = 0;
+    // The cycled entries of the beach tracks in the pictures of the registry (an RGBA copy of such a pixel could not cycle): reported.
+    const cycledInFrames = new Map(), leftOut = new Set();
+    const draw7 = (enh, sc, alpha, index, out, palette, cap, layers) => {
+      const s = sc.state;
+      if (sc.split) return enh.drawSplit(s, alpha, { index, out, palette, cap, mode: s.menu.settings.detail.split, overlays: versusOverlays, layers, worldReady: true });
+      return enh.drawSingle(s, alpha, { index, out, palette, cap, mode: s.detail, sky: sceneSky(s), seat: sc.seat ?? 0, layers, worldReady: true, aspect: ASPECT, wideAllowed: !sc.link && !sceneSky(s), overlays: (p, fb) => drawRaceOverlays(p, fb) });
+    };
+    const geometries7 = [{ scale: 1, view: 'standard' }, { scale: 2, view: 'standard' }, { scale: 1, view: 'wide' }, { scale: 2, view: 'wide' }];
+    const plan7 = [...SCENARIOS.map((make, n) => ({ make, geometries: n < 2 || n === SCENARIOS.length - 4 ? geometries7 : n % 5 === 0 ? geometries7.slice(0, 3) : geometries7.slice(0, 1) })), { make: linkSecond, geometries: geometries7.slice(0, 2) }]; // @math every scenario at 1x; the first demos, the split screen and every fifth at 2x and wide too
+    for (const { make, geometries } of plan7) for (const geo of geometries) for (const [color, p] of PACKS) {
+      Math.random = lehmer(9090 + got.runs); // @math a repeatable stand-in for the browser's random source, one seed a run
+      const sc = make(), s = sc.state, track = s.world.name, fade = sc.name.startsWith('demo'), pick = createRandom(707 + got.runs); // @math the checks' seed
+      if (sc.split && geo.view === 'wide') continue; // the split screen is never wide
+      // An RGBA picture cannot take the palette cycle: on a beach track the RGBA identity pack leaves out the groups of pictures that use the
+      // cycle's entries (the water's dust and puffs of EFFECTS.SP), which only an indexed pack can copy (reported below).
+      const cycled = s.world.beach && color === 'rgba' ? cycledEntries(members, s.world.gam) : null, usesCycle = e => { const d = members.get(e.member); for (let k = 0; k < e.count; k++) for (let i = 0; i < e.width * e.height; i++) if (cycled.has(d[e.offset + k * e.stride + i])) return true; return false; };
+      const provider = createArtProvider(() => dat).set(packArts({ scale: p, color, track }, null, cycled ? e => { if (e.kind !== 'frames' || !usesCycle(e)) return true; leftOut.add(`${e.member} at ${e.offset}`); return false; } : null)), lookup = provider.frame;
+      provider.frame = bytes => { const hit = lookup(bytes); if (hit) { offsets.add(bytes.byteOffset); const m = [...members.values()].find(d => d.buffer === bytes.buffer && bytes.byteOffset >= d.byteOffset && bytes.byteOffset < d.byteOffset + d.length); if (m && (bytes.byteOffset - m.byteOffset) % bytes.length !== 0) nonAligned++; if (effectsMembers.includes(m) || (m === genef && bytes.length !== 1064)) afterBlits++; } return hit; }; // @math a frame of 38 x 28
+      const plain = createEnhancer({ storage: memory(dark) }), packed = createEnhancer({ storage: memory(dark), art: provider }), cfg = { ...PRESETS.enhanced, art: true, scale: geo.scale, view: geo.view };
+      plain.configure(cfg); packed.configure(cfg);
+      if (s.world.beach) got.beach.add(track);
+      if (s.world.beach && color === 'rgba' && !cycledInFrames.has(track)) { const cycled = cycledEntries(members, s.world.gam), regs = worldRegions(members, packWorld); let n = 0; for (const g of regs.groups) { const d = members.get(g.member); for (let k = 0; k < g.count; k++) for (let i = 0; i < g.width * g.height; i++) if (cycled.has(d[g.offset + k * g.stride + i])) n++; } cycledInFrames.set(track, n); }
+      const buf = [0, 1].map(() => ({ index: new Uint8Array(SIZE), out: new Uint8ClampedArray(SIZE * 4) })); // @math the two enhancers; four bytes a colour
+      let found = null;
+      for (let t = 0; t < Math.min(frames, 160) && !found; t++) { // @math the fly-in, the start and some racing
+        const input = sc.input(); if (input === null) break;
+        stepRace(s, input); plain.afterTick(s); packed.afterTick(s);
+        if (t % 2) continue; // @math every other tick
+        // In the duck game the ducks' explosions (GENEF.SP from 7641) are forced on the drawn state now and then (none of the scenario's
+        // ducks is shot down in these ticks); put back before the next tick, so the race runs as it would.
+        const ducks = sc.name.startsWith('duck') && t % 8 === 4 ? s.ai.racers.slice(1) : [], kept = ducks.map(r => [r.crashed, r.crashPic]); // @math every fourth drawn tick
+        ducks.forEach((r, n) => { r.crashed = true; r.crashPic = (n + (t >> 3)) % duckPictures().explosion.frames; });
+        const alpha = t % 14 === 6 ? 1 : pick(), { palette, cap } = paletteOf(s, t, fade), P = [plain, packed].map((e, n) => draw7(e, sc, alpha, buf[n].index, buf[n].out, palette, cap, null)); // @math every fourteenth tick at the tick itself
+        ducks.forEach((r, n) => { [r.crashed, r.crashPic] = kept[n]; });
+        if (!s.minimap && P[0].minimap) s.minimap = P[0].minimap;
+        const la = plain.layers(), lb = packed.layers(), wa = la.world.data, wb = lb.world.data;
+        if (!packed.inspect().art) found = `tick ${t}: the packs were not drawn`;
+        else if (la.world.w !== lb.world.w || la.world.h !== lb.world.h) found = `tick ${t}: worlds of ${la.world.w} x ${la.world.h} and ${lb.world.w} x ${lb.world.h}`;
+        else {
+          const parts = [['out', buf[0].out, buf[1].out], ['index', buf[0].index, buf[1].index], ['world', wa, wb]], bad = parts.find(([, x, y]) => differs(x, y));
+          if (bad) { const [k, x, y] = bad, i = x.findIndex((v, j) => v !== y[j]), per = k === 'index' ? 1 : 4, w = k === 'world' ? la.world.w : WIDTH; found = `tick ${t} (${geo.scale}x ${geo.view}, ${color} p = ${p}): ${k} differs at ${Math.floor(i / per) % w},${Math.floor(Math.floor(i / per) / w)}`; } // @math four bytes a colour
+        }
+        if (fade && t < 16) got.fade++; // @math the demos' fade-in ticks (paletteOf)
+        if (sc.split) got.split++;
+        if (geo.scale > 1) got.hd++;
+        if (geo.view === 'wide' && la.world.w > geo.scale * WIDTH) got.wide++;
+        got.pictures++;
+      }
+      for (const k of ['tiles', 'sky', 'strip', 'frames']) got[k] += provider.hits[k];
+      got.runs++;
+      if (found) { wrong7++; fail(`pack identity, ${sc.name}: ${found}`); }
+    }
+    Math.random = keepRandom;
+    // A tinted pack changes the picture (the identity above is not the packs doing nothing).
+    { const sc = demo(1), s = sc.state, a = createEnhancer({ storage: memory() }), b = createEnhancer({ storage: memory(), art: tinted() }), ia = new Uint8Array(SIZE), ib = new Uint8Array(SIZE), oa = new Uint8ClampedArray(SIZE * 4), ob = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+      a.configure({ ...PRESETS.enhanced, art: true }); b.configure({ ...PRESETS.enhanced, art: true });
+      let changed = 0;
+      for (let t = 0; t < 60; t++) { const input = sc.input(); if (input === null) break; stepRace(s, input); a.afterTick(s); b.afterTick(s); if (t % 10) continue; drawEnhanced(a, sc, 1, ia, oa); drawEnhanced(b, sc, 1, ib, ob); for (let i = 0; i < oa.length; i++) if (oa[i] !== ob[i]) changed++; } // @math the fly-in's first ticks, a picture every tenth
+      if (!changed) fail('pack identity: a tinted pack changed nothing'); else console.log(`ok   pack identity: a tinted pack (red and blue swapped) changes ${changed} bytes of demo 1's pictures`);
+    }
+    const need = [['tile', got.tiles], ['sky', got.sky], ['strip', got.strip], ['picture', got.frames], ['starter lion (GENEF.SP 4449)', offsets.has(lionAt)], ['explosion (GENEF.SP 7641)', explosions.some(o => offsets.has(o))], ['picture at a byte offset of no frame grid', nonAligned], ['effect drawn after the own car', afterBlits], ['beach track', got.beach.size], ['demo fade-in picture', got.fade], ['split screen picture', got.split], ['2x picture', got.hd], ['wide picture', got.wide]].filter(([, v]) => !v).map(([k]) => k);
+    if (need.length) fail(`pack identity: no ${need.join(', no ')} was drawn with the packs`);
+    const cycledNote = [...cycledInFrames].map(([t, n]) => `track ${t} ${n}`).join(', ');
+    if (!wrong7 && !need.length) console.log(`ok   pack identity: ${got.runs} runs (${PACKS.map(([c, p]) => `${c} at p = ${p}`).join(' and ')}), ${got.pictures} pictures each the no-pack picture byte for byte (the canvas, the index, the world), Enhanced with the dark full atmosphere; ${got.hd} at 2x, ${got.wide} wide, ${got.split} of the split screen, ${got.fade} of a demo's fade-in, beach tracks ${[...got.beach].join(', ')}; lookups: tiles ${got.tiles}, skies ${got.sky}, strips ${got.strip}, pictures ${got.frames} (the lion, the explosions, ${nonAligned} at offsets of no frame grid, ${afterBlits} effects after the own car); the registry's pictures in the palette cycle's entries: ${cycledNote || 'no beach track'}, their groups left out of the RGBA packs of those tracks: ${[...leftOut].join(', ') || 'none'} (${((performance.now() - seventh) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
+  }
 }
 
 // ---- 4. the draw time of each effect
@@ -789,13 +912,14 @@ if (timing) {
     ['smooth only 2x', { ...PRESETS.original, smooth: true, scale: 2 }], ['Enhanced 2x', { ...PRESETS.enhanced, scale: 2 }], ['Enhanced 2x sunset', { ...PRESETS.enhanced, scale: 2 }, { grade: 'sunset' }], // Stage 4's 2x, the soft layers on the reference grid (HD.look 'reference')
     ['Enhanced 2x full', { ...PRESETS.enhanced, scale: 2 }, null, null, 'full'], ['Enhanced 2x sunset full', { ...PRESETS.enhanced, scale: 2 }, { grade: 'sunset' }, null, 'full'], // and with every soft layer at the output resolution ('full'), for comparison
     ['Enhanced 1x wide', { ...PRESETS.enhanced, view: 'wide' }], ['Enhanced 2x wide', { ...PRESETS.enhanced, scale: 2, view: 'wide' }], // Stage 4's wide view on the display's default shape (4 BY 3: 426 and 852 columns)
-    ['Enhanced 1x smooth sizes', { ...PRESETS.enhanced, sizes: 'smooth' }], ['Enhanced 2x smooth sizes', { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }]]; // Stage 4's smooth sprite sizes (M7)
+    ['Enhanced 1x smooth sizes', { ...PRESETS.enhanced, sizes: 'smooth' }], ['Enhanced 2x smooth sizes', { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }], // Stage 4's smooth sprite sizes (M7)
+    ['Enhanced 1x + pack', { ...PRESETS.enhanced, art: true }, null, null, undefined, world => createArtProvider(() => dat).set(['CARS.SP', ...templateParts(members, packWorld).tracks.find(t => t.stem === world.name).tiles].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: world.name })))]]; // Stage 4's artwork packs: an RGBA pack of CARS.SP and the track's tile sheets at p = 2 (the plan's budget: +0.5 ms)
   console.log(`  (load average ${os.loadavg().map(v => v.toFixed(1)).join(' ')}: compare the rows against each other, a busy machine slows them all)`);
-  for (const [label, cfg, atmosphere, force = null, look = undefined] of configs) {
+  for (const [label, cfg, atmosphere, force = null, look = undefined, packsOf = null] of configs) {
     const times = [];
     let sized = null;
     for (const race of [1, 2, 3, 4]) { // @math the four attract races
-      const sc = demo(race), s = sc.state, enh = createEnhancer({ storage: memory(atmosphere ? Object.fromEntries(raceTracks.map(t => [String(t), atmosphere])) : null), force, look }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4), palette = rgbaPalette(s.world.palette); // @math four bytes a colour
+      const sc = demo(race), s = sc.state, enh = createEnhancer({ storage: memory(atmosphere ? Object.fromEntries(raceTracks.map(t => [String(t), atmosphere])) : null), force, look, art: packsOf ? packsOf(s.world) : null }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4), palette = rgbaPalette(s.world.palette); // @math four bytes a colour
       if (cfg) enh.configure(cfg);
       for (let t = 0; t < frames; t++) {
         const input = sc.input(); if (input === null) break;

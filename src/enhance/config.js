@@ -203,7 +203,22 @@ export const TIMING_FRAMES = 120;
 
 // The player's own art kept in this browser (IndexedDB, src/enhance/store.js): the version of the page's database. Version 1 had the relief
 // maps only; version 2 (Stage 4) adds the artwork packs and their art. The relief maps carry over unchanged.
-export const ART = { dbVersion: 2 };
+// The artwork packs (Stage 4: docs/artpacks.md, the authors' reference; pack-format.js checks them, art.js draws them):
+// - `maxScale`: the most pack pixels a side an entry may give one of the original's pixels (its scale p, a whole number from 1);
+// - `maxSide`, `maxImagePixels`, `maxPackPixels`: the largest picture side, picture and pack (all its pictures) an import takes, so that a pack
+//   cannot exhaust the browser's memory when it is decoded (CARS.SP at p = 4 is about 1.6 million pixels, the whole world's template at 4 about
+//   27 million, 16 times its 1.7 million at 1); a PNG's header is checked against the first two before its data is inflated (png.js);
+// - `maxFileBytes`: the largest file of a pack a zip gives (its directory's size is checked before the file is read, and a deflated file is
+//   inflated no further): a PNG of `maxImagePixels` at 16 bits a sample of RGBA stored without compression (8 bytes a pixel), and room for its
+//   chunks;
+// - `alphaCut`: a strip pixel whose alpha is below this says 'sky here' (the strip's sky goes on there: the tint and the far range over it);
+// - `cacheBytes`: the decoded pictures kept across races (a least recently used list of this many bytes; the pictures are kept as PNG in the
+//   store, decoded when a race needs them);
+// - `decodeTimeoutMs`: how long a race's start waits for its packs to be decoded before it starts anyway (their art then applies from the
+//   frame they are ready on);
+// - `templateScales`: the scales the garage's template export offers;
+// - `directions`: the kart angle sets' directions (M4): a whole number of times `step`, at most `max`.
+export const ART = { dbVersion: 2, maxScale: 8, maxSide: 16384, maxImagePixels: 16e6, maxPackPixels: 64e6, maxFileBytes: 16e6 * 8 + 2 ** 20, alphaCut: 128, cacheBytes: 128 * 2 ** 20, decodeTimeoutMs: 1500, templateScales: [1, 2, 4], directions: { step: 8, max: 64 } };
 
 // The display (Stage 1 of docs/enhancements.md): how the finished 320 x 200 picture is put on the visitor's screen, after every renderer, for
 // the Original preset as for the Enhanced one. Nothing here changes a pixel of the picture itself.

@@ -139,6 +139,20 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
   return out;
 }
 
+// compositeAt's lighting grade of the output row Y at every `step`-th column (grade.js gradePixel, inlined as composite has it): not over the
+// overlays (`mask`, or null for none), not over sky rows that are not the track's sky; the pictures and the red liquid get its weaker part.
+function gradeRow(out, Y, step, W, mask, kinds, wet, grade, cap) {
+  const world = grade.lut, worldSat = grade.saturation, pictures = grade.sprite.lut, picturesSat = grade.sprite.saturation, masked = mask !== null;
+  for (let X = 0, o = Y * W, oo = o * 4; X < W; X += step, o += step, oo += step * 4) { // @math four bytes a colour
+    if (masked && mask[o]) continue;
+    const kind = kinds[o];
+    if (kind === KIND.sky && !grade.trackSky) continue;
+    const weak = kind === KIND.sprite || (kind === KIND.floor && wet[o] === 2), t = weak ? pictures : world, sat = weak ? picturesSat : worldSat; // @math the red liquid (wet 2) glows: lit as the pictures are
+    const r = t[out[oo]], g = t[256 + out[oo + 1]], b = t[512 + out[oo + 2]], grey = 0.299 * r + 0.587 * g + 0.114 * b; // @math the green and blue tables follow the red one; the Rec. 601 luma weights
+    out[oo] = Math.min(grey + (r - grey) * sat, cap); out[oo + 1] = Math.min(grey + (g - grey) * sat, cap); out[oo + 2] = Math.min(grey + (b - grey) * sat, cap); // @math the three components
+  }
+}
+
 // composite for a geometry G (geometry.js; Stage 4, docs/enhancements.md): `fb` the G.W x G.H indexed picture, `L` its layers, `mask` the
 // overlay pixels at the same size or null for none (a world composed under a HUD layer), the effects and the splats as composite has them, the
 // splats in output pixels. Every per-row table (the sky's, the strip's, the far range's and the clouds' colours, the strip's flags) is read at
@@ -152,7 +166,10 @@ export function composite(out, { index, mask, L, palette, width, effects, splats
 // reference sky rows composed once per cell (scripts/spike-2x.mjs: a fast path that took no row has measured nothing). `soft` (the reference
 // look above 1x, config.js HD.look: scene.js createSoftLayers, refW x 200) holds the contact shadows, the sun shadows, the skid marks and the
 // ground's relief light on the reference grid: they are read at the pixel's reference cell, the pictures' relief light (L.relief) at the
-// pixel itself; without it every layer is read at the pixel.
+// pixel itself; without it every layer is read at the pixel. `L.art` (art.js createArtLayers, while an artwork pack is drawn) gives the pixels
+// of RGBA art their own colour: each component within the demo's fade (min(component, cap): the widening of the palette's 6 bits is monotonic,
+// so an RGBA copy of the palette fades as the palette does), partial alpha over the colour of the index beneath; and the strip's pixels their own
+// sky flag (`through`, which a pack strip's 'sky here' sets), read instead of the strip's per-index flags.
 export function compositeAt(out, { fb, mask = null, L, G, palette, effects, splats = [], rows = null, slow = false, count = null, soft = null }) {
   const { s, m, W, H, refW, rowRef, colRef } = G, S = models().sky;
   const { shadow, fog, sky = null, water = null, relief = false, grade = null, cap = 255 } = effects, darken = SHADOW.opacity * shadow, sunDarken = SUN.opacity * shadow; // @math the brightest 8-bit component
@@ -160,6 +177,7 @@ export function compositeAt(out, { fb, mask = null, L, G, palette, effects, spla
   const range = sky?.range ?? null, rangeAlpha = range?.cover.alpha, rangeTone = range?.cover.tone, rangeSnow = range?.cover.snow, rangeLit = range?.colours.lit, rangeShade = range?.colours.shade, rangeWhite = range?.colours.snow;
   const wet = water ? L.wet : null, wave = L.wave, reflect = water?.reflect ?? null, reflectLast = reflect ? reflect.length - 1 : 0, mirror = water?.sky, highlight = water?.highlight, glow = water?.glow;
   const kinds = L.kind, depths = L.depth, lights = L.relief, masked = mask !== null;
+  const art = L.art ?? null, direct = art ? art.direct : null, colours = art ? art.rgba : null, beneath = art ? art.beneath : null, through = art?.strip ? art.through : null; // the artwork packs' layers (art.js), while art is drawn
   const shades = soft ? soft.shade : L.shade, casts = soft ? soft.cast : L.cast, marks = soft ? soft.mark : L.mark, ground = soft ? soft.relief : L.relief; // the soft layers: on the reference grid (read at the cell) or the output's
   if (rows && rows.length < H) throw new Error(`compositeAt: ${rows.length} row flags for ${H} output rows`); // flags of another geometry would let rows with pictures pass as clean
   // The reference sky rows composed once per cell: those whose output rows hold only the sky's kind, no flagged row, no splat, no overlay.
@@ -170,85 +188,75 @@ export function compositeAt(out, { fb, mask = null, L, G, palette, effects, spla
     for (let r = 0; r < S.skyRows; r++) if (fast[r]) for (let o = s * r * W; o < (s * r + s) * W; o++) if (kinds[o] !== KIND.sky || (masked && mask[o])) { fast[r] = 0; break; }
     if (count) for (let r = 0; r < S.skyRows; r++) count.fast += fast[r];
   }
-  // The base and the per-pixel effects of the output row Y, at every `step`-th column from 0.
-  const pass = (Y, step) => {
-    const row = rowRef[Y], k = row * 3, cells = row * refW + m; // @math three components a row
-    for (let X = 0, o = Y * W; X < W; X += step, o += step) {
-      const p = fb[o] * 4, oo = o * 4, ci = s === 1 ? o : cells + colRef[X], so = soft ? ci : o; // @math four bytes a colour; at scale 1 an output pixel is its reference cell (the grid is refW wide)
-      let r = palette[p], g = palette[p + 1], b = palette[p + 2]; // @math the three components
-      if (!masked || !mask[o]) {
-        const kind = kinds[o];
-        let ranged = false;
-        if (row < skyRows && kind === KIND.sky) { // the track's sky: the lighting's gradient, the far range, then the clouds over them
-          const t = sky.tint;
-          if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
-          if (range && rangeAlpha[ci]) {
-            if (rangeSnow[ci]) { r = rangeWhite[k]; g = rangeWhite[k + 1]; b = rangeWhite[k + 2]; } // @math the three components
-            else { const v = rangeTone[ci]; r = rangeShade[k] + (rangeLit[k] - rangeShade[k]) * v; g = rangeShade[k + 1] + (rangeLit[k + 1] - rangeShade[k + 1]) * v; b = rangeShade[k + 2] + (rangeLit[k + 2] - rangeShade[k + 2]) * v; } // @math the three components
-          }
-          for (const c of sky.clouds) { // the banks over it
-            const a = c.alpha[ci]; if (!(a > 0)) continue;
-            const l = c.light[ci], cr = c.shade[k] + (c.lit[k] - c.shade[k]) * l, cg = c.shade[k + 1] + (c.lit[k + 1] - c.shade[k + 1]) * l, cb = c.shade[k + 2] + (c.lit[k + 2] - c.shade[k + 2]) * l; // @math the three components
-            r += (cr - r) * a; g += (cg - g) * a; b += (cb - b) * a;
-          }
-          r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
+  // Each output row: the base and the per-pixel effects at every `step`-th column from 0 (a sky row of the fast path once per cell: its first
+  // output row, every s-th column, then graded and copied over the cell; every other row per pixel). The body is this function's own loop, not a
+  // closure: the per-pixel work reads its tables from local variables.
+  for (let Y = 0; Y < H; Y++) {
+    const row = rowRef[Y], once = fast !== null && row < S.skyRows && fast[row] === 1;
+    if (once && Y !== s * row) continue; // the cell's other rows are copied from its first
+    const step = once ? s : 1, k = row * 3, cells = row * refW + m; // @math three components a row
+      for (let X = 0, o = Y * W; X < W; X += step, o += step) {
+        const p = fb[o] * 4, oo = o * 4, ci = s === 1 ? o : cells + colRef[X], so = soft ? ci : o; // @math four bytes a colour; at scale 1 an output pixel is its reference cell (the grid is refW wide)
+        let r = palette[p], g = palette[p + 1], b = palette[p + 2]; // @math the three components
+        if (direct !== null && direct[o] !== 0 && (!masked || !mask[o])) { // an RGBA pack's pixel (an overlay's pixel over it is the overlay's): its colour within the demo's fade, partial alpha over the colour of the index beneath it
+          const a = colours[oo + 3], cr = Math.min(colours[oo], cap), cg = Math.min(colours[oo + 1], cap), cb = Math.min(colours[oo + 2], cap); // @math the alpha last; the three components
+          if (a === 0xff) { r = cr; g = cg; b = cb; } // @math opaque
+          else { const q = beneath[o] * 4, t = a / 0xff; r = palette[q] + (cr - palette[q]) * t; g = palette[q + 1] + (cg - palette[q + 1]) * t; b = palette[q + 2] + (cb - palette[q + 2]) * t; } // @math four bytes a colour, the three components
         }
-        else if (row < stripRows && kind === KIND.horizon) { // the strip's sky-coloured background: the gradient and the far range go on over it
-          const t = sky.tint;
-          if (sky.strip[(row - sky.rows) * 256 + fb[o]]) { // @math a flag for each palette index
+        if (!masked || !mask[o]) {
+          const kind = kinds[o];
+          let ranged = false;
+          if (row < skyRows && kind === KIND.sky) { // the track's sky: the lighting's gradient, the far range, then the clouds over them
+            const t = sky.tint;
             if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
-            if (range && rangeAlpha[ci]) { // the range's own haze: no strip fog over it
-              ranged = true;
+            if (range && rangeAlpha[ci]) {
               if (rangeSnow[ci]) { r = rangeWhite[k]; g = rangeWhite[k + 1]; b = rangeWhite[k + 2]; } // @math the three components
               else { const v = rangeTone[ci]; r = rangeShade[k] + (rangeLit[k] - rangeShade[k]) * v; g = rangeShade[k + 1] + (rangeLit[k + 1] - rangeShade[k + 1]) * v; b = rangeShade[k + 2] + (rangeLit[k + 2] - rangeShade[k + 2]) * v; } // @math the three components
             }
+            for (const c of sky.clouds) { // the banks over it
+              const a = c.alpha[ci]; if (!(a > 0)) continue;
+              const l = c.light[ci], cr = c.shade[k] + (c.lit[k] - c.shade[k]) * l, cg = c.shade[k + 1] + (c.lit[k + 1] - c.shade[k + 1]) * l, cb = c.shade[k + 2] + (c.lit[k + 2] - c.shade[k + 2]) * l; // @math the three components
+              r += (cr - r) * a; g += (cg - g) * a; b += (cb - b) * a;
+            }
             r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
           }
-        }
-        if (relief && (kind === KIND.floor || kind === KIND.sprite)) { const f = kind === KIND.floor ? ground[so] : lights[o]; if (f !== 1) { r = Math.min(r * f, cap); g = Math.min(g * f, cap); b = Math.min(b * f, cap); } } // the relief's light, within the demo's fade
-        if (kind === KIND.floor) { // the ground: the water, the shadows (the darker of contact and sun), then the skid marks
-          if (wet !== null && wet[o] !== 0) {
-            if (wet[o] === 1 && reflect !== null) { const t = reflect[Math.min(Math.round(depths[o]), reflectLast)]; r += (mirror[0] - r) * t; g += (mirror[1] - g) * t; b += (mirror[2] - b) * t; } // @math the three components
-            const v = wave[o];
-            if (v < 0) { r *= 1 + v; g *= 1 + v; b *= 1 + v; }
-            else if (v > 0) { const h = wet[o] === 1 ? highlight : glow; r += (h[0] - r) * v; g += (h[1] - g) * v; b += (h[2] - b) * v; } // @math the three components
+          else if (row < stripRows && kind === KIND.horizon) { // the strip's sky-coloured background: the gradient and the far range go on over it
+            const t = sky.tint;
+            if (through !== null ? through[o] : sky.strip[(row - sky.rows) * 256 + fb[o]]) { // @math a flag for each palette index (while art is drawn, the strip pixel's own flag: a pack strip's 'sky here' too)
+              if (t) { r += (t.colours[k] - r) * t.amount; g += (t.colours[k + 1] - g) * t.amount; b += (t.colours[k + 2] - b) * t.amount; } // @math the three components
+              if (range && rangeAlpha[ci]) { // the range's own haze: no strip fog over it
+                ranged = true;
+                if (rangeSnow[ci]) { r = rangeWhite[k]; g = rangeWhite[k + 1]; b = rangeWhite[k + 2]; } // @math the three components
+                else { const v = rangeTone[ci]; r = rangeShade[k] + (rangeLit[k] - rangeShade[k]) * v; g = rangeShade[k + 1] + (rangeLit[k + 1] - rangeShade[k + 1]) * v; b = rangeShade[k + 2] + (rangeLit[k + 2] - rangeShade[k + 2]) * v; } // @math the three components
+              }
+              r = Math.min(r, cap); g = Math.min(g, cap); b = Math.min(b, cap); // never above the demo's fade
+            }
           }
-          const dark = Math.max(shades[so] * darken, casts[so] * sunDarken), f = (1 - dark) * (1 - marks[so]);
-          if (f !== 1) { r *= f; g *= f; b *= f; }
+          if (relief && (kind === KIND.floor || kind === KIND.sprite)) { const f = kind === KIND.floor ? ground[so] : lights[o]; if (f !== 1) { r = Math.min(r * f, cap); g = Math.min(g * f, cap); b = Math.min(b * f, cap); } } // the relief's light, within the demo's fade
+          if (kind === KIND.floor) { // the ground: the water, the shadows (the darker of contact and sun), then the skid marks
+            if (wet !== null && wet[o] !== 0) {
+              if (wet[o] === 1 && reflect !== null) { const t = reflect[Math.min(Math.round(depths[o]), reflectLast)]; r += (mirror[0] - r) * t; g += (mirror[1] - g) * t; b += (mirror[2] - b) * t; } // @math the three components
+              const v = wave[o];
+              if (v < 0) { r *= 1 + v; g *= 1 + v; b *= 1 + v; }
+              else if (v > 0) { const h = wet[o] === 1 ? highlight : glow; r += (h[0] - r) * v; g += (h[1] - g) * v; b += (h[2] - b) * v; } // @math the three components
+            }
+            const dark = Math.max(shades[so] * darken, casts[so] * sunDarken), f = (1 - dark) * (1 - marks[so]);
+            if (f !== 1) { r *= f; g *= f; b *= f; }
+          }
+          if (fogC && kind !== KIND.sky && !ranged) {
+            const t = kind === KIND.horizon ? fog.horizon : ramp[Math.min(Math.round(depths[o]), last)];
+            r += (fogC[0] - r) * t; g += (fogC[1] - g) * t; b += (fogC[2] - b) * t; // @math the three components
+          }
         }
-        if (fogC && kind !== KIND.sky && !ranged) {
-          const t = kind === KIND.horizon ? fog.horizon : ramp[Math.min(Math.round(depths[o]), last)];
-          r += (fogC[0] - r) * t; g += (fogC[1] - g) * t; b += (fogC[2] - b) * t; // @math the three components
-        }
+        out[oo] = r; out[oo + 1] = g; out[oo + 2] = b; out[oo + 3] = 255; // @math opaque
       }
-      out[oo] = r; out[oo + 1] = g; out[oo + 2] = b; out[oo + 3] = 255; // @math opaque
-    }
-  };
-  // The lighting grade of the output row Y at every `step`-th column (grade.js gradePixel, inlined as composite has it).
-  const world = grade?.lut, worldSat = grade?.saturation, pictures = grade?.sprite.lut, picturesSat = grade?.sprite.saturation;
-  const graded = (Y, step) => {
-    for (let X = 0, o = Y * W, oo = o * 4; X < W; X += step, o += step, oo += step * 4) { // @math four bytes a colour
-      if (masked && mask[o]) continue;
-      const kind = kinds[o];
-      if (kind === KIND.sky && !grade.trackSky) continue;
-      const weak = kind === KIND.sprite || (kind === KIND.floor && L.wet[o] === 2), t = weak ? pictures : world, sat = weak ? picturesSat : worldSat; // @math the red liquid (wet 2) glows: lit as the pictures are
-      const r = t[out[oo]], g = t[256 + out[oo + 1]], b = t[512 + out[oo + 2]], grey = 0.299 * r + 0.587 * g + 0.114 * b; // @math the green and blue tables follow the red one; the Rec. 601 luma weights
-      out[oo] = Math.min(grey + (r - grey) * sat, cap); out[oo + 1] = Math.min(grey + (g - grey) * sat, cap); out[oo + 2] = Math.min(grey + (b - grey) * sat, cap); // @math the three components
-    }
-  };
-  for (let Y = 0; Y < H; Y++) {
-    const row = rowRef[Y];
-    if (fast !== null && row < S.skyRows && fast[row]) {
-      if (Y !== s * row) continue; // the cell's other rows are copied from its first
-      pass(Y, s);
-      if (grade) graded(Y, s);
+    if (once) {
+      if (grade) gradeRow(out, Y, s, W, mask, kinds, L.wet, grade, cap);
       const from = Y * W * 4; // @math four bytes a colour
       if (pixels) for (let X = 0, a = Y * W; X < W; X += s, a += s) for (let d = a + 1; d < a + s; d++) pixels[d] = pixels[a]; // the cell's first pixel along its row, as a word
       else for (let X = 0, a = from; X < W; X += s, a += s * 4) for (let d = a + 4; d < a + s * 4; d++) out[d] = out[d - 4]; // @math four bytes a colour: each byte of the cell's first pixel along its row
       for (let q = 1; q < s; q++) out.copyWithin(from + q * W * 4, from, from + W * 4); // @math four bytes a colour
-      continue;
     }
-    pass(Y, 1);
   }
   for (const sp of splats) {
     const base = sp.color.map(v => Math.min(v, cap)), color = fogC ? mixInto(base, fogC, ramp[Math.min(Math.round(sp.depth), last)]) : base;
@@ -266,6 +274,6 @@ export function compositeAt(out, { fb, mask = null, L, G, palette, effects, spla
       }
     }
   }
-  if (grade) for (let Y = 0; Y < H; Y++) { const row = rowRef[Y]; if (fast === null || row >= S.skyRows || !fast[row]) graded(Y, 1); } // the lighting, last (the fast rows are graded already)
+  if (grade) for (let Y = 0; Y < H; Y++) { const row = rowRef[Y]; if (fast === null || row >= S.skyRows || !fast[row]) gradeRow(out, Y, 1, W, mask, kinds, L.wet, grade, cap); } // the lighting, last (the fast rows are graded already)
   return out;
 }

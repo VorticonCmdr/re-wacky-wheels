@@ -21,7 +21,6 @@
 // `sizes`), and stand the particles on those rows too (geometry.js rowLaw).
 import { frameMs } from '../game/clock.js';
 import { carsBySeat, swapSeat } from '../game/versus.js';
-import { LAYOUT } from '../game/versus-rules.js';
 import { composeSplit, flipViewport } from '../render/versus.js';
 import { EFFECTS, LOOK_EFFECTS, FOG, SHADOW, CLOUDS, TIMING_FRAMES, HD } from './config.js';
 import { loadSettings, saveSettings, normalize, enhancedOn } from './settings.js';
@@ -42,6 +41,8 @@ import { gradeOf } from './grade.js';
 import { coverRange, rangeColours } from './ranges.js';
 import { liquidsOf, waterColours } from './water.js';
 import { groundRelief, sunVector } from './relief.js';
+import { createArtLayers } from './art.js';
+import { LAYOUT } from '../game/versus-rules.js';
 
 // An RGBA picture's pixels as 32-bit words (the same bytes), kept per array; the pictures handed to the enhancer start on a whole pixel.
 const wordViews = new WeakMap();
@@ -66,7 +67,12 @@ function words(rgba) {
 // `probes` false leaves the wide view's margins without their records (wide.js; the checks' comparison of the reference fan alone), and
 // `trace` makes inspect() report the records drawn with their shadows' boxes and the skid marks' boxes (scene.js opts.trace) and the frame's
 // particle discs (the checks' exclusions of the wide view).
-export function createEnhancer({ storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
+// `art` (Stage 4, the artwork packs: art.js createArtProvider) gives the player's packs; they are drawn while the settings' artwork is on
+// (RENDER.art: ARTWORK ON) and the provider has art that may change the world's draw (artFor below). Then the frame is drawn as a frame of a
+// geometry, the reference one included (the general caster, blit and compositeAt, which the forced paths of check:enhance section 6 prove
+// equal to the dispatched functions), with the art layers (art.js createArtLayers) allocated while art is drawn. With the artwork off, or no
+// pack stored, nothing of this runs: the frame is today's. `blits` (the checks' region recorder) is told every picture drawn (scene.js).
+export function createEnhancer({ storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false, art = null, blits = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
   const F = models().floor, size = F.width * F.height;
   let settings = loadSettings(storage), ramps = new WeakMap(), stored = atmosphere ? null : loadAtmospheres(storage);
   const atmosphereOf = world => normalizeAtmosphere((atmosphere ? atmosphere(world.name) : stored[world.name]) ?? {});
@@ -94,6 +100,25 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     return set;
   };
   const splitOf = B => (B.split ??= { A: new Uint8Array(B.fb.length), B: new Uint8Array(B.fb.length), LA: createLayers(B.fb.length), LB: createLayers(B.fb.length), rowsA: new Uint8Array(B.G.H), rowsB: new Uint8Array(B.G.H), RA: B.R ? createSoftLayers(B.R.shade.length) : null, RB: B.R ? createSoftLayers(B.R.shade.length) : null });
+  // The art layers of a set of buffers while art is drawn (made on the first frame with art, kept with the buffers), else none: the blits and
+  // the composite then never touch them.
+  const ART_KEYS = ['px', 'direct', 'beneath', 'through'];
+  const artLayersOf = (B, on) => {
+    const n = B.fb.length;
+    B.L.art = on ? (B.artLayers ??= createArtLayers(n)) : null;
+    if (B.split) { B.split.LA.art = on ? (B.split.artA ??= createArtLayers(n)) : null; B.split.LB.art = on ? (B.split.artB ??= createArtLayers(n)) : null; }
+  };
+  const identityArt = {}; // the reference geometry's art layers (L's, and the split screen's LA and LB), made on the first frame with art
+  const artLayersAtIdentity = on => { L.art = on ? (identityArt.L ??= createArtLayers(size)) : null; LA.art = on ? (identityArt.LA ??= createArtLayers(size)) : null; LB.art = on ? (identityArt.LB ??= createArtLayers(size)) : null; };
+  // The packs' art for a world's frame: null with the artwork off or no pack that may change the world's draw, else { provider, sky, strip }:
+  // the pack sky of the sky the frame draws (the split screen's background picture, LAYOUT's, else the .GAM's sky) and the world's strip.
+  const artFor = (world, split = false) => {
+    if (!settings.art || !art || !art.active(world)) return null;
+    const own = art.forWorld(world);
+    return { provider: art, sky: split ? art.sky(LAYOUT().background) : own.sky, strip: own.strip, stripSky: own.stripSky };
+  };
+  // Whether the settings draw through the enhanced path: the artwork counts only while a pack is stored (ARTWORK with no pack draws nothing).
+  const enhancedNow = s => enhancedOn(s.art && !(art?.size > 0) ? { ...s, art: false } : s);
   // The geometry of a frame (Stage 4): the frame context's `geometry` when it gives one (the checks, scripts/spike-2x.mjs), else the settings'
   // scale and view where the caller can show a world of another size (`worldReady`: the page's display.worldReady(), true for the previews and
   // the checks, which show the RGBA world themselves) and 1x in the standard view where it cannot (the stored choices are kept for when it
@@ -110,7 +135,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     const length = sunLengthOf(atmo);
     return { ground: groundRelief(world, relief?.tiles ?? null), sun: sunVector(world, sunAngleOf(atmo, settings.sunAngle), length), length, strength: atmo.relief, frameHeights: relief?.frame ?? null };
   };
-  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0) => ({ subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
+  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0, packs = null) => ({ art: packs, blits, subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
   // The liquids of a world when its water moves (the switch, the track's water above 0, a liquid on its map), else null.
   const liquidsOn = (world, atmo) => { if (!settings.water || !(atmo.water > 0)) return null; const l = liquidsOf(world); return l.any ? { ...l, beach: world.beach !== null && world.beach !== undefined } : null; };
   const rampOf = (world, strength) => { // the fog's table of a world at a strength (the game setting's times the track's)
@@ -133,7 +158,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
   // palette: the same picture as without layers, since the effects of a pixel depend only on its world index and its layers.
   // With `forced.composite` compositeAt composes at IDENTITY (`rows`: the rows the general blit wrote, or null where they are not known).
   const compose = (out, index, layers, args, rows = null) => {
-    const at = forced.composite ? { ...args, G: IDENTITY, rows: forced.blit ? rows : null, slow: forced.slow } : null;
+    const at = forced.composite || L.art ? { ...args, G: IDENTITY, rows: forced.blit ? rows : null, slow: forced.slow } : null; // (with the artwork packs' layers: compositeAt, which draws their colours)
     if (!layers) { if (at) compositeAt(out, { ...at, fb: index, mask }); else composite(out, { ...args, index, mask }); return; }
     if (at) compositeAt(layers.world, { ...at, fb: under, mask: null }); else composite(layers.world, { ...args, index: under, mask: none });
     const { world, hud } = layers, palette = args.palette;
@@ -156,7 +181,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
   const stampHud = (world32, hud32, s, W, refW) => { for (let y = 0, i = 0; y < F.height; y++) for (let x = 0; x < refW; x++, i++) { const c = hud32[i]; if (c === 0) continue; for (let q = 0, w = s * y * W + s * x; q < s; q++, w += W) for (let r = 0; r < s; r++) world32[w + r] = c; } }; // (an opaque colour is never the word 0: its alpha byte is 0xff)
   const composeAt = (B, out, index, layers, args, canvas) => {
     const { G, world, hud } = B, { s } = G, palette = args.palette;
-    if (forced.composite || !G.identity) compositeAt(world, { ...args, fb: B.fb, mask: null, G, rows: G.identity && !forced.blit ? null : B.rows, slow: forced.slow, count: fastRows, soft: B.R }); else composite(world, { ...args, width: F.width, index: B.fb, mask: none });
+    if (forced.composite || !G.identity || B.L.art) compositeAt(world, { ...args, fb: B.fb, mask: null, G, rows: G.identity && !forced.blit ? null : B.rows, slow: forced.slow, count: fastRows, soft: B.R }); else composite(world, { ...args, width: F.width, index: B.fb, mask: none });
     mark?.('composite');
     paintOf(palette);
     const out32 = words(out), world32 = words(world), hud32 = words(hud), lw32 = layers ? words(layers.world) : null, lh32 = layers ? words(layers.hud) : null, place = hudPlaces(G);
@@ -179,7 +204,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     if (timing.count >= TIMING_FRAMES) { timing.window = timing.sum / timing.count; timing.sum = 0; timing.count = 0; }
     return out;
   };
-  const composeLayers = () => { for (const k of LAYER_KEYS) composeSplit(LA[k], LB[k], L[k]); };
+  const composeLayers = () => { for (const k of LAYER_KEYS) composeSplit(LA[k], LB[k], L[k]); if (L.art) for (const k of ART_KEYS) composeSplit(LA.art[k], LB.art[k], L.art[k]); };
   const cloudCover = CLOUDS.layers.map(() => ({ alpha: new Float32Array(S.width * S.skyRows), light: new Float32Array(S.width * S.skyRows) }));
   const rangeSize = S.width * (S.skyRows + S.horizonRows), rangeCover = { alpha: new Uint8Array(rangeSize), tone: new Float32Array(rangeSize), snow: new Uint8Array(rangeSize) };
   const rowsMixed = (rows, toward, t, cap) => rows.map((v, i) => Math.min(v + ((toward ? toward[i] : 0xff) - v) * t, cap)); // @math toward white when no colour is given
@@ -214,13 +239,13 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
 
   const api = {
     get settings() { return settings; },
-    active: () => enhancedOn(settings),
+    active: () => enhancedNow(settings),
     // New settings, kept in this browser; a switch that changed starts a new scene (no snapshot or particle of the old mode is kept). The
     // rendering choices (RENDER) only change how the scene is drawn: they keep it, unless the enhanced path comes on or goes off with them.
     configure(next) {
       const before = settings; settings = normalize(next); saveSettings(settings, storage);
       if (before.scale !== settings.scale) { timing.sum = 0; timing.count = 0; timing.window = null; } // another resolution: its own times
-      if (EFFECTS.some(k => !LOOK_EFFECTS.includes(k) && before[k] !== settings[k]) || enhancedOn(before) !== enhancedOn(settings)) api.reset(); // the sky's layers, the lighting and the water only colour the picture, but with the enhanced path off no snapshot was taken
+      if (EFFECTS.some(k => !LOOK_EFFECTS.includes(k) && before[k] !== settings[k]) || enhancedNow(before) !== enhancedNow(settings)) api.reset(); // the sky's layers, the lighting and the water only colour the picture, but with the enhanced path off no snapshot was taken
       return settings;
     },
     // A new scene (a race start, a restart, a round, a mode change): no snapshot, no particle survives it. The stored atmospheres are read
@@ -230,7 +255,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     atmosphereOf,
     // After every completed tick of the race; `sounds` are the tick's sounds when the page has already taken them out of the state.
     afterTick(state, { sounds = state.sounds } = {}) {
-      if (!enhancedOn(settings)) return;
+      if (!enhancedNow(settings)) return;
       const { prev, cur } = motion.tick(state, frameMs(), sounds);
       if (settings.particles) particles.emit(state, prev, cur, settings.particleAmount);
       if (settings.skidMarks) marks.emit(prev, cur);
@@ -243,14 +268,16 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // wide (not a link race, not a slides demo), both for the wide view (M8: the margin for that shape); `geometry` (the checks' and
     // scripts/spike-2x.mjs's) overrides the settings' geometry (geometryFor above). Returns the present state; layers() then has the frame's
     // world and HUD.
-    drawSingle(state, alpha, { index, out, palette, mode, sky = null, overlays, seat = 0, cap = 255, layers = null, worldReady = false, aspect = null, wideAllowed = true, geometry = null }) { // @math the brightest 8-bit component
+    // `useArt` false draws the frame without the artwork packs whatever the settings (the garage's comparisons).
+    drawSingle(state, alpha, { index, out, palette, mode, sky = null, overlays, seat = 0, cap = 255, layers = null, worldReady = false, aspect = null, wideAllowed = true, geometry = null, useArt = true }) { // @math the brightest 8-bit component
       return timed(() => {
         clock?.start();
         const { fine, P } = view(state, alpha), G = geometryFor(geometry, worldReady, state.world, aspect, wideAllowed);
         if (seat === 1) swapSeat(P); // @math the second player's seat
-        const atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo);
-        if (G.identity && !forced.pipeline) {
-          const camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine, atmo, liquids, lit));
+        const atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo), packs = useArt ? artFor(P.world) : null;
+        if (G.identity && !forced.pipeline) { // (with the artwork packs too: their art layers beside L, the general caster and blit, compositeAt)
+          artLayersAtIdentity(Boolean(packs));
+          const camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine, atmo, liquids, lit, null, undefined, null, 0, packs));
           overlaid(P, overlays, index, !sky); mark?.('overlays');
           const splats = settings.particles ? particles.splats(P.world, camera, fine.time, null, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
           if (trace) splatted = splats;
@@ -259,7 +286,10 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
           shown = { G: IDENTITY, out, layers, B: null }; set = null; // back at the reference geometry: the buffers of another are released
           return P;
         }
-        const B = buffersFor(G), camera = renderEnhancedScene(P, fine, seat, B.fb, B.L, mode, sky, opts(fine, atmo, liquids, lit, B), G);
+        artLayersAtIdentity(false);
+        const B = buffersFor(G);
+        artLayersOf(B, Boolean(packs));
+        const camera = renderEnhancedScene(P, fine, seat, B.fb, B.L, mode, sky, opts(fine, atmo, liquids, lit, B, B.rows, B.R, 0, packs), G);
         decimate(B, index); mark?.('decimate');
         overlaid(P, overlays, index, !sky, B.kind); mark?.('overlays');
         const splats = settings.particles ? particles.splats(P.world, camera, fine.time, G, rowLaw(P.world, settings.sizes)).map(s => ({ ...s, map: y => y })) : []; mark?.('particles');
@@ -278,17 +308,18 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // takes the world's samples before the overlays flip an upside-down viewer's half of it, and the world is mirrored at its own rows
     // afterwards: the canvas then reads row s y + s - 1 inside a mirrored band (geometry.js bandSample), the mirror of the sample row the
     // overlays' own mirror put at y.
-    drawSplit(state, alpha, { index, out, palette, mode, overlays, cap = 255, layers = null, worldReady = false, geometry = null }) { // @math the brightest 8-bit component
+    drawSplit(state, alpha, { index, out, palette, mode, overlays, cap = 255, layers = null, worldReady = false, geometry = null, useArt = true }) { // @math the brightest 8-bit component
       return timed(() => {
         clock?.start();
-        const { fine, P } = view(state, alpha), Y = LAYOUT(), first = P.versus.viewer, cams = [], atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo), G = geometryFor(geometry, worldReady);
+        const { fine, P } = view(state, alpha), Y = LAYOUT(), first = P.versus.viewer, cams = [], atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo), G = geometryFor(geometry, worldReady), packs = useArt ? artFor(P.world, true) : null;
         if (G.identity && !forced.pipeline) {
-          cams[first] = renderEnhancedScene(P, fine, first, first === 0 ? sceneA : sceneB, first === 0 ? LA : LB, mode, null, opts(fine, atmo, liquids, lit));
-          swapSeat(P); cams[1 - first] = renderEnhancedScene(P, fine, 1 - first, first === 0 ? sceneB : sceneA, first === 0 ? LB : LA, mode, null, opts(fine, atmo, liquids, lit)); swapSeat(P);
+          artLayersAtIdentity(Boolean(packs));
+          cams[first] = renderEnhancedScene(P, fine, first, first === 0 ? sceneA : sceneB, first === 0 ? LA : LB, mode, null, opts(fine, atmo, liquids, lit, null, undefined, null, 0, packs));
+          swapSeat(P); cams[1 - first] = renderEnhancedScene(P, fine, 1 - first, first === 0 ? sceneB : sceneA, first === 0 ? LB : LA, mode, null, opts(fine, atmo, liquids, lit, null, undefined, null, 0, packs)); swapSeat(P);
           composeSplit(sceneA, sceneB, index); composeLayers();
           overlaid(P, overlays, index);
           const flipped = carsBySeat(P).map(c => c.inverted !== 0);
-          flipped.forEach((f, n) => { if (f) { for (const k of LAYER_KEYS) flipViewport(L[k], n); if (layers) flipViewport(under, n); } }); // the world before the overlays flipped as they flip the picture
+          flipped.forEach((f, n) => { if (f) { for (const k of LAYER_KEYS) flipViewport(L[k], n); if (L.art) for (const k of ART_KEYS) flipViewport(L.art[k], n); if (layers) flipViewport(under, n); } }); // the world before the overlays flipped as they flip the picture
           mark?.('overlays');
           const rowOf = (n, y) => { // a row of a viewer's picture to the screen (composeSplit, then the flip)
             if (y < Y.viewRow || y >= F.height) return -1;
@@ -303,16 +334,19 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
           return P;
         }
         if (G.m !== 0) throw new Error('the split screen is never wide: it has no margin');
+        artLayersAtIdentity(false);
         const B = buffersFor(G), X = splitOf(B), s = G.s, force = forced.pipeline && G.identity, keys = B.R ? OUTPUT_KEYS : LAYER_KEYS; // the reference look's output layers; its soft ones are cut on the reference grid
-        const viewer = (n, scene, layered, flags, soft) => renderEnhancedScene(P, fine, n, scene, layered, mode, null, opts(fine, atmo, liquids, lit, B, flags, soft, Y.viewRow), G);
+        artLayersOf(B, Boolean(packs));
+        const viewer = (n, scene, layered, flags, soft) => renderEnhancedScene(P, fine, n, scene, layered, mode, null, opts(fine, atmo, liquids, lit, B, flags, soft, Y.viewRow, packs), G);
         cams[first] = first === 0 ? viewer(first, X.A, X.LA, X.rowsA, X.RA) : viewer(first, X.B, X.LB, X.rowsB, X.RB);
         swapSeat(P); cams[1 - first] = first === 0 ? viewer(1 - first, X.B, X.LB, X.rowsB, X.RB) : viewer(1 - first, X.A, X.LA, X.rowsA, X.RA); swapSeat(P);
         composeSplitAt(X.A, X.B, B.fb, G, G.W, force); for (const k of keys) composeSplitAt(X.LA[k], X.LB[k], B.L[k], G, G.W, force); composeSplitAt(X.rowsA, X.rowsB, B.rows, G, 1);
+        if (packs) for (const k of ART_KEYS) composeSplitAt(X.LA.art[k], X.LB.art[k], B.L.art[k], G, G.W, force); // the art layers cut with the others
         if (B.R) for (const k of SOFT_KEYS) composeSplitAt(X.RA[k], X.RB[k], B.R[k], IDENTITY, G.refW); // the reference grid's cut (render/versus.js composeSplit)
         decimate(B, index); mark?.('decimate'); // the reference samples, before the overlays mirror an upside-down viewer's half of the index
         overlaid(P, overlays, index, false, B.kind);
         const flipped = carsBySeat(P).map(c => c.inverted !== 0);
-        flipped.forEach((f, n) => { if (f) { flipViewportAt(B.fb, n, G, G.W, force); for (const k of keys) flipViewportAt(B.L[k], n, G, G.W, force); flipViewportAt(B.rows, n, G, 1); if (B.R) for (const k of SOFT_KEYS) flipViewportAt(B.R[k], n, IDENTITY, G.refW); } }); // the world mirrored as the overlays mirror the index
+        flipped.forEach((f, n) => { if (f) { flipViewportAt(B.fb, n, G, G.W, force); for (const k of keys) flipViewportAt(B.L[k], n, G, G.W, force); flipViewportAt(B.rows, n, G, 1); if (B.R) for (const k of SOFT_KEYS) flipViewportAt(B.R[k], n, IDENTITY, G.refW); if (packs) for (const k of ART_KEYS) flipViewportAt(B.L.art[k], n, G, G.W, force); } }); // the world mirrored as the overlays mirror the index
         mark?.('overlays');
         const rowOf = (n, y) => { // an output row of a viewer's picture to the screen's (composeSplitAt, then the mirror)
           if (y < s * Y.viewRow || y >= G.H) return -1;
@@ -371,7 +405,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // (`fb`: the geometry's own, or at the reference geometry the page's index as it was before the overlays drew), the soft layers of the
     // reference look (refW x 200, or null), the probes the wide view has taken since the enhancer was made, and with `trace` the frame's trace
     // (scene.js opts.trace; the split screen's is its last viewer's) and particle discs, for the checks (scripts/check-enhance.js).
-    inspect: () => ({ ...(shown?.B ? { L: shown.B.L, mask, G: shown.G, kind: shown.B.kind, fb: shown.B.fb, R: shown.B.R } : { L, mask, G: IDENTITY, kind: L.kind, fb: under, R: null }), probes: wide.probes, trace: traced, splats: splatted }),
+    inspect: () => ({ ...(shown?.B ? { L: shown.B.L, mask, G: shown.G, kind: shown.B.kind, fb: shown.B.fb, R: shown.B.R } : { L, mask, G: IDENTITY, kind: L.kind, fb: under, R: null }), art: Boolean((shown?.B ? shown.B.L : L).art), probes: wide.probes, trace: traced, splats: splatted }),
 
     // The readout: the delay smooth motion adds (mean since the last call), the particles alive, the mean time of a frame's draw (`ms`, over the
     // frames of the window being counted, or the last window's before its first frame), the mean over the last whole window of TIMING_FRAMES
