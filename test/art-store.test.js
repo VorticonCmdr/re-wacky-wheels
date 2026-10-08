@@ -91,6 +91,18 @@ test('a pack and its art saved in one transaction, the order and the switches, r
   });
 });
 
+test('a kart angle set (M4) kept and read back: its slot in the id, its directions, anchor and anchors in the record; two slots, two records', async () => {
+  const set = (slot, o = {}) => normalizeArtEntry({ kind: 'angles', member: 'CARS.SP', memberCrc: 'deadbeef', image: `angles/CARS-slot${slot}-32.png`, scale: 1, color: 'rgba', slot, directions: 32, width: 38, height: 28, columns: 4, anchor: 27, anchors: Array.from({ length: 32 }, (_, k) => 24 + (k % 4)), ...o }).entry; // @math a set of 32, four a row (an octant a row); its ground rows
+  await withDB({}, async () => {
+    const r = await savePack(pack('Angles'), [{ entry: set(2), png: png(12), width: 4 * 38, height: 8 * 28 }, { entry: set(5), png: png(12), width: 4 * 38, height: 8 * 28 }]); // @math the sets' pictures: four cells by eight
+    assert.ok(r.ok, r.reason);
+    const kept = await loadArt();
+    assert.deepEqual(kept.map(a => [a.id, a.kind, a.meta.slot, a.meta.directions, a.meta.anchor, a.meta.anchors.slice(0, 4)]), [[`${r.id}|angles|CARS.SP||38x28|2`, 'angles', 2, 32, 27, [24, 25, 26, 27]], [`${r.id}|angles|CARS.SP||38x28|5`, 'angles', 5, 32, 27, [24, 25, 26, 27]]]); // @math the slots; the first four ground rows
+    assert.equal(normalizeArtRecord({ ...kept[0], width: 4 * 38 + 1 }), null, 'a picture of another size than the set\'s'); // @math a column more
+    assert.equal(normalizeArtRecord({ ...kept[0], id: `${r.id}|angles|CARS.SP||38x28|3` }), null, 'an id of another slot'); // @math another slot
+  });
+});
+
 test('a full quota keeps nothing of the pack and says so; a browser that keeps nothing gives no packs', async () => {
   await withDB({ quota: 40 }, async () => { // @math room for 40 bytes of PNG
     assert.ok((await savePack(pack('Small'), [art('A_F1.PCX', 30)])).ok); // @math within the quota

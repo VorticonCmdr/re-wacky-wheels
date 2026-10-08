@@ -87,7 +87,7 @@ export function menuView(settings, { worldReady = true, packs = 0, angleSets = 0
 
 // What Enter on a menu line does: the preset goes from Original to Enhanced and from either other to Original (which puts the rendering choices
 // back), a switch flips, a strength goes up a quarter (from full to off), the sun goes on an eighth of a turn, DEFAULT LEVELS puts the levels back,
-// a rendering choice (RENDERING: RESOLUTION, VIEW, SPRITE SIZES) goes to its next value.
+// a rendering choice (RENDERING: RESOLUTION, VIEW, SPRITE SIZES, KART ANGLES: locked, free, off) goes to its next value.
 export const nextPreset = settings => applyPreset(settings, settings.preset === 'original' ? 'enhanced' : 'original');
 export const toggle = (settings, key) => change(settings, key, !settings[key]);
 export function cycleLevel(settings, key) {

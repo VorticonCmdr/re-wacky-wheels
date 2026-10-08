@@ -16,9 +16,10 @@ import { drawSkyAt, drawStripAt, upscaleRows } from './sky-hd.js';
 import { stampShadow, casterOf, castOf, castShadow, sunDirection, blurCast, boxBlurCast, shadowBox } from './shadows.js';
 import { stripSkyIndices } from './clouds.js';
 import { tileHook } from './art.js';
+import { angleRecords } from './angles.js';
 import { waterShader, sunGlitter } from './water.js';
 import { groundLight, pictureLight, screenSun, paletteLuma } from './relief.js';
-import { SUN } from './config.js';
+import { SUN, RENDER } from './config.js';
 import { mergeOrder, recordKey } from './wide.js';
 import { models } from './models.js';
 
@@ -252,6 +253,10 @@ function traceEntry(r, G) {
 // pictures are the archive's, through the general blit (at the reference geometry blitLayers' own picture).
 // `opts.blits(bytes, width, height)` (the checks' region recorder, scripts/check-enhance.js section 5) is told every picture drawn: each record's
 // frame with its shape's class 0 size, each after-blit's bytes with its size.
+// With the art, the provider's kart angle sets (Stage 4, M4: angles.js angleRecords) give the records of CARS.SP's direction frames of their
+// slots a set's picture (a shallow copy with `art`: the set and its index, picked by `opts.angles`, RENDER.angles, from the racer's direction
+// against the floor's heading `camF`; the frames are the game's, chosen at the tick's heading as sceneRecords chose them), after the margin
+// records are joined, so the wide view's margins are drawn from the sets too. `opts.angleLog` (the checks') is told each record drawn from a set.
 export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = IDENTITY) {
   const S = models().sky, at = !G.identity, width = at ? G.W : S.width, height = at ? G.H : fb.length / width, world = P.world, own = fine.seats[seat], force = opts.force ?? NO_FORCE, smooth = opts.sizes === 'smooth', clock = opts.clock ?? null;
   const art = opts.art ?? null, A = art ? L.art : null, tile = art ? tileHook(world, art.provider, A) : null; // the artwork packs' art (above)
@@ -294,6 +299,7 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
   let ordered;
   if (smooth) ordered = smoothOrder(margins ? [...records, ...margins.map(placeMargin)] : records); // one stable order by the fine distances, the margin records in the queue
   else { ordered = sortDrawList(records); if (margins) ordered = mergeOrder(ordered, sortDrawList(margins.map(placeMargin))); } // the game's sort; the margin records merged into it by distance
+  if (art?.provider.angleSlots) ordered = angleRecords(ordered, { P, world, heading: frames?.heading ?? camI.heading, camera: camF.heading, mode: opts.angles ?? RENDER.defaults.angles, provider: art.provider, seat, log: opts.angleLog ?? null }); // the kart angle sets (the game's records untouched)
   const casters = [], casts = [], ground = playerGeometry(world).top + world.carShape[0].h; // the own car's ground row: the row-table bottom of its distance, before the jiggle and the jump
   const lightPictures = R ? { sun: screenSun(sunDirection(world, opts.sunAngle, camI.heading), R.length), luma: paletteLuma(world) } : null;
   const toOut = b => (soft ? { x0: G.s * b.x0, y0: G.s * b.y0, x1: G.s * b.x1 + G.s - 1, y1: G.s * b.y1 + G.s - 1 } : b); // a box of the soft layers' grid in output pixels
@@ -302,8 +308,8 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
       const entry = trace ? traceEntry(r, G) : null;
       if (entry) trace.records.push(entry);
       if (R) { collect.count = 0; collect.art = false; }
-      const hit = art ? art.provider.frame(r.frame) : null; // a pack's picture of the record's bytes
-      if (hit) art.provider.hits.frames++;
+      const hit = r.art ? { art: r.art.asset, k: r.art.index } : art ? art.provider.frame(r.frame) : null; // a kart angle set's picture (angleRecords), or a pack's picture of the record's bytes
+      if (hit) art.provider.hits[r.art ? 'angles' : 'frames']++;
       if (opts.blits) { const info = shapeOf(world, r.picture); opts.blits(r.frame, info?.W0 ?? r.picture.w, info?.H0 ?? r.picture.h); }
       const drawn = general.blit ? blitAt(fb, L, r, opts.band, G, { world, collect: R ? collect : null, rows, at: r.place ?? null, sampled: Boolean(soft), from: G.s * from, art: hit, luma: lightPictures?.luma ?? null }) : blitLayers(fb, L, r, opts.band, width, height, R ? collect : null);
       // The shadows' grid: the reference picture's (1x, a record with no place), the reference grid (the reference look: the picture's samples at

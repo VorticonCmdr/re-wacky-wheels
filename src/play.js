@@ -100,7 +100,7 @@ const relief = createReliefProvider(() => state.dat); // the player's own relief
 // ART.decodeTimeoutMs (artWait in frame()), so its art does not pop in once it runs. With ARTWORK off nothing is decoded until it is switched
 // on (setGraphics). Reads may overlap (a race started while the last one's pictures are decoded): only the newest one's answer is shown, and
 // the provider sets only its newest load's pictures (art.js load).
-const art = createArtProvider(() => state.dat), artCache = createArtCache(), artInfo = { packs: 0, enabled: [], records: 0, decoded: false, loading: false, error: null };
+const art = createArtProvider(() => state.dat), artCache = createArtCache(), artInfo = { packs: 0, enabled: [], records: 0, angleSets: 0, decoded: false, loading: false, error: null }; // `angleSets`: the enabled packs' kart angle sets (KART ANGLES says NONE without one)
 let artReads = 0;
 function reloadArt(world = state.world, decode = enh.settings.art && Boolean(world)) {
   const mine = ++artReads, current = () => mine === artReads;
@@ -108,7 +108,7 @@ function reloadArt(world = state.world, decode = enh.settings.art && Boolean(wor
   const done = (async () => {
     const all = await loadPacks(), { packs, art: records } = await enabledArt(), wanted = world ? wantedFor(world) : null;
     if (!current()) return;
-    Object.assign(artInfo, { packs: all.length, enabled: packs.map(p => p.name), records: wanted ? records.filter(r => wanted(r.meta)).length : records.length, decoded: false });
+    Object.assign(artInfo, { packs: all.length, enabled: packs.map(p => p.name), records: wanted ? records.filter(r => wanted(r.meta)).length : records.length, angleSets: new Set(records.filter(r => r.meta.kind === 'angles').map(r => r.meta.slot)).size, decoded: false });
     if (decode && !(await art.load(records, artCache, wanted))) return; // a newer read's load took its place
     if (current()) Object.assign(artInfo, { decoded: decode, loading: false, error: null });
   })().catch(error => { if (current()) Object.assign(artInfo, { loading: false, error: error.message }); });
@@ -530,7 +530,7 @@ function chooseItem(action) {
   if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : cycleCrtLevel(s, d.level)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS and its CRT AND HUD (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
   if (action.graphics) { // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js) and DISPLAY OPTIONS > RENDERING (display-menu.js): the same settings as the panel's
     const g = action.graphics, s = enh.settings;
-    if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) do nothing; SPRITE SIZES draws at 1x too
+    if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; if (g.cycle === 'angles' && !(artInfo.angleSets > 0)) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) and KART ANGLES NONE (no enabled angle set) do nothing; SPRITE SIZES draws at 1x too
     if (g.toggle === 'art' && !(artInfo.packs > 0)) return; // ARTWORK NONE: no pack stored
     setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return;
   }
@@ -676,7 +676,8 @@ function showGraphics() {
   else if (!enh.active()) $('gfx-render').textContent = '';
   if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
   $('gfx-art').checked = s.art && artInfo.packs > 0; $('gfx-art').disabled = !(artInfo.packs > 0); // the artwork switch: NONE (disabled) with no pack stored
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready, packs: artInfo.packs }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
+  $('gfx-angles').value = s.angles; $('gfx-angles').disabled = !(artInfo.angleSets > 0); // the kart angles: NONE (disabled) without an enabled angle set
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
 }
 // The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the sky's layers, the water, the lighting and the fog draw this track with.
 function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
@@ -690,12 +691,13 @@ $('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 
 $('gfx-view').addEventListener('change', e => setGraphics(change(enh.settings, 'view', e.target.value), e.target));
 $('gfx-sizes').addEventListener('change', e => setGraphics(change(enh.settings, 'sizes', e.target.value), e.target));
 $('gfx-art').addEventListener('change', e => setGraphics(change(enh.settings, 'art', e.target.checked), e.target));
+$('gfx-angles').addEventListener('change', e => setGraphics(change(enh.settings, 'angles', e.target.value), e.target));
 // The artwork packs' status line: the packs in use (the enabled ones, in their order), their pictures decoded, or what kept them.
 function showArtStatus() {
   const el = $('gfx-art-status');
   if (!el) return;
   const i = artInfo, s = enh.settings;
-  const pictures = i.decoded ? `${art.size} of ${i.records} pictures decoded${art.size < i.records ? '; the others could not be read' : ''}` : `${i.records} picture${i.records === 1 ? '' : 's'}, decoded ${s.art ? 'when a race starts' : 'when Artwork packs is switched on'}`; // ARTWORK off decodes nothing; with no race yet there is no world to decode for
+  const pictures = `${i.decoded ? `${art.size} of ${i.records} pictures decoded${art.size < i.records ? '; the others could not be read' : ''}` : `${i.records} picture${i.records === 1 ? '' : 's'}, decoded ${s.art ? 'when a race starts' : 'when Artwork packs is switched on'}`}${i.angleSets ? `; kart angle sets for ${i.angleSets} slot${i.angleSets === 1 ? '' : 's'}` : ''}`; // ARTWORK off decodes nothing; with no race yet there is no world to decode for
   el.textContent = i.error ? `Artwork packs: the browser did not give them (${i.error}).` : i.loading ? 'Artwork packs: decoding...' : !i.packs ? 'No artwork pack is stored: make and import one in the asset garage (Art packs).' : `${i.enabled.length ? `Packs in use${s.art ? '' : ' when Artwork packs is on'}: ${i.enabled.join(', ')} (${pictures}).` : 'Every stored pack is switched off (asset garage, Art packs).'} ${i.packs} pack${i.packs === 1 ? '' : 's'} stored.`;
 }
 $('gfx-reset').addEventListener('click', e => setGraphics(resetSettings(), e.target));
@@ -711,7 +713,7 @@ function showDisplay() {
   $('dsp-hud').value = ready ? s.hud : 'picture'; $('dsp-hud').disabled = !ready;
   $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
   showDisplayStats(true);
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready, packs: artInfo.packs }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
   showGraphics();
 }
 function showDisplayStats(now = false) {
@@ -1289,7 +1291,7 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady(), packs: artInfo.packs }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady(), packs: artInfo.packs, angleSets: artInfo.angleSets }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }

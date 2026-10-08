@@ -220,6 +220,21 @@ export const TIMING_FRAMES = 120;
 // - `directions`: the kart angle sets' directions (M4): a whole number of times `step`, at most `max`.
 export const ART = { dbVersion: 2, maxScale: 8, maxSide: 16384, maxImagePixels: 16e6, maxPackPixels: 64e6, maxFileBytes: 16e6 * 8 + 2 ** 20, alphaCut: 128, cacheBytes: 128 * 2 ** 20, decodeTimeoutMs: 1500, templateScales: [1, 2, 4], directions: { step: 8, max: 64 } };
 
+// The kart angle sets (Stage 4, M4: angles.js, docs/artpacks.md): how a computer racer's direction is read from the route it drives, and the
+// garage's template of a set.
+// - `minChord`: a route entry whose rasterised points span less than this many world units gives no direction of its own (a few points, or
+//   none: a single-point entry would read as the direction 0); such an entry faces the centre of its compass word's octant, and the
+//   convention check leaves it out (the route records' angle words were checked the same way: rd.derived-words skipped the segments shorter
+//   than 30);
+// - `agreement`: the share of a world's long-enough entries whose chord's octant (humanCompass of the chord's TRIG angle, rounded) must be the
+//   entry's own compass word for the world's chords to be used; a world below it (its route's words would not follow the game's convention)
+//   faces every racer to the centre of its compass word's octant instead, and check:enhance section 8 reports it;
+// - `templateDirections`: the directions of the garage's angle-set template unless another N is chosen;
+// - `guide`: the guide picture written beside an angle-set template (never a picture of the pack: an import ignores it): the in-between cells
+//   show the two original frames around them faded in by how near each is (`ghost`, the alpha of a ghost at its own frame), the cell's box
+//   outline (`box`) and its ground row (`ground`), RGB colours.
+export const ANGLES = { minChord: 30, agreement: 0.95, templateDirections: 32, guide: { ghost: 160, box: [128, 128, 128], ground: [255, 90, 90] } };
+
 // The display (Stage 1 of docs/enhancements.md): how the finished 320 x 200 picture is put on the visitor's screen, after every renderer, for
 // the Original preset as for the Enhanced one. Nothing here changes a pixel of the picture itself.
 // - `aspects`: the shape of the whole picture. 'wide' is the page's square pixels (320 by 200, 16:10); 'dos' the 4:3 a VGA monitor of the time

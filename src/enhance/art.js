@@ -7,9 +7,10 @@
 //   indices (the palette cycle, the fade, the strip's sky indices and every effect then work as for the archive), RGBA pictures their bytes.
 // - createArtCache(limit): the decoded pictures kept across races, the least recently used let go past `limit` bytes.
 // - createArtProvider(archive): set(arts) (in their order: a later one wins), tiles(member), sky(member), strip(member), frame(bytes) ({ art,
-//   k } or null), angles(slot) (the kart angle sets: M4), forWorld(world), active(world) (whether any entry may apply to the world's draw),
-//   load(records, cache, wanted) (decodes the store's records, art-store.js, and sets them unless a newer load or set has begun), `size`,
-//   `ready`, and `hits` (the lookups that found art, by kind: the checks count them).
+//   k } or null), angles(slot) (the kart angle set of a slot of CARS.SP, M4: angles.js picks its index; `angleSlots` how many slots have
+//   one), forWorld(world), active(world) (whether any entry may apply to the world's draw), load(records, cache, wanted) (decodes the store's
+//   records, art-store.js, and sets them unless a newer load or set has begun), `size`, `ready`, and `hits` (the lookups that found art, by
+//   kind: the checks count them; `angles` the records drawn from a set).
 // - tileHook(world, provider, L): the floor caster's tile hook (caster.js) for the world's tile sheets, or null where no sheet of it has art.
 // - lumaOf(r, g, b): relief.js paletteLuma's expression for an RGBA colour, bit for bit as paletteLuma's Float32 for a colour of the palette.
 import { ART } from './config.js';
@@ -21,7 +22,8 @@ import { decodePcxMember } from '../formats/pcx.js';
 import { LAYOUT } from '../game/versus-rules.js';
 
 // An entry and its decoded picture as drawn: { entry, kind, p, width, height, ix (indices or null), clear (indexed: a flag a palette index whose
-// alpha is 0, 'sky here' or 'the archive's'; frames: index 0 too), rgba (4 bytes a pixel or null), px (rgba's 32-bit words), bytes (memory) }.
+// alpha is 0, 'sky here' or 'the archive's'; frames: index 0 too), rgba (4 bytes a pixel or null), px (rgba's 32-bit words), bytes (memory),
+// filled (an angle set: a flag a direction whose cell has an opaque pixel; angles.js draws an empty cell as the game's frame) }.
 export function toArt(entry, image) {
   const indexed = entry.color === 'indexed', n = image.width * image.height;
   if (indexed && !image.indices) throw new Error(`${entry.image}: an indexed entry is a palette PNG`);
@@ -29,7 +31,20 @@ export function toArt(entry, image) {
   if (indexed) { clear = new Uint8Array(256); if (image.alpha) for (let v = 0; v < clear.length; v++) clear[v] = image.alpha[v] === 0 ? 1 : 0; if (entry.kind === 'frames' || entry.kind === 'angles') clear[0] = 1; } // @math a flag for each palette index
   const rgba = indexed ? null : new Uint8Array(image.rgba.buffer, image.rgba.byteOffset, n * 4); // @math four bytes a colour
   const px = rgba && rgba.byteOffset % 4 === 0 ? new Uint32Array(rgba.buffer, rgba.byteOffset, n) : rgba ? new Uint32Array(Uint8Array.from(rgba).buffer) : null; // @math four bytes a word
-  return { entry, kind: entry.kind, p: entry.scale, width: image.width, height: image.height, ix: indexed ? image.indices : null, clear, rgba: px ? new Uint8Array(px.buffer, px.byteOffset, n * 4) : null, px, bytes: indexed ? n : n * 4 }; // @math four bytes a colour
+  const art = { entry, kind: entry.kind, p: entry.scale, width: image.width, height: image.height, ix: indexed ? image.indices : null, clear, rgba: px ? new Uint8Array(px.buffer, px.byteOffset, n * 4) : null, px, bytes: indexed ? n : n * 4 }; // @math four bytes a colour
+  if (entry.kind === 'angles') art.filled = filledCells(art);
+  return art;
+}
+
+// Whether each direction of an angle set's art has an opaque pixel in its cell (an indexed pixel of an index that is not clear, an RGBA pixel
+// whose alpha is above 0).
+function filledCells(art) {
+  const e = art.entry, out = new Uint8Array(e.directions);
+  for (let k = 0; k < e.directions; k++) {
+    const c = frameCell(e, k);
+    scan: for (let y = 0; y < e.cell[1]; y++) for (let x = 0; x < e.cell[0]; x++) { const i = (c.y + y) * art.width + c.x + x; if (art.ix !== null ? !art.clear[art.ix[i]] : art.rgba[i * 4 + 3] !== 0) { out[k] = 1; break scan; } } // @math four bytes a colour, the alpha last
+  }
+  return out;
 }
 
 // An entry's art from its PNG (a Blob, an ArrayBuffer or bytes).
@@ -58,8 +73,8 @@ export function createArtCache(limit = ART.cacheBytes) {
 export const lumaOf = (r, g, b) => Math.fround(0.299 * (r / 0xff) + 0.587 * (g / 0xff) + 0.114 * (b / 0xff)); // @math the Rec. 601 luma weights; 8 bits to 0 to 1
 
 export function createArtProvider(archive) {
-  let arts = [], tiles = new Map(), skies = new Map(), strips = new Map(), frames = new Map(), from = null, ready = false, loads = 0; // `loads` counts the loads and sets begun: only the newest one applies its list
-  const worlds = new WeakMap(), hits = { tiles: 0, sky: 0, strip: 0, frames: 0 };
+  let arts = [], tiles = new Map(), skies = new Map(), strips = new Map(), frames = new Map(), sets = new Map(), from = null, ready = false, loads = 0; // `loads` counts the loads and sets begun: only the newest one applies its list
+  const worlds = new WeakMap(), hits = { tiles: 0, sky: 0, strip: 0, frames: 0, angles: 0 };
   // The frames' keys by the archive the race draws from: the byte offset in the archive of each frame of each entry.
   const frameKeys = () => {
     const dat = archive?.();
@@ -77,12 +92,13 @@ export function createArtProvider(archive) {
   };
   // The arts in their order (a later one wins its keys).
   const apply = list => {
-    arts = list.filter(Boolean); tiles = new Map(); skies = new Map(); strips = new Map(); from = undefined; ready = true;
+    arts = list.filter(Boolean); tiles = new Map(); skies = new Map(); strips = new Map(); sets = new Map(); from = undefined; ready = true;
     for (const art of arts) {
       const e = art.entry;
       if (e.kind === 'tiles') tiles.set(e.member, art);
       else if (e.kind === 'sky') skies.set(e.member, art);
       else if (e.kind === 'strip') for (const m of e.members) strips.set(m, art);
+      else if (e.kind === 'angles') sets.set(e.slot, art);
     }
     frameKeys();
   };
@@ -103,7 +119,9 @@ export function createArtProvider(archive) {
       const hit = frames.get(bytes.byteOffset);
       return hit && hit.length === bytes.length ? hit : null;
     },
-    angles: () => null, // the kart angle sets come with M4
+    // The kart angle set of a slot of CARS.SP (a later pack's wins), or null; angles.js decides which records it draws and at which index.
+    angles: slot => sets.get(slot) ?? null,
+    get angleSlots() { return sets.size; },
     // The art of a world's own members: its two tile sheets' (in the world's sheet order), its sky's and its strip's, and `stripSky` the
     // indices of the track's own sky picture (its .GAM's, the picture a strip is drawn against; a split screen's world draws another picture,
     // the strips' background, behind its strips): a pack strip's 'sky here' takes its sky indices and its pixels.
@@ -118,8 +136,8 @@ export function createArtProvider(archive) {
       worlds.set(world, out);
       return out;
     },
-    // Whether the art may change a frame of the world: an entry of its own members, or any picture's.
-    active: world => arts.length > 0 && (provider.forWorld(world).any || arts.some(a => a.entry.kind === 'frames')),
+    // Whether the art may change a frame of the world: an entry of its own members, or any picture's (a frames entry or a kart angle set).
+    active: world => arts.length > 0 && (provider.forWorld(world).any || arts.some(a => a.entry.kind === 'frames' || a.entry.kind === 'angles')),
     // The store's records (art-store.js: { id, meta (the entry), png, saved }) decoded, through `cache` when given, and set in their order;
     // `wanted(entry)` (wantedFor) leaves out the entries a race does not draw (they are decoded when a race needs them). Loads may overlap (a
     // race started while the last one's pictures are still being decoded): only the newest load or set applies its list, an older load stops

@@ -17,7 +17,8 @@
 //     holds exactly the masked pixels, and the reference renderer's layers put back together are its picture;
 //  time. with --time, the mean, median and 95th percentile draw time of each effect on the demos, on this machine (and of the general paths of
 //     6, and of 2x: smooth motion only, Enhanced, Enhanced with a sunset, and both again with every soft layer at the output resolution; the
-//     wide view at 1x and 2x; the smooth sprite sizes at 1x and 2x; Enhanced with an artwork pack of CARS.SP and the track's tile sheets);
+//     wide view at 1x and 2x; the smooth sprite sizes at 1x and 2x; Enhanced with an artwork pack of CARS.SP and the track's tile sheets, and with
+//     kart angle sets of 32 directions besides);
 //  5. Stage 4's region registry of the artwork packs (src/enhance/regions.js): every picture the scenarios' enhanced draws blit (standard
 //     and wide, a recorder of the enhancer's) is a region of the registry, and the template of the local archive (src/enhance/art-template.js,
 //     RGBA and indexed) validates with no entry refused;
@@ -27,6 +28,12 @@
 //     wide view in some; the packs' lookups reach the tiles, the skies, the strips, the pictures, the starter lion, the explosions, pictures at
 //     byte offsets of no frame grid and the effects drawn after the own car; a tinted pack changes the picture. Section 1 switches the artwork
 //     of a tinted pack on and off mid-run too.
+//  8. Stage 4's kart angle sets (M4: src/enhance/angles.js): the convention check of every local track's route (its chords' octants are its
+//     compass words: passes, or the track is reported); indexed N = 8 identity sets of every slot (CARS.SP's eight direction frames, p = 1) in
+//     locked mode give the no-pack picture byte for byte in every scenario at 1x (and some at 2x, wide and in smooth sizes); every record
+//     remapped by its direction has the bytes of the direction frame the game's rule chose (worked out here from the state: the tick's heading,
+//     the racer's compass word and slot); the own car is never drawn from a set; N = 32 sets in locked and free mode move the karts between
+//     the game's frames, locked never more than half an octant from the game's. Section 1 switches an N = 32 free set on and off mid-run too.
 //  6. Stage 4's general paths (caster.js, blit.js, composite.js compositeAt) and the draw of a geometry (the enhancer's own buffers, the
 //     decimation, the split screen's general cut and flip, the world composed under the overlays, the canvas and the HUD built from it) forced
 //     at the reference geometry (createEnhancer's `force`): every scenario, the slides demo, the link race's second seat, a race at detail
@@ -56,7 +63,7 @@
 //     mid-run too.
 //  11. Stage 4's wide view (VIEW WIDE through the settings and the frame context) at 1x and 2x against the standard view and the reference
 //     renderer, with and without the margins' probes (the full list at the section). Section 1 switches into and out of it mid-run too.
-// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,5,6,6b,7,9,10,11] (--only runs the sections named, for
+// usage: node scripts/check-enhance.js [WACKY.DAT] [--frames N] [--time] [--only 1,2,2b,2c,3,3b,3c,5,6,6b,7,8,9,10,11] (--only runs the sections named, for
 // a quick look; the gate is the run of every section)
 import { readFile } from 'node:fs/promises';
 import { execSync } from 'node:child_process';
@@ -98,13 +105,18 @@ import { models } from '../src/enhance/models.js';
 import { viewSetup, projectPoint } from '../src/game/view.js';
 import { clipPicture } from '../src/game/objects.js';
 import { normalizeDisplay } from '../src/enhance/display-settings.js';
-import { WIDE, SUN } from '../src/enhance/config.js';
+import { WIDE, SUN, ANGLES } from '../src/enhance/config.js';
 import { splitSample } from '../src/enhance/split.js';
 import { RACE as VERSUS_RACE } from '../src/game/versus-rules.js';
 import { worldRegions } from '../src/enhance/regions.js';
 import { buildTemplate, templateParts, cycledEntries } from '../src/enhance/art-template.js';
 import { normalizeArtEntry, packContext } from '../src/enhance/pack-format.js';
 import { createArtProvider, toArt } from '../src/enhance/art.js';
+import { mapping as angleMapping, routeDirections } from '../src/enhance/angles.js';
+import { racerFrame } from '../src/game/racers.js';
+import { carFrame } from '../src/game/control.js';
+import { viewRacers, viewSlots } from '../src/game/versus.js';
+import { sceneCamera } from '../src/render/scene.js';
 
 const args = process.argv.slice(2), frames = args.includes('--frames') ? Number(args[args.indexOf('--frames') + 1]) : 500, path = args.find(a => /\.dat$/i.test(a)), timing = args.includes('--time');
 const only = args.includes('--only') ? args[args.indexOf('--only') + 1].split(',') : null, want = id => !only || only.includes(id);
@@ -192,9 +204,22 @@ function packArts(options, change = null, keep = null) {
   if (!change && !keep) packCache.set(key, arts);
   return arts;
 }
-// A tinted pack (the RGBA template of CARS.SP, track 1's tile sheets and its strip, red and blue swapped): it changes the picture, never the race.
+// A kart angle set's template (art-template.js, its in-between cells empty) with each in-between cell drawn as the nearer original frame's cell: a
+// set whose every direction is drawn, so locked and free mode move the karts between pictures (the original's own, here).
+function fillSet(image, e) {
+  if (e.kind !== 'angles') return image;
+  const q = e.directions / 8, cw = e.cell[0], ch = e.cell[1], n = e.directions, indexed = Boolean(image.indices), px = indexed ? Uint8Array.from(image.indices) : Uint8ClampedArray.from(image.rgba), per = indexed ? 1 : 4; // @math the original's eight directions; four bytes a colour
+  for (let k = 0; k < n; k++) {
+    if (k % q === 0) continue;
+    const from = (Math.round(k / q) * q) % n, a = { x: (from % e.columns) * cw, y: Math.floor(from / e.columns) * ch }, b = { x: (k % e.columns) * cw, y: Math.floor(k / e.columns) * ch };
+    for (let y = 0; y < ch; y++) px.copyWithin(((b.y + y) * image.width + b.x) * per, ((a.y + y) * image.width + a.x) * per, ((a.y + y) * image.width + a.x + cw) * per);
+  }
+  return indexed ? { ...image, indices: px } : { ...image, rgba: px };
+}
+// A tinted pack (the RGBA template of CARS.SP, track 1's tile sheets and its strip, red and blue swapped, and N = 32 kart angle sets of every slot
+// with their in-between cells drawn): it changes the picture, never the race.
 let tintedOnce = null;
-const tinted = () => (tintedOnce ??= (() => { const swap = img => { const rgba = Uint8ClampedArray.from(img.rgba); for (let o = 0; o < rgba.length; o += 4) { const r = rgba[o]; rgba[o] = rgba[o + 2]; rgba[o + 2] = r; } return { ...img, rgba }; }; return createArtProvider(() => dat).set(['CARS.SP', ...templateParts(members, packWorld).tracks[0].tiles, templateParts(members, packWorld).tracks[0].par].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: templateParts(members, packWorld).tracks[0].stem }, swap))); })()); // @math four bytes a colour, red and blue swapped
+const tinted = () => (tintedOnce ??= (() => { const swap = (img, e) => { const filled = fillSet(img, e), rgba = Uint8ClampedArray.from(filled.rgba); for (let o = 0; o < rgba.length; o += 4) { const r = rgba[o]; rgba[o] = rgba[o + 2]; rgba[o + 2] = r; } return { ...filled, rgba }; }; const track = templateParts(members, packWorld).tracks[0]; return createArtProvider(() => dat).set([...['CARS.SP', ...track.tiles, track.par].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: track.stem }, swap)), ...packArts({ select: 'ANGLES:ALL', directions: 32, scale: 2, color: 'rgba', track: track.stem }, swap)]); })()); // @math four bytes a colour, red and blue swapped; a set of 32 directions
 
 // ---- 1. the same simulation whatever is drawn
 const SKIP = new Set(['world', 'dat', 'hudArt', 'mov', 'menu', 'unproven', 'minimap', 'steps']);
@@ -202,7 +227,7 @@ const hashState = s => crc32(new TextEncoder().encode(JSON.stringify(s, (k, v) =
 const lehmer = seed => () => ((seed = (seed * 16807) % 2147483647) / 2147483647); // @math a repeatable stand-in for the browser's random source
 const keepRandom = Math.random;
 const guarded = fn => { const r = Math.random; Math.random = () => { throw new Error('the enhanced presentation used Math.random'); }; try { return fn(); } finally { Math.random = r; } };
-const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.enhanced, sizes: 'smooth' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }, { ...PRESETS.original, sizes: 'smooth' }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }, { ...PRESETS.enhanced, art: true }]; // Stage 4: 2x, the wide view, the smooth sprite sizes (1x, 2x, and alone with Original's switches) and a tinted artwork pack among them, switched to and from mid-run
+const SWITCHES = [PRESETS.enhanced, { ...PRESETS.enhanced, scale: 2 }, { ...PRESETS.original, smooth: true }, { ...PRESETS.original, smooth: true, scale: 2 }, PRESETS.original, { ...PRESETS.enhanced, view: 'wide' }, { ...PRESETS.enhanced, sizes: 'smooth' }, { ...PRESETS.original, shadows: true, fog: true }, { ...PRESETS.enhanced, particleAmount: 0.3, fogStrength: 0.4, scale: 2 }, { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }, { ...PRESETS.original, sizes: 'smooth' }, { ...PRESETS.enhanced, scale: 2, view: 'wide' }, { ...PRESETS.enhanced, art: true }, { ...PRESETS.enhanced, art: true, angles: 'free' }]; // Stage 4: 2x, the wide view, the smooth sprite sizes (1x, 2x, and alone with Original's switches), a tinted artwork pack and its N = 32 kart angle sets in free mode among them, switched to and from mid-run
 // A settings change every `EVERY` ticks, so that a run of `frames` ticks applies every entry, Original's reference renderer back to the enhanced
 // path (its reset) among them; a run that goes past the last change and misses one fails.
 const EVERY = Math.max(Math.floor(frames / (SWITCHES.length + 1)), 1);
@@ -458,7 +483,7 @@ if (want('5')) {
 // check:identity, every scenario with the slides demo, the link race's second seat, a race at detail level 3 and the split screen with a viewer
 // upside down now and then (set on the state for both draws and put back before the next tick). The two enhancers draw the same
 // state at the same blends; the overhead map is kept from the dispatched draw only after both have drawn, so each captures it from its own world.
-if (want('6') || want('6b') || want('7') || want('9') || want('10') || want('11')) {
+if (want('6') || want('6b') || want('7') || want('8') || want('9') || want('10') || want('11')) {
   const ticks = Math.min(frames, 160), FORCE = { caster: true, blit: true, composite: true, pipeline: true }; // @math the fly-in, the start and some racing
   const darkFull = Object.fromEntries(raceTracks.map(t => [String(t), { grade: 'night', clouds: 0.9, range: 1, rangeShape: 'mountains', water: 1, relief: 1 }])); // @math check:identity's B: every track night, cloudy, mountainous, its water and relief full
   const CONFIGS = { A: { settings: PRESETS.enhanced, atmosphere: null, layers: false }, B: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: false }, C: { settings: PRESETS.enhanced, atmosphere: darkFull, layers: true }, D: { settings: { ...PRESETS.original, smooth: true }, atmosphere: null, layers: false } };
@@ -902,6 +927,93 @@ if (want('6') || want('6b') || want('7') || want('9') || want('10') || want('11'
     const cycledNote = [...cycledInFrames].map(([t, n]) => `track ${t} ${n}`).join(', ');
     if (!wrong7 && !need.length) console.log(`ok   pack identity: ${got.runs} runs (${PACKS.map(([c, p]) => `${c} at p = ${p}`).join(' and ')}), ${got.pictures} pictures each the no-pack picture byte for byte (the canvas, the index, the world), Enhanced with the dark full atmosphere; ${got.hd} at 2x, ${got.wide} wide, ${got.split} of the split screen, ${got.fade} of a demo's fade-in, beach tracks ${[...got.beach].join(', ')}; lookups: tiles ${got.tiles}, skies ${got.sky}, strips ${got.strip}, pictures ${got.frames} (the lion, the explosions, ${nonAligned} at offsets of no frame grid, ${afterBlits} effects after the own car); the registry's pictures in the palette cycle's entries: ${cycledNote || 'no beach track'}, their groups left out of the RGBA packs of those tracks: ${[...leftOut].join(', ') || 'none'} (${((performance.now() - seventh) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
   }
+
+  // ---- 8. the kart angle sets (M4): the convention check of every track, N = 8 identity sets giving the no-pack picture, the remapped records'
+  // bytes the game's direction frames, and N = 32 sets moving the karts within half an octant of the game's frame in locked mode.
+  if (want('8')) {
+    const eighth = performance.now(), M = angleMapping(), cars = members.get('CARS.SP'), carSize = packWorld.carShape[0].w * packWorld.carShape[0].h;
+    // The convention check on every track of the archive (a track that fails faces its racers to their compass words' octant centres).
+    const conventions = raceTracks.map(t => ({ t, ...routeDirections(loadTrack(dat, String(t))) })), refused = conventions.filter(c => !c.ok), worst = conventions.filter(c => c.long).reduce((w, c) => Math.min(w, c.agree / c.long), 1);
+    console.log(`${refused.length ? 'note' : 'ok  '} kart angles: the convention check of ${conventions.length} tracks: ${conventions.length - refused.length} keep it (their chords' octants are their compass words in at least ${(worst * 100).toFixed(1)}% of their long entries, ${ANGLES.agreement * 100}% asked)${refused.length ? `; refused, facing the octant centres: ${refused.map(c => `track ${c.t} (${c.agree} of ${c.long})`).join(', ')}` : ''}`); // @math percent; one decimal
+    // The direction frame the game's rule chose for a logged record, worked out here from the drawn state: the seat's tick heading (sceneCamera),
+    // the racer's compass word and slot (the computer racers of the state or the two player list of the seat, the intro's human), carFrame.
+    const expectedAt = (s, entry) => {
+      const swap = Boolean(s.versus) && s.versus.viewer !== entry.seat;
+      if (swap) swapSeat(s);
+      try {
+        const heading = sceneCamera(s).heading, intro = s.intro && entry.racer === 0;
+        const racer = intro ? { compass: 0, hit: 0 } : s.versus ? viewRacers(s)[entry.racer] : s.ai?.racers[entry.racer]; // the intro's human: compass word 0 (render/scene.js introHuman)
+        const slot = intro ? s.slots[0] : s.versus ? viewSlots(s)[entry.racer] : s.slots[entry.racer];
+        if (!racer || racer.hit === 1) return null;
+        return cars.byteOffset + carFrame(slot, racerFrame(heading, racer.compass)) * carSize;
+      } finally { if (swap) swapSeat(s); }
+    };
+    const draw8 = (enh, sc, alpha, index, out, palette, cap) => { // the page's draw where its display shows a world of any size (2x, wide), as section 7's
+      const st = sc.state;
+      if (sc.split) return enh.drawSplit(st, alpha, { index, out, palette, cap, mode: st.menu.settings.detail.split, overlays: versusOverlays, worldReady: true });
+      return enh.drawSingle(st, alpha, { index, out, palette, cap, mode: st.detail, sky: sceneSky(st), seat: sc.seat ?? 0, worldReady: true, aspect: ASPECT, wideAllowed: !sc.link && !sceneSky(st), overlays: (p, fb) => drawRaceOverlays(p, fb) });
+    };
+    const plan8 = [...SCENARIOS.map((make, n) => ({ make, looks: n < 2 || n === SCENARIOS.length - 4 ? [{ scale: 1, view: 'standard', sizes: 'classes' }, { scale: 2, view: 'standard', sizes: 'classes' }, { scale: 1, view: 'wide', sizes: 'classes' }, { scale: 1, view: 'standard', sizes: 'smooth' }] : [{ scale: 1, view: 'standard', sizes: 'classes' }] })), { make: linkSecond, looks: [{ scale: 1, view: 'standard', sizes: 'classes' }] }, { make: slides, looks: [{ scale: 1, view: 'standard', sizes: 'classes' }] }]; // @math every scenario at 1x; the first demos and the split screen at 2x, wide and in smooth sizes too
+    const got = { runs: 0, pictures: 0, direct: 0, own: 0, fixed: 0, hits: 0, wrongBytes: 0, missed: 0, moved: { locked: 0, free: 0 }, far: 0, looks: new Set() };
+    let wrong8 = 0;
+    for (const { make, looks } of plan8) for (const look of looks) {
+      Math.random = lehmer(8080 + got.runs); // @math a repeatable stand-in for the browser's random source, one seed a run
+      const sc = make(), s = sc.state, fade = sc.name.startsWith('demo') || sc.name.startsWith('slides'), pick = createRandom(808 + got.runs); // @math the checks' seed
+      if (sc.split && look.view === 'wide') continue; // the split screen is never wide
+      const log = [], provider = createArtProvider(() => dat).set(packArts({ select: 'ANGLES:ALL', directions: 8, scale: 1, color: 'indexed', track: s.world.name })); // @math N = 8: the identity
+      const plain = createEnhancer({ storage: memory() }), sets = createEnhancer({ storage: memory(), art: provider, angleLog: entry => log.push(entry) }), cfg = { ...PRESETS.enhanced, art: true, angles: 'locked', ...look };
+      plain.configure(cfg); sets.configure(cfg);
+      const buf = [0, 1].map(() => ({ index: new Uint8Array(SIZE), out: new Uint8ClampedArray(SIZE * 4) })); // @math the two enhancers; four bytes a colour
+      let found = null;
+      for (let t = 0; t < Math.min(frames, 160) && !found; t++) { // @math the fly-in, the start and some racing
+        const input = sc.input(); if (input === null) break;
+        stepRace(s, input); plain.afterTick(s); sets.afterTick(s);
+        if (t % 2) continue; // @math every other tick
+        const alpha = t % 14 === 6 ? 1 : pick(), { palette, cap } = paletteOf(s, t, fade); // @math every fourteenth tick at the tick itself
+        log.length = 0;
+        const P = [plain, sets].map((e, n) => draw8(e, sc, alpha, buf[n].index, buf[n].out, palette, cap));
+        if (!s.minimap && P[0].minimap) s.minimap = P[0].minimap;
+        for (const entry of log) {
+          if (entry.direct) { got.direct++; const want = expectedAt(s, entry); if (want !== entry.bytes.byteOffset) { got.wrongBytes++; found ??= `tick ${t}: racer ${entry.racer} (seat ${entry.seat}) remapped with the bytes at ${entry.bytes.byteOffset}, the game's direction frame at ${want}`; } if (entry.index !== entry.f) found ??= `tick ${t}: racer ${entry.racer} at index ${entry.index}, the game's frame ${entry.f}`; }
+          else if (entry.type === 0) { got.own++; found ??= `tick ${t}: the own car drawn from a set (the bytes at ${entry.bytes.byteOffset})`; } // never: its other pictures are the driver files'
+          else { got.fixed++; if (expectedAt(s, entry) === entry.bytes.byteOffset) { got.missed++; found ??= `tick ${t}: racer ${entry.racer} (seat ${entry.seat}) shows the game's direction frame but was not remapped`; } } // a direction frame the remap missed (another heading, slot or racer read)
+        }
+        const la = plain.layers(), lb = sets.layers(), parts = [['out', buf[0].out, buf[1].out], ['index', buf[0].index, buf[1].index], ['world', la.world.data, lb.world.data]], bad = parts.find(([, x, y]) => differs(x, y));
+        if (!found && la.world.w !== lb.world.w) found = `tick ${t}: worlds of ${la.world.w} and ${lb.world.w} columns`;
+        else if (!found && bad) { const [k, x, y] = bad, i = x.findIndex((v, j) => v !== y[j]), per = k === 'index' ? 1 : 4, w = k === 'world' ? la.world.w : WIDTH; found = `tick ${t} (${look.scale}x ${look.view} ${look.sizes}): ${k} differs at ${Math.floor(i / per) % w},${Math.floor(Math.floor(i / per) / w)}`; } // @math four bytes a colour
+        got.pictures++;
+      }
+      got.hits += provider.hits.angles; got.runs++; got.looks.add(`${look.scale}x ${look.view} ${look.sizes}`);
+      if (found) { wrong8++; fail(`kart angles, the N = 8 identity sets, ${sc.name}: ${found}`); }
+    }
+    // N = 32 sets (every direction drawn: the in-between cells the nearer original's) in locked and free mode: the karts move between the game's
+    // frames, locked never more than half an octant (two directions) from the game's frame q f, and the remapped records' bytes are the game's.
+    for (const mode of ['locked', 'free']) for (const make of SCENARIOS.filter((_, n) => n % 4 === 0)) { // @math every fourth scenario
+      const sc = make(), s = sc.state, log = [], provider = createArtProvider(() => dat).set(packArts({ select: 'ANGLES:ALL', directions: 32, scale: 1, color: 'rgba', track: s.world.name }, fillSet)), q = 32 / M.octants; // @math N = 32
+      const enh = createEnhancer({ storage: memory(), art: provider, angleLog: entry => log.push(entry) }), index = new Uint8Array(SIZE), out = new Uint8ClampedArray(SIZE * 4); // @math four bytes a colour
+      enh.configure({ ...PRESETS.enhanced, art: true, angles: mode });
+      for (let t = 0; t < Math.min(frames, 160); t++) { // @math the fly-in, the start and some racing
+        const input = sc.input(); if (input === null) break;
+        stepRace(s, input); enh.afterTick(s);
+        if (t % 2) continue; // @math every other tick
+        log.length = 0; drawEnhanced(enh, sc, (t % 10) / 10, index, out); // @math blends between the ticks
+        for (const entry of log) {
+          if (entry.type === 0) { got.own++; fail(`kart angles N = 32 ${mode}, ${sc.name}, tick ${t}: the own car drawn from a set`); continue; } // never: its other pictures are the driver files'
+          if (!entry.direct) { if (entry.type === 1 && expectedAt(s, entry) === entry.bytes.byteOffset) { got.missed++; fail(`kart angles N = 32 ${mode}, ${sc.name}, tick ${t}: racer ${entry.racer} shows the game's direction frame but was not remapped`); } continue; }
+          got.direct++;
+          if (expectedAt(s, entry) !== entry.bytes.byteOffset) { got.wrongBytes++; fail(`kart angles N = 32 ${mode}, ${sc.name}, tick ${t}: racer ${entry.racer} remapped with bytes that are not the game's direction frame`); }
+          const off = Math.abs(((entry.index - q * entry.f + 48) % 32) - 16); // @math the distance from q f in the set's 32 directions
+          if (entry.index !== q * entry.f) got.moved[mode]++;
+          if (mode === 'locked' && off > Math.floor(q / 2)) { got.far++; fail(`kart angles N = 32 locked, ${sc.name}, tick ${t}: index ${entry.index}, ${off} from the game's ${q * entry.f}`); }
+        }
+      }
+      got.hits += provider.hits.angles;
+    }
+    Math.random = keepRandom;
+    const need = [['record remapped by its direction', got.direct], ['spin frame drawn from a set at its own entry', got.fixed],['set lookup in the draw', got.hits], ['kart moved off the game\'s frame in locked mode', got.moved.locked], ['kart moved off the game\'s frame in free mode', got.moved.free]].filter(([, v]) => !v).map(([k]) => k);
+    if (need.length) fail(`kart angles: no ${need.join(', no ')}: nothing was checked`);
+    if (!wrong8 && !need.length && !got.wrongBytes && !got.far && !got.missed && !got.own) console.log(`ok   kart angles: ${got.runs} runs of the N = 8 identity sets (indexed, p = 1, every slot) in locked mode (${[...got.looks].join(', ')}), ${got.pictures} pictures each the no-pack picture byte for byte (the canvas, the index, the world); with them and the N = 32 sets ${got.direct} records remapped by their directions, each with the bytes of the game's direction frame (the tick's heading, the racer's compass word and slot), and no record of a direction frame left out; ${got.fixed} other frames of a slot with a set (the hit racers' spins) drawn at their own entries, the own car never; N = 32 sets: ${got.moved.locked} karts moved off the game's frame in locked mode, never more than two directions, ${got.moved.free} in free mode; ${got.hits} pictures drawn from the sets (${((performance.now() - eighth) / 1000).toFixed(0)} s)`); // @math milliseconds in a second
+  }
 }
 
 // ---- 4. the draw time of each effect
@@ -913,7 +1025,8 @@ if (timing) {
     ['Enhanced 2x full', { ...PRESETS.enhanced, scale: 2 }, null, null, 'full'], ['Enhanced 2x sunset full', { ...PRESETS.enhanced, scale: 2 }, { grade: 'sunset' }, null, 'full'], // and with every soft layer at the output resolution ('full'), for comparison
     ['Enhanced 1x wide', { ...PRESETS.enhanced, view: 'wide' }], ['Enhanced 2x wide', { ...PRESETS.enhanced, scale: 2, view: 'wide' }], // Stage 4's wide view on the display's default shape (4 BY 3: 426 and 852 columns)
     ['Enhanced 1x smooth sizes', { ...PRESETS.enhanced, sizes: 'smooth' }], ['Enhanced 2x smooth sizes', { ...PRESETS.enhanced, scale: 2, sizes: 'smooth' }], // Stage 4's smooth sprite sizes (M7)
-    ['Enhanced 1x + pack', { ...PRESETS.enhanced, art: true }, null, null, undefined, world => createArtProvider(() => dat).set(['CARS.SP', ...templateParts(members, packWorld).tracks.find(t => t.stem === world.name).tiles].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: world.name })))]]; // Stage 4's artwork packs: an RGBA pack of CARS.SP and the track's tile sheets at p = 2 (the plan's budget: +0.5 ms)
+    ['Enhanced 1x + pack', { ...PRESETS.enhanced, art: true }, null, null, undefined, world => createArtProvider(() => dat).set(['CARS.SP', ...templateParts(members, packWorld).tracks.find(t => t.stem === world.name).tiles].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: world.name })))], // Stage 4's artwork packs: an RGBA pack of CARS.SP and the track's tile sheets at p = 2 (the plan's budget: +0.5 ms)
+    ['+ angles N = 32', { ...PRESETS.enhanced, art: true, angles: 'locked' }, null, null, undefined, world => createArtProvider(() => dat).set([...['CARS.SP', ...templateParts(members, packWorld).tracks.find(t => t.stem === world.name).tiles].flatMap(select => packArts({ select, scale: 2, color: 'rgba', track: world.name })), ...packArts({ select: 'ANGLES:ALL', directions: 32, scale: 2, color: 'rgba', track: world.name }, fillSet)])]]; // M4's kart angle sets: the row above with RGBA sets of 32 directions of every slot at p = 2, locked (the plan's budget: +0.1 ms over the row above)
   console.log(`  (load average ${os.loadavg().map(v => v.toFixed(1)).join(' ')}: compare the rows against each other, a busy machine slows them all)`);
   for (const [label, cfg, atmosphere, force = null, look = undefined, packsOf = null] of configs) {
     const times = [];

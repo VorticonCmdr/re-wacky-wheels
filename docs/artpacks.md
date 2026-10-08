@@ -67,7 +67,7 @@ Every entry has:
 
 | Field | Meaning |
 | --- | --- |
-| `kind` | `tiles`, `sky`, `strip`, `frames` (or `angles`, the kart angle sets, a later milestone) |
+| `kind` | `tiles`, `sky`, `strip`, `frames` or `angles` (the kart angle sets) |
 | `member` | the archive member it replaces (a strip has `members`) |
 | `memberCrc` | the CRC-32 of that member's bytes, 8 hex digits or a number: an entry made for another `A_F3.PCX` is refused |
 | `image` | the picture's path in the pack |
@@ -123,11 +123,48 @@ Every entry has:
   changes what the picture looks like. The race stands the logical box where the archive's frame stands: draw your art on the archive
   frame's ground row (the template's anchors; the garage warns when a frame's lowest opaque row is more than a row off it).
 
-### `angles` (kart angle sets, a later milestone)
+### `angles` (kart angle sets)
 
-`member` CARS.SP, `slot` (a slot of CARS.SP, 0 to 7), `directions` N (a multiple of 8, at most 64), `width` x `height` 38 x 28, `columns`,
-`cell`, `box`, `anchor` (default 27). Index 0 is the view of the original entry 0; indices rise as the original entries rise; index (N / 8) f
-is the original entry f. The format is checked now; the race draws the sets from the kart angles milestone (M4) on.
+A kart angle set gives one driver's kart (a slot of CARS.SP) more directions than the original's eight. The race keeps the game's choice of
+frame and only draws a kart between those frames as it turns against the camera (KART ANGLES, below).
+
+- `member` CARS.SP; `slot` the slot of CARS.SP (0 to 7: the slots whose eight direction frames, entries 0 to 7 of the slot's twelve, are
+  pictures the race draws); `directions` N, a multiple of 8 (q = N / 8 directions for each original frame), at most 64; `width` x `height`
+  38 x 28 (the cars' size: the logical box the race sizes and places as the archive's frame); `columns`, `cell` and `box` as for frames
+  (direction k in the cell (k mod columns, floor(k / columns))); `anchor` (the ground row of every direction, default 27) and `anchors`
+  (optional: one ground row a direction). Like a frames entry's, the anchors are checked (a warning when the art stands more than a row off
+  them) and shown in the garage; the race stands the box where the archive's frame stands.
+- **The order.** Index 0 is the view of the original entry 0, and index q f is the original entry f: indices rise as the original entries
+  rise, with no mirroring. The original's entries are worked out from the game's own frame rule (`src/enhance/angles.js`, from `racerFrame`
+  and `humanCompass`): entry 4 is the kart seen from behind (driving the camera's way: the player's own straight picture is entry 4 of its
+  slot), entry 0 the kart seen from the front, and the entry rises by one as the kart's heading turns one eighth of a turn on from the
+  camera's in the rising sense of the game's headings (the turntable's *Direction* slider, increasing). Which way that turns the kart on
+  the screen is the one CARS.SP's frames show: look at entries 0 to 7 in the template or the turntable rather than guess it, and draw the
+  in-between directions in the same sense (index q f + 1 is a q-th of an eighth on from entry f toward entry f + 1).
+- **Empty cells.** A cell with no opaque pixel is drawn as the game's own frame (the set's cell q f; with that empty too, the archive's frame,
+  or a frames entry's picture of it). The template leaves the in-between cells empty, so it draws the original as it is until you fill them.
+- **What the sets draw.** A computer racer, the other human of a two player race or shoot-out and the human of the camera's fly-in, while
+  the game shows one of its slot's direction frames (not while it glances, waits with the idle pictures, spins after a hit, crashes or is
+  wrecked: those keep the game's pictures). Their direction: a computer racer faces the route entry it drives along (the chord of the
+  entry's points, in the game's own heading units; on a track whose route does not keep the game's convention, and on entries too short to
+  give a direction, the centre of the entry's compass octant), the other human its car's heading at the tick, the fly-in's human its
+  compass word's octant centre. Directions change on the game's ticks only; the camera turns between them with smooth motion.
+- **Same sheet.** Any other racer's picture of the slot's eight direction frames is drawn from the set at its own index q e: a hit racer's
+  spin. **The player's own car never comes from a set**: its straight picture is a CARS.SP direction frame of its slot, but its lean,
+  drift, spin and crash pictures are the driver files' (TIGER.SP and the others), so all of them keep the archive's pictures or a frames
+  entry's (to redraw your own kart, give frames entries of CARS.SP and of the driver file). The idle and glance pictures (entries 8 to 11),
+  the ducks (DIGGER.SP: frames entries may replace them), the lion, the objects and the shots never come from a set either. Where a set and
+  a frames entry both cover a direction frame of the slot, the set's picture is drawn for the other karts (whichever pack is later); the
+  frames entry keeps the slot's other entries and the own car's straight picture.
+- **KART ANGLES** (GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS > RENDERING, the playtest page's *Kart angles*, the garage race
+  view's *Kart angles*): LOCKED (the default) draws the index nearest the kart's direction against the camera but never more than half an
+  original step (floor(q / 2) directions) from the game's frame, so the picture keeps the game's own rounding of the kart's octant and the
+  camera's sector (N = 8 is exactly the game's frame); FREE draws the index nearest the kart's direction, which may be an original step
+  from the game's frame at the edges of its octants (a kart shown from the front where the game shows it three-quarter on); OFF draws
+  the set's pictures of the game's eight frames only (index q f). NONE without an enabled pack with a set. Nothing changes without
+  ARTWORK on.
+- **The turntable** (the garage's *Art packs*, *Compare* a set): turn the kart with *Direction* (and the camera with *Camera*) and see the
+  game's frame beside the set's locked and free index, each on the ground with its contact and sun shadows; *Turn* sweeps a full turn.
 
 ## The pictures
 
@@ -162,7 +199,12 @@ editor in indexed mode with the template's palette.
 
 The garage's *Art packs* panel exports a template: one member, or the whole race world (every tile sheet a track uses, every sky, every
 strip, one entry for each CRC with its members listed, and every group of the region registry), at scale 1, 2 or 4 (nearest), in RGBA
-through a palette (by default each member's first track's, else A_F1.PCX's) or indexed. Its pictures are the archive's art; its
+through a palette (by default each member's first track's, else A_F1.PCX's) or indexed. A kart angle set is its own choice (*CARS.SP kart
+angle set, slot k*, or every slot) with its *Angle directions* N: `angles/CARS-slot<k>-<N>.png` has q = N / 8 cells a row, a row an original
+frame, the original frame f in the row's first cell (index q f) and the in-between cells empty, its anchors the originals' ground rows (an
+in-between cell the nearer original's); beside it `angles/CARS-slot<k>-<N>-guide.png`, which no entry names (an import never reads it),
+shows every cell's box and ground row, the originals, and in each in-between cell the two original frames around it faded in by how near
+each is: open it as a layer under the set's picture to draw the in-between directions. Its pictures are the archive's art; its
 `pack.json` is complete (the CRCs, the frames' offsets and cells, the anchors: each frame's lowest opaque row), its licence `LOCAL ONLY`,
 and its `NOTICE.txt` says that it holds the original game's art and stays on your computer.
 
@@ -191,7 +233,8 @@ An entry is **refused**, with its reason, for:
 - a member that is not in the archive, or whose CRC-32 is not the entry's (*made for another A_F3.PCX*);
 - frames past the end of the member, or a frame that is no picture the race draws;
 - a box that does not fit its cell, anchors outside the frame, `columnMajor` false;
-- kart angles: N not a multiple of 8 or above 64, a slot CARS.SP does not have, another size than 38 x 28;
+- kart angles: N not a multiple of 8 or above 64, a slot CARS.SP does not have (or whose eight direction frames are not pictures the race
+  draws), another size than 38 x 28, anchors that are not a row of the frame for each direction;
 - a strip period that is not the archive's;
 - a picture missing from the pack, unreadable, of another size than the kind's, larger than the caps, or (indexed) not a palette PNG or with
   another colour than the palette's at an index it uses;
@@ -207,6 +250,7 @@ Refused entries are not kept; the report lists every entry as ok, warning or ref
 ## Several packs
 
 The garage keeps any number of packs, each on or off, in an order. Where two enabled packs replace the same thing (a tile sheet, a sky, a
-strip, a frame), the later one in the order wins; anything no pack replaces is the archive's. *Use in the game* turns ARTWORK on for the
+strip, a frame, a slot's angle set), the later one in the order wins; anything no pack replaces is the archive's. A slot's angle set draws
+that slot's eight direction frames whatever frames entry another pack has for them. *Use in the game* turns ARTWORK on for the
 playtest page. The race decodes the enabled packs' pictures when it starts (a race waits for them up to 1.5 s) and keeps up to 128 MB of
 them decoded across races; your browser keeps the PNG files as you imported them.

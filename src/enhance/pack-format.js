@@ -18,9 +18,11 @@
 //   every race frame is), columns, cell [cw, ch] (default [width p, height p]), box [bx, by] (default [0, 0]: where the logical box's top left
 //   sits in the cell, so art may overhang it), anchors (optional: the logical ground row of each frame). Frame k is the archive's bytes at
 //   offset + k stride, drawn from the cell (k mod columns, floor(k / columns)); each frame must be a picture the race draws (regions.js).
-// - angles (kart angles, M4): member CARS.SP, slot (a slot of CARS.SP), directions N (a multiple of ART.directions.step up to its max), width
-//   x height (the cars' class 0 size), columns, cell, box, anchor (the logical ground row, default height - 1); index 0 is the view of the
-//   original entry 0, indices rising as the original entries rise, and index (N / 8) f is the original entry f.
+// - angles (kart angle sets, M4: angles.js draws them): member CARS.SP, slot (a slot of CARS.SP whose eight direction frames are pictures the
+//   race draws), directions N (a multiple of ART.directions.step, the original's eight directions, up to its max), width x height (the cars'
+//   class 0 size), columns, cell, box, anchor (the logical ground row, default height - 1) and anchors (optional: one ground row a direction);
+//   index 0 is the view of the original entry 0, indices rising as the original entries rise (no mirroring), and index (N / 8) f is the
+//   original entry f. A cell left empty (no opaque pixel) is drawn as the game's frame.
 import { ART } from './config.js';
 import { models } from './models.js';
 import { stripPeriod, stripRepeats } from './geometry.js';
@@ -28,6 +30,7 @@ import { worldRegions } from './regions.js';
 import { crc32, hex8 } from '../evidence/crc32.js';
 import { decodePcxMember } from '../formats/pcx.js';
 import { carFrame } from '../game/control.js';
+import { frameTable } from '../game/racers.js';
 import { decodePng } from './png.js';
 
 export const PACK = { format: 'wackywheels-artpack', version: 1, manifest: 'pack.json', notice: 'NOTICE.txt' };
@@ -169,6 +172,10 @@ export function normalizeArtEntry(raw, ctx = null, image = null) {
       e.slot = raw.slot; e.directions = raw.directions;
       if (raw.anchor !== undefined && !(whole(raw.anchor) && raw.anchor < e.height)) return refuse(`${imagePath}: anchor ${JSON.stringify(raw.anchor)} is not a row of the frame`);
       e.anchor = raw.anchor ?? e.height - 1;
+      if (raw.anchors !== undefined && raw.anchors !== null) {
+        if (!Array.isArray(raw.anchors) || raw.anchors.length !== e.directions || !raw.anchors.every(a => whole(a) && a < e.height)) return refuse(`${imagePath}: anchors are a row of the frame (0 to ${e.height - 1}), one a direction (${e.directions})`);
+        e.anchors = raw.anchors.slice();
+      } else e.anchors = null;
     }
     const count = kind === 'angles' ? e.directions : e.count;
     if (raw.columns !== undefined && !whole(raw.columns, 1)) return refuse(`${imagePath}: columns ${JSON.stringify(raw.columns)} is not a whole number from 1`);
@@ -203,6 +210,9 @@ export function normalizeArtEntry(raw, ctx = null, image = null) {
     if (kind === 'angles') {
       if (e.slot >= ctx.slots) return refuse(`${imagePath}: CARS.SP has ${ctx.slots} slots, not ${e.slot + 1}`);
       if (e.width !== ctx.car.w || e.height !== ctx.car.h) return refuse(`${imagePath}: a kart angle is ${ctx.car.w} x ${ctx.car.h}, the cars' size`);
+      const octants = frameTable().length, size = e.width * e.height;
+      if (e.directions % octants !== 0) return refuse(`${imagePath}: ${e.directions} directions; a set has a whole number of directions for each of the original's ${octants}`);
+      for (let f = 0; f < octants; f++) { const at = carFrame(e.slot, f) * size; if (!ctx.regions.has(e.member, at, e.width, e.height)) return refuse(`${imagePath}: the direction frame ${f} of slot ${e.slot} (byte ${at} of CARS.SP) is no picture the race draws`); }
     }
   } else if (kind === 'strip' && e.period === null) return refuse(`${imagePath}: a strip names its period (or is checked against the archive)`);
   if (image) { // against its picture
@@ -226,7 +236,7 @@ export function normalizeArtEntry(raw, ctx = null, image = null) {
       const low = lowestRows(e, image), member = ctx?.member(e.member), off = [];
       low.forEach((r, k) => {
         if (r < 0) return;
-        let want = kind === 'angles' ? e.anchor : e.anchors?.[k];
+        let want = kind === 'angles' ? e.anchors?.[k] ?? e.anchor : e.anchors?.[k];
         if (want === undefined || want === null) { want = -1; if (member) { const at = e.offset + k * e.stride; for (let x = 0; x < e.width; x++) for (let y = e.height - 1; y > want; y--) if (member[at + x * e.height + y] !== 0) { want = y; break; } } } // the archive frame's lowest opaque row
         if (want >= 0 && Math.abs(r / p - want) > 1) off.push(k);
       });

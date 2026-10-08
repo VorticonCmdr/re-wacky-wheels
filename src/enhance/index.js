@@ -72,7 +72,9 @@ function words(rgba) {
 // geometry, the reference one included (the general caster, blit and compositeAt, which the forced paths of check:enhance section 6 prove
 // equal to the dispatched functions), with the art layers (art.js createArtLayers) allocated while art is drawn. With the artwork off, or no
 // pack stored, nothing of this runs: the frame is today's. `blits` (the checks' region recorder) is told every picture drawn (scene.js).
-export function createEnhancer({ storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false, art = null, blits = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
+// The provider's kart angle sets (M4: angles.js) are drawn with the art, their index picked by the settings' `angles` (RENDER.angles: locked,
+// free or off); `angleLog` (the checks' recorder) is told each record drawn from a set (scene.js opts.angleLog).
+export function createEnhancer({ storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false, art = null, blits = null, angleLog = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
   const F = models().floor, size = F.width * F.height;
   let settings = loadSettings(storage), ramps = new WeakMap(), stored = atmosphere ? null : loadAtmospheres(storage);
   const atmosphereOf = world => normalizeAtmosphere((atmosphere ? atmosphere(world.name) : stored[world.name]) ?? {});
@@ -135,7 +137,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     const length = sunLengthOf(atmo);
     return { ground: groundRelief(world, relief?.tiles ?? null), sun: sunVector(world, sunAngleOf(atmo, settings.sunAngle), length), length, strength: atmo.relief, frameHeights: relief?.frame ?? null };
   };
-  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0, packs = null) => ({ art: packs, blits, subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
+  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0, packs = null) => ({ art: packs, blits, angles: settings.angles, angleLog, subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
   // The liquids of a world when its water moves (the switch, the track's water above 0, a liquid on its map), else null.
   const liquidsOn = (world, atmo) => { if (!settings.water || !(atmo.water > 0)) return null; const l = liquidsOf(world); return l.any ? { ...l, beach: world.beach !== null && world.beach !== undefined } : null; };
   const rampOf = (world, strength) => { // the fog's table of a world at a strength (the game setting's times the track's)

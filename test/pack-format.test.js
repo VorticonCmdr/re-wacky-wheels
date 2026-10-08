@@ -83,6 +83,26 @@ test('an entry against the archive: its member, CRC, frames and period', () => {
   assert.match(normalizeArtEntry({ kind: 'angles', member: 'CARS.SP', memberCrc: crc32(cars), image: 'a.png', scale: 1, color: 'rgba', slot: 8, directions: 8, width: 38, height: 28 }, ctx).reason, /8 slots/); // @math a slot past the last
 });
 
+test('kart angle sets (M4): N, the slot, the cars\' size, anchors, and the slot\'s eight direction frames among the pictures the race draws', () => {
+  const angles = (o = {}) => ({ kind: 'angles', member: 'CARS.SP', memberCrc: crc32(cars), image: 'a.png', scale: 1, color: 'rgba', slot: 0, directions: 16, width: 38, height: 28, columns: 2, ...o }); // @math a set of 16, two a row
+  const all = { ...ctx, regions: { has: (m, offset, w, h) => m === 'CARS.SP' && w === 38 && h === 28 && offset % (38 * 28) === 0 }, member: n => (n === 'CARS.SP' ? cars : ctx.member(n)) }; // @math every frame of the cars' size a picture the race draws
+  assert.equal(normalizeArtEntry(angles(), all).reason, null);
+  assert.match(normalizeArtEntry(angles(), ctx).reason, /direction frame 3 of slot 0 .* no picture the race draws/, 'the synthetic archive has three frames: the fourth direction is none'); // @math the first missing
+  assert.match(normalizeArtEntry(angles({ width: 28, height: 38 }), all).reason, /38 x 28, the cars' size/); // @math the size swapped
+  assert.match(normalizeArtEntry(angles({ directions: 0 }), all).reason, /multiple of 8/);
+  assert.match(normalizeArtEntry(angles({ slot: -1 }), all).reason, /not a slot/);
+  assert.deepEqual(normalizeArtEntry(angles({ anchors: Array.from({ length: 16 }, (_, k) => 20 + (k % 8)) }), all).entry.anchors.slice(0, 3), [20, 21, 22]); // @math a ground row a direction
+  assert.match(normalizeArtEntry(angles({ anchors: [27, 27] }), all).reason, /one a direction \(16\)/); // @math two of sixteen
+  assert.match(normalizeArtEntry(angles({ anchors: Array(16).fill(28) }), all).reason, /anchors/); // @math a row past the frame
+  assert.match(normalizeArtEntry(angles({ anchor: 28 }), all).reason, /anchor 28/); // @math a row past the frame
+  assert.equal(normalizeArtEntry(angles()).entry.anchors, null);
+  // The ground row of each direction: its declared anchor (or `anchor`); an empty cell is not checked.
+  const pic = { width: 76, height: 224, rgba: new Uint8ClampedArray(76 * 224 * 4) }; // @math two columns of eight rows of 38 x 28; four bytes a colour
+  for (let y = 0; y < 26; y++) for (let x = 0; x < 38; x++) pic.rgba[(y * 76 + x) * 4 + 3] = 0xff; // @math the first cell opaque to row 25; the alpha of four bytes
+  assert.match(normalizeArtEntry(angles(), all, pic).warnings[0], /1 frame stands more than a row off its ground row \(frame 0\)/); // the default anchor 27
+  assert.deepEqual(normalizeArtEntry(angles({ anchors: Array(16).fill(25) }), all, pic).warnings, []); // @math standing on its declared row
+});
+
 test('an entry against its picture: the exact size, the caps, the indexed palette, the ground row', () => {
   const p = 2, rgba = (w, h, fill = 0xff) => ({ width: w, height: h, rgba: new Uint8ClampedArray(w * h * 4).fill(fill) }); // @math a scale; four bytes a colour
   assert.equal(normalizeArtEntry(tiles(), ctx, rgba(640, 400)).reason, null); // @math 320 x 200 at p = 2

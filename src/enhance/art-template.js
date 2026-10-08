@@ -11,8 +11,14 @@
 //   strip's sky indices (the sky picture's colours, clouds.js stripSkyIndices) at alpha 0: 'sky here'.
 // - frames: every group of the region registry (regions.js), a cell a frame; in RGBA index 0 at alpha 0 (transparent, as in the game); with
 //   each frame's ground row (its lowest opaque row) as its anchor.
+// - angles (M4, only when asked for: `select` 'ANGLES:<slot>' or 'ANGLES:ALL'): a kart angle set of a slot of CARS.SP with `directions` N
+//   (ANGLES.templateDirections by default), q = N / 8 columns a row so that each row is an octant: the original direction frame f in the
+//   cell q f (the row's first), the in-between cells empty (an empty cell draws the game's frame, so the template draws the original as it
+//   is); the anchors the originals' ground rows, an in-between cell the nearer original's. Beside it a guide picture that no entry names
+//   (`extras`: an import ignores it): the originals, the in-between cells' two original frames faded by how near each is, every cell's box
+//   and its ground row, for the author to draw over (the turntable of the garage shows which index the race picks).
 // An indexed template is palette PNGs of the game's palette: the pixels are the archive's indices themselves.
-import { ART, DISPLAY } from './config.js';
+import { ART, DISPLAY, ANGLES } from './config.js';
 import { models } from './models.js';
 import { stripPeriod, stripRepeats, viewMargin } from './geometry.js';
 import { skyMargins } from './sky-hd.js';
@@ -23,6 +29,8 @@ import { crc32 } from '../evidence/crc32.js';
 import { decodePcxMember } from '../formats/pcx.js';
 import { parseGam } from '../formats/gam.js';
 import { createCycle, stepCycle, cycleName } from '../game/palette-cycle.js';
+import { carFrame } from '../game/control.js';
+import { frameTable } from '../game/racers.js';
 
 export const NOTICE = [
   `${LOCAL_ONLY}.`,
@@ -33,6 +41,10 @@ export const NOTICE = [
   'A pack you share may hold only art you made yourself (or may otherwise share). Replace every picture you keep in it, remove the',
   'entries you do not replace, set "licence" in pack.json to the terms you share your art under, and remove this notice.',
   'pack.json, the pictures\' sizes and the colour rules are described in docs/artpacks.md of the port.',
+  '',
+  'A kart angle set (angles/CARS-slot<k>-<N>.png) has the original eight direction frames in the first cell of each row and its in-between',
+  'cells empty (an empty cell is drawn as the game\'s own frame). Draw the in-between directions into them; angles/...-guide.png beside it',
+  'shows each cell\'s neighbouring original frames faded, its box and its ground row, and is never read by an import.',
 ].join('\n');
 
 // The tracks of an archive with their .GAM (the numbered ones), and what each uses.
@@ -74,13 +86,27 @@ export function templateParts(members, world) {
   return out;
 }
 
-// The members a template can be made of, for the garage's choice: [{ member, kind, label }].
+// The slots of CARS.SP that have the eight direction frames (the kart angle sets' slots).
+export function carSlots(members, world) {
+  const cars = members.get('CARS.SP'), size = world.carShape[0].w * world.carShape[0].h, octants = frameTable().length;
+  if (!cars) return [];
+  const out = [];
+  for (let slot = 0; (carFrame(slot, octants - 1) + 1) * size <= cars.length; slot++) out.push(slot);
+  return out;
+}
+export const ANGLES_ALL = 'ANGLES:ALL';
+export const anglesChoice = slot => `ANGLES:${slot}`;
+
+// The members a template can be made of, for the garage's choice: [{ value (buildTemplate's `select`), member, kind, label }].
 export function templateChoices(members, world) {
   const parts = templateParts(members, world), out = [];
-  for (const name of new Set(parts.regions.groups.map(g => g.member))) out.push({ member: name, kind: 'frames', label: `${name} (pictures)` });
-  for (const [name, users] of parts.tiles) out.push({ member: name, kind: 'tiles', label: `${name} (tile sheet of track${users.length > 1 ? 's' : ''} ${users.map(t => t.stem).join(', ')})` });
-  for (const [name, users] of parts.skies) out.push({ member: name, kind: 'sky', label: `${name} (sky of ${users.length} track${users.length > 1 ? 's' : ''})` });
-  for (const users of parts.strips.values()) out.push({ member: users[0].par, kind: 'strip', label: `${users.map(t => t.par).join(', ')} (horizon strip)` });
+  for (const name of new Set(parts.regions.groups.map(g => g.member))) out.push({ value: name, member: name, kind: 'frames', label: `${name} (pictures)` });
+  for (const [name, users] of parts.tiles) out.push({ value: name, member: name, kind: 'tiles', label: `${name} (tile sheet of track${users.length > 1 ? 's' : ''} ${users.map(t => t.stem).join(', ')})` });
+  for (const [name, users] of parts.skies) out.push({ value: name, member: name, kind: 'sky', label: `${name} (sky of ${users.length} track${users.length > 1 ? 's' : ''})` });
+  for (const users of parts.strips.values()) out.push({ value: users[0].par, member: users[0].par, kind: 'strip', label: `${users.map(t => t.par).join(', ')} (horizon strip)` });
+  const slots = carSlots(members, world);
+  if (slots.length) out.push({ value: ANGLES_ALL, member: 'CARS.SP', kind: 'angles', label: 'CARS.SP kart angle sets, every slot' });
+  for (const slot of slots) out.push({ value: anglesChoice(slot), member: 'CARS.SP', kind: 'angles', slot, label: `CARS.SP kart angle set, slot ${slot}` });
   return out;
 }
 
@@ -105,11 +131,13 @@ function picture(path, w, h, p, color, pal, at, clear, transparentZero = false) 
   return { path, width: W, height: H, rgba };
 }
 
-// The template of `select` ('all', or one member's name) at scale `scale` in `color` ('rgba' or 'indexed'). `palette` names the PCX whose
-// palette the pictures are drawn with (an indexed picture's PLTE); by default each member's first track's (a track's palette is its first tile
-// sheet's), else A_F1.PCX's. `track` (a stem) takes that track's palette, its sky's strip indices and its palette cycle for every picture
-// (the checks' identity packs of a scenario). `archive` (the WACKY.DAT bytes) gives the manifest its `source`.
-export function buildTemplate(members, world, { select = 'all', scale = 1, color = 'rgba', palette = null, track = null, archive = null } = {}) {
+// The template of `select` ('all', one member's name, or a kart angle set: 'ANGLES:<slot>' or 'ANGLES:ALL', which 'all' does not hold) at scale
+// `scale` in `color` ('rgba' or 'indexed'). `palette` names the PCX whose palette the pictures are drawn with (an indexed picture's PLTE); by
+// default each member's first track's (a track's palette is its first tile sheet's), else A_F1.PCX's. `track` (a stem) takes that track's
+// palette, its sky's strip indices and its palette cycle for every picture (the checks' identity packs of a scenario). `archive` (the WACKY.DAT
+// bytes) gives the manifest its `source`. `directions` is an angle set's N. `extras` are the pictures beside the pack that no entry names
+// (an angle set's guide).
+export function buildTemplate(members, world, { select = 'all', scale = 1, color = 'rgba', palette = null, track = null, archive = null, directions = ANGLES.templateDirections } = {}) {
   if (!ART.templateScales.includes(scale) && !(Number.isInteger(scale) && scale >= 1 && scale <= ART.maxScale)) throw new Error(`no template at scale ${scale}`);
   const parts = templateParts(members, world), F = models().floor, S = models().sky, p = scale, want = name => select === 'all' || select === name;
   const fixed = track ? parts.tracks.find(t => t.stem === String(track)) : null;
@@ -117,7 +145,7 @@ export function buildTemplate(members, world, { select = 'all', scale = 1, color
   const fallback = members.get('A_F1.PCX') ? 'A_F1.PCX' : [...parts.tiles.keys()][0];
   const paletteName = users => palette ?? (fixed ?? users?.[0])?.tiles[0] ?? fallback, palettes = new Map();
   const pal = name => { if (!palettes.has(name)) palettes.set(name, decodePcxMember(members.get(name)).vga); return palettes.get(name); };
-  const entries = [], images = [], base = { scale: p, color };
+  const entries = [], images = [], extras = [], base = { scale: p, color };
   const entry = (e, users, image) => { const name = paletteName(users); entries.push({ ...e, ...base, ...(color === 'indexed' ? { palette: name } : {}), image: image.path }); images.push(image); };
   for (const [name, users] of parts.tiles) {
     if (!want(name)) continue;
@@ -144,6 +172,37 @@ export function buildTemplate(members, world, { select = 'all', scale = 1, color
     const at = (x, y) => { const k = Math.floor(y / g.height) * columns + Math.floor(x / g.width); return k < g.count ? data[g.offset + k * g.stride + (x % g.width) * g.height + (y % g.height)] : 0; };
     entry({ kind: 'frames', member: g.member, memberCrc: crcHex(crc32(data)), offset: g.offset, width: g.width, height: g.height, count: g.count, stride: g.stride, columnMajor: true, columns, cell: [g.width * p, g.height * p], box: [0, 0], anchors }, null, picture(`frames/${g.member.replace(/\.SP$/, '')}-${g.offset}-${g.width}x${g.height}.png`, w, h, p, color, pal(paletteName(null)), at, v => v === 0, true));
   }
+  const angleSlots = String(select).startsWith('ANGLES:') ? carSlots(members, world).filter(slot => select === ANGLES_ALL || select === anglesChoice(slot)) : [];
+  if (angleSlots.length) {
+    const D = ART.directions, octants = frameTable().length, cars = members.get('CARS.SP'), w = world.carShape[0].w, h = world.carShape[0].h, size = w * h, crc = crcHex(crc32(cars));
+    if (!Number.isInteger(directions) || directions < D.step || directions % D.step !== 0 || directions > D.max || directions % octants !== 0) throw new Error(`no kart angle set of ${directions} directions: a multiple of ${D.step} up to ${D.max}`);
+    const q = directions / octants, columns = q, rows = octants, pal6 = pal(paletteName(null));
+    for (const slot of angleSlots) {
+      const offsets = Array.from({ length: octants }, (_, f) => carFrame(slot, f) * size), at = f => offsets[f], low = f => { let r = 0; for (let x = 0; x < w; x++) for (let y = h - 1; y > r; y--) if (cars[at(f) + x * h + y] !== 0) { r = y; break; } return r; }; // each original frame's lowest opaque row
+      const lows = Array.from({ length: octants }, (_, f) => low(f)), anchors = Array.from({ length: directions }, (_, k) => lows[Math.round(k / q) % octants]); // an in-between cell: the nearer original's
+      const pixel = (x, y) => { const k = Math.floor(y / h) * columns + Math.floor(x / w); return k % q === 0 ? cars[at(k / q) + (x % w) * h + (y % h)] : 0; }; // the originals in their cells q f, the rest empty
+      const path = `angles/CARS-slot${slot}-${directions}`;
+      entry({ kind: 'angles', member: 'CARS.SP', memberCrc: crc, slot, directions, width: w, height: h, columns, cell: [w * p, h * p], box: [0, 0], anchor: Math.max(...lows), anchors }, null, picture(`${path}.png`, columns * w, rows * h, p, color, pal6, pixel, v => v === 0, true));
+      extras.push(angleGuide(`${path}-guide.png`, { cars, at, w, h, q, octants, columns, p, pal: pal6, anchors }));
+    }
+  }
   const manifest = { format: PACK.format, version: PACK.version, name: select === 'all' ? 'Template of the race world' : `Template of ${select}`, author: '', licence: LOCAL_ONLY, ...(archive ? { source: { size: archive.length, crc32: crcHex(crc32(archive)) } } : {}), entries };
-  return { manifest, images, notice: NOTICE };
+  return { manifest, images, extras, notice: NOTICE };
+}
+
+// The guide picture of an angle set's template (RGBA, the set's layout, never a pack's picture): every cell's box outline and ground row (its
+// last pack row); the
+// original frame in its cell q f; in an in-between cell the original frames f and f + 1 around it, each faded in by how near it is (the ghost's
+// alpha times 1 - t and t, t the cell's place between them).
+function angleGuide(path, { cars, at, w, h, q, octants, columns, p, pal, anchors }) {
+  const G = ANGLES.guide, W = columns * w * p, H = octants * h * p, rgba = new Uint8ClampedArray(W * H * 4); // @math four bytes a colour
+  const put = (X, Y, c, a) => { const o = (Y * W + X) * 4, k = a / 0xff, keep = rgba[o + 3] / 0xff, out = k + keep * (1 - k); if (out <= 0) return; for (let j = 0; j < 3; j++) rgba[o + j] = Math.round((c[j] * k + rgba[o + j] * keep * (1 - k)) / out); rgba[o + 3] = Math.round(out * 0xff); }; // @math four bytes a colour, three components; alpha over alpha
+  const colour = v => [widen(pal[v * 3]), widen(pal[v * 3 + 1]), widen(pal[v * 3 + 2])]; // @math three components an entry
+  for (let k = 0; k < q * octants; k++) {
+    const cx = (k % columns) * w * p, cy = Math.floor(k / columns) * h * p, f = Math.floor(k / q), t = (k % q) / q, ghosts = t === 0 ? [[f, 0xff]] : [[f, G.ghost * (1 - t)], [(f + 1) % octants, G.ghost * t]]; // @math opaque
+    for (const [g, a] of ghosts) for (let x = 0; x < w; x++) for (let y = 0; y < h; y++) { const v = cars[at(g) + x * h + y]; if (v !== 0) for (let Y = 0; Y < p; Y++) for (let X = 0; X < p; X++) put(cx + x * p + X, cy + y * p + Y, colour(v), a); }
+    for (let X = 0; X < w * p; X++) { put(cx + X, cy, G.box, 0xff); put(cx + X, cy + h * p - 1, G.box, 0xff); put(cx + X, cy + (anchors[k] + 1) * p - 1, G.ground, 0xff); } // @math opaque: the box's top and bottom, and the ground row's last pack row
+    for (let Y = 0; Y < h * p; Y++) { put(cx, cy + Y, G.box, 0xff); put(cx + w * p - 1, cy + Y, G.box, 0xff); } // @math opaque: the box's sides
+  }
+  return { path, width: W, height: H, rgba };
 }

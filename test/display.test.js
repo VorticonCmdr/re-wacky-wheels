@@ -304,22 +304,25 @@ test('Stage 4: the wide view stored lays the element out for the widest picture 
   } finally { page.restore(); }
 });
 
-test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIEW, SPRITE SIZES, ARTWORK and LEAVE THIS MENU, the graphics settings\' words, Enter asking for the next scale, view or sizes or the artwork switch', () => {
-  assert.equal(DISPLAY_MENU.rendering, RENDER_MENU.item); assert.equal(DISPLAY_MENU.resolution, RENDER_MENU.scale); assert.equal(DISPLAY_MENU.view, RENDER_MENU.view); assert.equal(DISPLAY_MENU.sizes, RENDER_MENU.sizes); assert.equal(DISPLAY_MENU.art, RENDER_MENU.art); // the menu's names are the config's
+test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIEW, SPRITE SIZES, KART ANGLES, ARTWORK and LEAVE THIS MENU, the graphics settings\' words, Enter asking for the next scale, view, sizes or angles or the artwork switch', () => {
+  assert.equal(DISPLAY_MENU.rendering, RENDER_MENU.item); assert.equal(DISPLAY_MENU.resolution, RENDER_MENU.scale); assert.equal(DISPLAY_MENU.view, RENDER_MENU.view); assert.equal(DISPLAY_MENU.sizes, RENDER_MENU.sizes); assert.equal(DISPLAY_MENU.angles, RENDER_MENU.angles); assert.equal(DISPLAY_MENU.art, RENDER_MENU.art); // the menu's names are the config's
   const base = defaultSettings(1, true), line = (name, word) => name.padEnd(DISPLAY_MENU.width - word.length) + word;
-  for (const [s, ready, word, view, sizes, packs = 0, art = 'NONE'] of [[resetSettings(), true, '1X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'scale', 2), true, '2X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'view', 'wide'), true, '1X', 'WIDE', 'STEPPED'], [changeGraphics(changeGraphics(resetSettings(), 'scale', 2), 'view', 'wide'), false, 'NONE', 'NONE', 'STEPPED'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), true, '1X', 'STANDARD', 'SMOOTH'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), false, 'NONE', 'NONE', 'SMOOTH'], [changeGraphics(resetSettings(), 'art', true), true, '1X', 'STANDARD', 'STEPPED', 2, 'ON '], [resetSettings(), false, 'NONE', 'NONE', 'STEPPED', 1, 'OFF'], [changeGraphics(resetSettings(), 'art', true), true, '1X', 'STANDARD', 'STEPPED', 0, 'NONE']]) { // @math the second scale; the wide view; neither without WebGL 2; smooth sizes, with and without it; the artwork on and off with packs stored (without WebGL 2 too), and NONE with no pack
-    const def = menuDef('rendering', { ...base, graphics: menuView(s, { worldReady: ready, packs }) });
-    assert.deepEqual(def.items, [line('RESOLUTION', word), line('VIEW', view), line('SPRITE SIZES', sizes), line('ARTWORK', art), 'LEAVE THIS MENU']);
-    assert.deepEqual(def.actions, [{ graphics: { cycle: 'scale' } }, { graphics: { cycle: 'view' } }, { graphics: { cycle: 'sizes' } }, { graphics: { toggle: 'art' } }, { back: true }]);
+  for (const [s, ready, word, view, sizes, packs = 0, art = 'NONE', angleSets = 0, angles = 'NONE'] of [[resetSettings(), true, '1X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'scale', 2), true, '2X', 'STANDARD', 'STEPPED'], [changeGraphics(resetSettings(), 'view', 'wide'), true, '1X', 'WIDE', 'STEPPED'], [changeGraphics(changeGraphics(resetSettings(), 'scale', 2), 'view', 'wide'), false, 'NONE', 'NONE', 'STEPPED'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), true, '1X', 'STANDARD', 'SMOOTH'], [changeGraphics(resetSettings(), 'sizes', 'smooth'), false, 'NONE', 'NONE', 'SMOOTH'], [changeGraphics(resetSettings(), 'art', true), true, '1X', 'STANDARD', 'STEPPED', 2, 'ON '], [resetSettings(), false, 'NONE', 'NONE', 'STEPPED', 1, 'OFF'], [changeGraphics(resetSettings(), 'art', true), true, '1X', 'STANDARD', 'STEPPED', 0, 'NONE'], [changeGraphics(resetSettings(), 'art', true), true, '1X', 'STANDARD', 'STEPPED', 1, 'ON ', 1, 'LOCKED'], [changeGraphics(resetSettings(), 'angles', 'free'), false, 'NONE', 'NONE', 'STEPPED', 1, 'OFF', 2, 'FREE'], [changeGraphics(resetSettings(), 'angles', 'off'), true, '1X', 'STANDARD', 'STEPPED', 1, 'OFF', 1, 'OFF'], [changeGraphics(resetSettings(), 'angles', 'free'), true, '1X', 'STANDARD', 'STEPPED', 1, 'OFF', 0, 'NONE']]) { // @math the second scale; the wide view; neither without WebGL 2; smooth sizes, with and without it; the artwork on and off with packs stored (without WebGL 2 too), and NONE with no pack; the kart angles with an angle set stored (without WebGL 2 too), NONE without one
+    const def = menuDef('rendering', { ...base, graphics: menuView(s, { worldReady: ready, packs, angleSets }) });
+    assert.deepEqual(def.items, [line('RESOLUTION', word), line('VIEW', view), line('SPRITE SIZES', sizes), line('KART ANGLES', angles), line('ARTWORK', art), 'LEAVE THIS MENU']);
+    assert.deepEqual(def.actions, [{ graphics: { cycle: 'scale' } }, { graphics: { cycle: 'view' } }, { graphics: { cycle: 'sizes' } }, { graphics: { cycle: 'angles' } }, { graphics: { toggle: 'art' } }, { back: true }]);
     def.items.forEach(drawable); assert.ok(def.items.every(t => t.length <= DISPLAY_MENU.width)); assert.ok(layoutOf('sub', def.items).y0 >= gameTopBar());
   }
   assert.equal(line('SPRITE SIZES', 'STEPPED'), 'SPRITE SIZES STEPPED', 'the longest line, exactly the bar'); // @math 20 characters
-  assert.deepEqual(menuDef('rendering', base).items.slice(0, 4), ['RESOLUTION'.padEnd(19) + '-', 'VIEW'.padEnd(19) + '-', 'SPRITE SIZES'.padEnd(19) + '-', 'ARTWORK'.padEnd(19) + '-']); // @math before the page has handed in its words
-  assert.ok(isRenderChoice('scale') && isRenderChoice('view') && isRenderChoice('sizes') && !isRenderChoice('shadowStrength') && !isRenderChoice('art'));
+  assert.equal(line('KART ANGLES', 'LOCKED'), 'KART ANGLES   LOCKED'); // @math 20 characters
+  assert.deepEqual(menuDef('rendering', base).items.slice(0, 5), ['RESOLUTION'.padEnd(19) + '-', 'VIEW'.padEnd(19) + '-', 'SPRITE SIZES'.padEnd(19) + '-', 'KART ANGLES'.padEnd(19) + '-', 'ARTWORK'.padEnd(19) + '-']); // @math before the page has handed in its words
+  assert.ok(isRenderChoice('scale') && isRenderChoice('view') && isRenderChoice('sizes') && isRenderChoice('angles') && !isRenderChoice('shadowStrength') && !isRenderChoice('art'));
   const s = resetSettings();
   assert.deepEqual([cycleRender(s, 'scale').scale, cycleRender(cycleRender(s, 'scale'), 'scale').scale], [2, 1]); // @math 1X to 2X and back
   assert.deepEqual([cycleRender(s, 'view').view, cycleRender(cycleRender(s, 'view'), 'view').view], ['wide', 'standard']); // STANDARD to WIDE and back
   assert.deepEqual([cycleRender(s, 'sizes').sizes, cycleRender(cycleRender(s, 'sizes'), 'sizes').sizes], ['smooth', 'classes']); // STEPPED to SMOOTH and back
+  assert.deepEqual([1, 2, 3].map(n => { let t = s; for (let k = 0; k < n; k++) t = cycleRender(t, 'angles'); return t.angles; }), ['free', 'off', 'locked']); // @math LOCKED to FREE, OFF and back
+  assert.equal(cycleRender(s, 'angles').preset, 'original', 'the kart angles alone keep Original: they only refine the artwork');
   assert.equal(cycleRender(s, 'sizes').preset, 'custom', 'Original with smooth sizes is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'sizes').preset, 'enhanced');
   assert.equal(cycleRender(s, 'view').preset, 'custom', 'Original in the wide view is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'view').preset, 'enhanced');
   assert.equal(cycleRender(s, 'scale').preset, 'custom', 'Original at 2x is custom'); assert.equal(cycleRender(normalizeGraphics({ preset: 'enhanced' }), 'scale').preset, 'enhanced');
@@ -330,6 +333,8 @@ test('Stage 4: the RENDERING list (DISPLAY OPTIONS > RENDERING): RESOLUTION, VIE
   assert.deepEqual(stepFrame(opened, 'enter').chosen, { graphics: { cycle: 'scale' } });
   assert.deepEqual(stepFrame(settled(stepFrame(opened, 'down').menu), 'enter').chosen, { graphics: { cycle: 'view' } }); // the second line, VIEW
   assert.deepEqual(stepFrame(settled(stepFrame(settled(stepFrame(opened, 'down').menu), 'down').menu), 'enter').chosen, { graphics: { cycle: 'sizes' } }); // the third line, SPRITE SIZES
-  let fourth = opened; for (let k = 0; k < 3; k++) fourth = settled(stepFrame(fourth, 'down').menu); // @math the fourth line, ARTWORK
-  assert.deepEqual(stepFrame(fourth, 'enter').chosen, { graphics: { toggle: 'art' } });
+  let fourth = opened; for (let k = 0; k < 3; k++) fourth = settled(stepFrame(fourth, 'down').menu); // @math the fourth line, KART ANGLES
+  assert.deepEqual(stepFrame(fourth, 'enter').chosen, { graphics: { cycle: 'angles' } });
+  const fifth = settled(stepFrame(fourth, 'down').menu); // the fifth line, ARTWORK
+  assert.deepEqual(stepFrame(fifth, 'enter').chosen, { graphics: { toggle: 'art' } });
 });

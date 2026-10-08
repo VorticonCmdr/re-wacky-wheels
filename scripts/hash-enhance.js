@@ -2,14 +2,15 @@
 // the same script runs against two source roots, this tree and a worktree of an earlier commit, and the two results must be equal frame for
 // frame. A regression gate, not evidence about the game. Every module is imported from `--root`; the archive is always this repository's own
 // (game/, or --archive), so both roots draw the same bytes. The hashes go only to `--out` (compare-enhance keeps them in a temporary directory).
-// - enhanced: twelve configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
+// - enhanced: fourteen configurations over ten scenarios. A (Enhanced with the default atmosphere), B (Enhanced with a dark full atmosphere on every
 //   track: the night grade, clouds 0.9, mountains at full range, water 1, relief 1), C (B with the HUD layers handed in) and D (smooth motion
 //   only) always draw through the enhancer, with the frame context the page passes where its display can show a world of another size
 //   (worldReady true, the display's default shape, wideAllowed but in a link race and a slides demo; an earlier commit ignores it). N (Enhanced
 //   with RESOLUTION 2X stored) and W (Enhanced with VIEW WIDE stored) draw with worldReady false, as the page without WebGL 2: the world at 1x
 //   in the standard view, so A's pictures (an earlier commit drops the unknown setting). P (Enhanced with ARTWORK ON and no pack stored: A's pictures) and
 //   P2 (Original's switches with ARTWORK ON and no pack: the reference renderer's path, as O), Q (Enhanced, ARTWORK OFF with a tinted pack of
-//   the whole race world stored: A's pictures) and Q2 (Original's switches, ARTWORK OFF with that pack: O's). O (the Original preset) and O2 (Original as stored before Stage 4, read from the storage) draw as
+//   the whole race world and kart angle sets of every slot stored: A's pictures), Q2 (Original's switches, ARTWORK OFF with that pack: O's),
+//   QF and Q2F (Q and Q2 with KART ANGLES FREE: A's and O's). O (the Original preset) and O2 (Original as stored before Stage 4, read from the storage) draw as
 //   the page's draw decides: through the enhancer when enh.active(), else the reference renderer's path, a replica of the page's (play.js
 //   cannot run in node); they guard the gate and that path, not an edit of play.js's draw itself. The scenarios: the attract demo of track 1
 //   (with its fade-in), races on tracks 2, 3, 6 and 7, the split screen, the duck game, a slides demo (the ORDERING pages over track 7) and
@@ -150,25 +151,43 @@ const CONFIGS = {
   // switches with ARTWORK ON (drawn as the page decides), each with an empty provider (an earlier commit drops the unknown setting and option).
   P: { settings: { ...PRESETS.enhanced, art: true }, atmosphere: null, layers: false, art: true }, P2: { settings: { ...PRESETS.original, art: true }, atmosphere: null, layers: false, page: true, art: true },
   // A pack stored and ARTWORK OFF, as the page has it once a player has imported a pack and left the artwork off: Q Enhanced, Q2 Original's
-  // switches (drawn as the page decides), each with the tinted pack of the whole race world (tintedPack): A's and O's pictures.
+  // switches (drawn as the page decides), each with the tinted pack of the whole race world and its kart angle sets (tintedPack), KART ANGLES
+  // LOCKED (the default): A's and O's pictures. QF and Q2F are Q and Q2 with KART ANGLES FREE (M4; an earlier commit drops the unknown setting).
   Q: { settings: PRESETS.enhanced, atmosphere: null, layers: false, art: 'tinted' }, Q2: { settings: PRESETS.original, atmosphere: null, layers: false, page: true, art: 'tinted' },
+  QF: { settings: { ...PRESETS.enhanced, angles: 'free' }, atmosphere: null, layers: false, art: 'tinted' }, Q2F: { settings: { ...PRESETS.original, angles: 'free' }, atmosphere: null, layers: false, page: true, art: 'tinted' },
 };
-// The tinted pack of Q and Q2, built at run time from the archive in memory (never written anywhere): the RGBA template at 1x of the whole race
-// world (every track's tile sheets, skies and strips, every picture of the region registry: art-template.js), red and blue swapped, each entry
-// checked as an import checks it. With the artwork on it changes every scenario's picture (check:enhance's section 7 shows a tinted pack does);
-// with it off it must change nothing. Null for an earlier commit (no packs).
+// The tinted pack of Q and Q2 (and QF, Q2F), built at run time from the archive in memory (never written anywhere): the RGBA template at 1x of
+// the whole race world (every track's tile sheets, skies and strips, every picture of the region registry: art-template.js) and, where the
+// tree has them (M4: art-template.js ANGLES_ALL), kart angle sets of 32 directions of every slot with each in-between cell drawn as the nearer
+// original's (check:enhance's fillSet), red and blue swapped, each entry checked as an import checks it. With the artwork on it changes every
+// scenario's picture (check:enhance's sections 7 and 8 show a tinted pack and its sets do); with it off it must change nothing. Null for an
+// earlier commit (no packs).
 let tinted;
+// An angle set's template with every in-between cell drawn as the nearer original frame's cell (the template's layout: q cells a row, a row
+// an original frame, the original f in the cell q f).
+function fillSet(image, e) {
+  const q = e.columns, cw = e.cell[0], ch = e.cell[1], n = e.directions, rgba = Uint8ClampedArray.from(image.rgba);
+  for (let k = 0; k < n; k++) {
+    if (k % q === 0) continue;
+    const from = (Math.round(k / q) * q) % n, a = { x: (from % e.columns) * cw, y: Math.floor(from / e.columns) * ch }, b = { x: (k % e.columns) * cw, y: Math.floor(k / e.columns) * ch };
+    for (let y = 0; y < ch; y++) rgba.copyWithin(((b.y + y) * image.width + b.x) * 4, ((a.y + y) * image.width + a.x) * 4, ((a.y + y) * image.width + a.x + cw) * 4); // @math four bytes a colour
+  }
+  return { ...image, rgba };
+}
 function tintedPack() {
   if (tinted !== undefined) return tinted;
   if (!artModule || !templateModule || !packModule) return (tinted = null);
   const world = loadTrack(dat, String(raceTracks[0])), ctx = packModule.packContext(members, world, dat), t = templateModule.buildTemplate(members, world, { scale: 1, color: 'rgba' });
-  tinted = t.manifest.entries.map((e, i) => {
-    const rgba = Uint8ClampedArray.from(t.images[i].rgba), image = { ...t.images[i], rgba };
+  const sets = templateModule.ANGLES_ALL ? templateModule.buildTemplate(members, world, { select: templateModule.ANGLES_ALL, directions: 32, scale: 1, color: 'rgba' }) : null; // @math a set of 32 directions
+  const parts = [...t.manifest.entries.map((e, i) => [e, t.images[i]]), ...(sets ? sets.manifest.entries.map((e, i) => [e, fillSet(sets.images[i], e)]) : [])];
+  tinted = parts.map(([e, picture]) => {
+    const rgba = Uint8ClampedArray.from(picture.rgba), image = { ...picture, rgba };
     for (let o = 0; o < rgba.length; o += 4) { const r = rgba[o]; rgba[o] = rgba[o + 2]; rgba[o + 2] = r; } // @math four bytes a colour, red and blue swapped
     const checked = packModule.normalizeArtEntry(e, ctx, image);
     if (!checked.entry) throw new Error(`the tinted pack: ${checked.reason}`);
     return artModule.toArt(checked.entry, image);
   });
+  if (sets && !tinted.some(a => a.entry.kind === 'angles')) throw new Error('the tinted pack has no kart angle set');
   return tinted;
 }
 function runEnhanced(config, make, n) {
@@ -179,6 +198,7 @@ function runEnhanced(config, make, n) {
     const layers = config.layers ? { world: new Uint8ClampedArray(SIZE * 4), hud: new Uint8ClampedArray(SIZE * 4) } : null, record = { ...(config.page ? { path: [] } : {}), out: [], index: [], mask: [], size: [], ...(layers ? { world: [], hud: [] } : {}) }; // @math four bytes a colour
     if (config.settings) enh.configure(config.settings);
     if (config.art === 'tinted' && art && !art.forWorld(s.world).any) throw new Error(`the tinted pack has no art of ${sc.name}'s world: Q would prove nothing`);
+    if (config.art === 'tinted' && art && templateModule?.ANGLES_ALL && art.angleSlots === 0) throw new Error(`the tinted pack has no kart angle set stored for ${sc.name}: Q would prove nothing about the sets`); // a tree with angle sets (M4)
     const worldReady = config.worldReady ?? true, aspect = normalizeDisplay().aspect; // the page's frame context (play.js drawEnhanced): its display's worldReady() and shape
     for (let t = 0; t < TICKS; t++) {
       const input = sc.input(); if (input === null) break;

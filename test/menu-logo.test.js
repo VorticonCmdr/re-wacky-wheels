@@ -20,7 +20,7 @@ test('the page\'s display lists in Stage 4: CRT LOOK leads CRT AND HUD, DEFAULT 
   const settings = { ...defaultSettings(1, true), graphics: menuView(resetSettings()), display: displayView(resetDisplay()) }, levels = menuDef('crtLevels', settings), display = menuDef('display', settings);
   assert.ok(levels.items[0].startsWith('CRT LOOK') && !levels.items.includes('DEFAULT LEVELS') && levels.items.length === 6); // @math CRT LOOK, three levels, HUD, LEAVE THIS MENU
   assert.ok(!display.items.some(t => t.startsWith('CRT LOOK')) && display.items.length === 6 && display.items[4] === 'RENDERING'); // @math SCALING, ASPECT, FULL SCREEN, CRT AND HUD, RENDERING, LEAVE THIS MENU
-  assert.deepEqual(menuDef('rendering', settings).items.length, 5); // @math RESOLUTION, VIEW (M8), SPRITE SIZES (M7), ARTWORK (the packs) and LEAVE THIS MENU (KART ANGLES comes with M4)
+  assert.deepEqual(menuDef('rendering', settings).items.length, 6); // @math RESOLUTION, VIEW (M8), SPRITE SIZES (M7), KART ANGLES (M4), ARTWORK (the packs) and LEAVE THIS MENU: the six-line limit
   assert.ok(menuDef('gfxLevels', settings).items.includes('DEFAULT LEVELS'), 'EFFECT LEVELS keeps its own DEFAULT LEVELS');
   const long = ['options', 'keysSound', 'keys', 'sound', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels', 'rendering'].filter(id => menuDef(id, settings).items.length > 6); // @math the page's own lists: six lines at most
   assert.deepEqual(long, []);

@@ -11,13 +11,14 @@ import { decodeVoc, decodePcSpeaker, encodeWav } from './audio.js';
 import { numericValues, inspectData, b800Cells } from './data-formats.js';
 import { createRacePreview, anchorStage } from './viewer-preview.js';
 import { driverFile, driverCount } from './game/drivers.js';
+import { carFrame } from './game/control.js';
 import { normalize, applyPreset, change, loadSettings, saveSettings, enhancedOn } from './enhance/settings.js';
 import { EFFECTS, LEVELS, PRESETS, RENDER } from './enhance/config.js';
 import { loadAtmospheres } from './enhance/atmosphere.js';
 import { loadDisplay } from './enhance/display-settings.js';
 import { loadReliefMaps, saveReliefMap, removeReliefMap, createReliefProvider } from './enhance/relief-store.js';
 import { tileSheetHeights, tilesToSheet, sheetToTiles, pictureHeights, shadeByHeights } from './enhance/relief.js';
-import { RELIEF, ART } from './enhance/config.js';
+import { RELIEF, ART, ANGLES } from './enhance/config.js';
 import { loadTrack, archiveMembers } from './game/track-data.js';
 import { readZip, writeZip } from './zip.js';
 import { encodePng } from './enhance/png.js';
@@ -26,6 +27,7 @@ import { buildTemplate, templateChoices, templateParts, cycledEntries } from './
 import { loadPacks, loadArt, enabledArt, savePack, setEnabled, setOrder, removePack } from './enhance/art-store.js';
 import { createArtProvider, createArtCache, decodeArt, wantedFor } from './enhance/art.js';
 import { skyMargins } from './enhance/sky-hd.js';
+import { mapping as angleMapping, angleIndex, wrapSigned } from './enhance/angles.js';
 
 const $ = id => document.getElementById(id);
 const categories = ['All assets', 'Graphics', 'Sprites', 'Tracks', 'Music', 'Sounds', 'Data', 'Archives'];
@@ -373,7 +375,7 @@ function previewRace(stem) {
   }
   function seek() { try { preview.seek(moment, effective()); draw(); } catch (e) { status(e.message, true); } }
   function set(next) { // the settings, and every control showing them
-    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view; sizesSelect.value = settings.sizes; artBox.checked = settings.art;
+    settings = state.gfx = normalize(next); presetSelect.value = settings.preset; scaleSelect.value = String(settings.scale); viewSelect.value = settings.view; sizesSelect.value = settings.sizes; anglesSelect.value = settings.angles; artBox.checked = settings.art;
     for (const k of EFFECTS) boxes[k].checked = settings[k];
     for (const k of Object.keys(LEVELS)) ranges[k].value = String(settings[k]);
     seek();
@@ -390,6 +392,7 @@ function previewRace(stem) {
   const scaleSelect = selectControl('Resolution', RENDER.scales.map(n => [n, `${n}x`]), settings.scale, v => set(change(settings, 'scale', Number(v)))); // Stage 4: the Enhanced world at twice the samples; the preview shows it itself, WebGL or not
   const viewSelect = selectControl('View', [['standard', 'Standard'], ['wide', 'Wide (16:9)']], settings.view, v => set(change(settings, 'view', v))); // Stage 4: the wide view's margins, for the playtest page's display shape
   const sizesSelect = selectControl('Sprite sizes', [['classes', 'Stepped, as the original'], ['smooth', 'Smooth']], settings.sizes, v => set(change(settings, 'sizes', v))); // Stage 4: the pictures at sizes between the game's classes, on the floor's own rows
+  const anglesSelect = selectControl('Kart angles', [['locked', 'Locked to the game\'s frame'], ['free', 'Free'], ['off', 'Off, the game\'s eight']], settings.angles, v => set(change(settings, 'angles', v))); // Stage 4 (M4): how the karts of your packs' angle sets turn
   const artBox = checkControl('Artwork packs', settings.art, v => set(change(settings, 'art', v))); // Stage 4: your enabled packs (Art packs) in the race world
   const boxes = Object.fromEntries(EFFECTS.map(k => [k, checkControl(EFFECT_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
   const ranges = Object.fromEntries(Object.keys(LEVELS).map(k => [k, rangeControl(LEVEL_LABELS[k], settings[k], v => set(change(settings, k, v)))]));
@@ -409,7 +412,7 @@ function previewRace(stem) {
   // (the first pack changes what the enhancer keeps of the scene: viewer-preview.js sceneSwitches) and drawn.
   const id = state.renderId, world = preview.race?.world;
   if (world) { state.artView = { world, decoded: false, redraw: () => { if (state.renderId === id) seek(); } }; reloadGarageArt(); }
-  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution, the view and the sprite sizes apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle; smooth sprite sizes draw the karts and the scenery at sizes between the game's ten steps, on the ground's own rows; Artwork packs draws your enabled packs, and Compare's Enhanced | Enhanced + pack and Original | Enhanced + pack show them against the archive's art whatever the switch says), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
+  detail(`A race on track ${stem} driven by ${preview.driver}, from the start with its fly-in. The left half is the reference renderer of the port, the right half the Enhanced presentation of the same moment (docs/enhancements.md). Play shows smooth motion against the game's 11 ticks a second; the effects, their levels, the sun direction, the resolution, the view and the sprite sizes apply at once (at 2x the Enhanced world has twice the original's samples each way and the Original is enlarged twice beside it; the wide view shows more of the track either side, for the screen shape the playtest page keeps, with the Original in the middle; smooth sprite sizes draw the karts and the scenery at sizes between the game's ten steps, on the ground's own rows; Artwork packs draws your enabled packs, and Compare's Enhanced | Enhanced + pack and Original | Enhanced + pack show them against the archive's art whatever the switch says; Kart angles picks how the karts of your packs' angle sets turn: locked between the game's own frames, never more than half a step from the frame it shows, free with each kart's direction against the camera's, or off, the game's eight), and Use these in the game stores them for the playtest page (graphics settings only, kept in this browser).`);
 }
 
 // ---- The artwork packs (Stage 4: docs/artpacks.md): the player's own art for the race world, imported here and kept in this browser
@@ -493,7 +496,8 @@ function previewArtPacks() {
   const importBox = el('div', undefined, 'control'); importBox.append(el('span', 'Import a pack'), ...imports); $('controls').append(importBox); // a group, not a label: a label would click its first button
   // The template export.
   const choices = templateChoices(W.members, W.world), sheets = state.entries.filter(e => /^a_.*\.pcx$/.test(e.name)).map(e => [e.name.toUpperCase(), e.name.toUpperCase()]);
-  const what = selectControl('Template of', [['all', 'The whole race world'], ...choices.map(c => [c.member, c.label])], 'all', () => {});
+  const what = selectControl('Template of', [['all', 'The whole race world'], ...choices.map(c => [c.value, c.label])], 'all', () => {});
+  const steps = Array.from({ length: ART.directions.max / ART.directions.step }, (_, k) => (k + 1) * ART.directions.step), directions = selectControl('Angle directions', steps.map(n => [n, `${n} (${n / ART.directions.step} an original frame)`]), ANGLES.templateDirections, () => {}); // a kart angle set's N
   const scale = selectControl('Scale', ART.templateScales.map(n => [n, `${n}x`]), ART.templateScales[0], () => {});
   const colors = selectControl('Colours', [['rgba', 'RGBA'], ['indexed', 'Indexed: the game\'s palette']], 'rgba', () => {});
   const pal = selectControl('Palette', [['default', 'Each member\'s first track\'s'], ...sheets], 'default', () => {});
@@ -501,10 +505,10 @@ function previewArtPacks() {
   exp.onclick = async () => {
     exp.disabled = true; status('Making the template…');
     try {
-      const t = buildTemplate(W.members, W.world, { select: what.value, scale: Number(scale.value), color: colors.value, palette: pal.value === 'default' ? null : pal.value, archive: W.dat });
+      const angles = what.value.startsWith('ANGLES:'), t = buildTemplate(W.members, W.world, { select: what.value, scale: Number(scale.value), color: colors.value, palette: pal.value === 'default' ? null : pal.value, archive: W.dat, directions: Number(directions.value) });
       const files = [{ name: PACK.manifest, data: new TextEncoder().encode(JSON.stringify(t.manifest, null, 1)) }, { name: PACK.notice, data: new TextEncoder().encode(t.notice) }];
-      for (const image of t.images) files.push({ name: image.path, data: await encodePng(image) });
-      const name = `wacky-template-${what.value === 'all' ? 'world' : what.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${scale.value}x-${colors.value}.zip`;
+      for (const image of [...t.images, ...t.extras]) files.push({ name: image.path, data: await encodePng(image) }); // the extras: an angle set's guide, which no entry names
+      const name = `wacky-template-${what.value === 'all' ? 'world' : what.value.toLowerCase().replace(/[^a-z0-9]+/g, '-')}${angles ? `-${directions.value}` : ''}-${scale.value}x-${colors.value}.zip`;
       download(writeZip(files), name, 'application/zip');
       status(`Exported ${t.images.length} pictures to ${name}. It holds the game's own art: keep it on your computer; a pack you share may hold only your own art (NOTICE.txt).`);
     } catch (error) { status(error.message, true); } finally { exp.disabled = false; }
@@ -567,7 +571,7 @@ function previewArtPacks() {
     if (token !== compareToken || gone()) return;
     compareBox.replaceChildren();
     if (!art.length) { $('preview').replaceChildren(el('p', 'Import a pack to compare its art with the archive\'s here.', 'muted')); return; }
-    const names = new Map(artPacks.packs.map(p => [p.id, p.name])), label = r => `${names.get(r.pack) ?? r.pack} › ${r.kind} ${r.kind === 'strip' ? r.meta.members.join(', ') : r.member}${r.kind === 'frames' ? ` at ${r.meta.offset}` : ''}`;
+    const names = new Map(artPacks.packs.map(p => [p.id, p.name])), label = r => `${names.get(r.pack) ?? r.pack} › ${r.kind} ${r.kind === 'strip' ? r.meta.members.join(', ') : r.member}${r.kind === 'frames' ? ` at ${r.meta.offset}` : ''}${r.kind === 'angles' ? ` slot ${r.meta.slot}, ${r.meta.directions} directions` : ''}`;
     const s = el('select'); art.forEach((r, i) => { const o = el('option', label(r)); o.value = String(i); s.append(o); });
     const wrapper = el('label', undefined, 'control'); wrapper.append(el('span', 'Compare'), s); compareBox.append(wrapper);
     const extra = el('div'); extra.style.display = 'contents'; compareBox.append(extra);
@@ -578,8 +582,9 @@ function previewArtPacks() {
       let decoded;
       try { decoded = await decodeArt(record.meta, record.png); } catch (error) { if (!gone()) $('preview').replaceChildren(el('p', error.message, 'preview-error')); return; }
       if (gone()) return;
-      const e = record.meta, p = e.scale, palName = e.palette ?? (e.kind === 'frames' ? 'A_F1.PCX' : null), add = (labelText, control) => { const w = el('label', undefined, 'control'); w.append(el('span', labelText), control); extra.append(w); return control; };
+      const e = record.meta, p = e.scale, palName = e.palette ?? (e.kind === 'frames' || e.kind === 'angles' ? 'A_F1.PCX' : null), add = (labelText, control) => { const w = el('label', undefined, 'control'); w.append(el('span', labelText), control); extra.append(w); return control; };
       if (e.kind === 'frames') compareFrames(record, decoded, add, palName, extra);
+      else if (e.kind === 'angles') turntable(record, decoded, add, palName, extra);
       else if (e.kind === 'tiles') compareTiles(record, decoded);
       else if (e.kind === 'sky') compareSky(record, decoded);
       else if (e.kind === 'strip') compareStrip(record, decoded, add);
@@ -666,6 +671,68 @@ function previewArtPacks() {
     };
     const text = (`${e.members.join(', ')}: the archive's strip (top, enlarged ${p} times) and the pack's (below) from the scroll offset, two periods of ${P} pixels; the yellow line is the seam where the panorama wraps. The pack's pixels of an alpha below ${ART.alphaCut} are 'sky here': the archive's sky indices stay, its scenery gives way to the sky picture.`);
     slider.oninput = draw; draw();
+  }
+  // Kart angles (M4): the turntable of a slot's set. The racer turned d TRIG entries from the camera (its compass word the game's for that heading,
+  // humanCompass): the game's frame f (racerFrame, from the archive's CARS.SP) beside the set's index in locked and in free mode (angles.js), each
+  // with its ground rows (red the archive frame's, cyan the art's lowest opaque row, yellow the set's declared anchor) and stood on the ground with
+  // its contact and sun shadows (anchorStage); under them the whole set with the game's frame's cell (red), the locked one (yellow) and the free
+  // one (cyan). Turn sweeps d through a full turn. An empty cell shows what the race draws for it: the game's frame from the set, or the archive's.
+  function turntable(record, art, add, palName, extra) {
+    const e = record.meta, p = e.scale, M = angleMapping(), N = e.directions, q = N / M.octants, cars = W.members.get('CARS.SP'), size = e.width * e.height, pal = palette8(e.palette ?? palName) ?? palette8('A_F1.PCX'), packPic = artRgba(art, pal);
+    const image = art.ix ? { indices: art.ix, alpha: art.clear.map(c => (c ? 0 : 255)) } : { rgba: art.rgba }; // @math transparent or opaque
+    const range = (label, max, value) => { const r = add(label, el('input')); r.type = 'range'; r.min = 0; r.max = max; r.step = 1; r.value = value; return r; };
+    const dir = range('Direction', M.turn - 1, 0), cam = range('Camera', M.turn - 1, 0), spin = add('Turn', el('input')); spin.type = 'checkbox';
+    const caption = el('span', undefined, 'frame-label'); extra.append(caption);
+    const archiveFrame = f => cars.subarray(carFrame(e.slot, f) * size, (carFrame(e.slot, f) + 1) * size);
+    const lowest = frame => { let r = -1; for (let i = 0; i < frame.length; i++) if (frame[i]) r = Math.max(r, i % e.height); return r; };
+    // The set's cell k: its pixels (cw x ch RGBA), its lowest opaque row in the box's rows, and the frame at the logical size (the pack pixel
+    // under each original pixel's middle) as a column-major mask with its colours, for anchorStage.
+    const cellOf = k => {
+      const c = frameCell(e, k), cw = e.cell[0], ch = e.cell[1], rgba = new Uint8ClampedArray(cw * ch * 4), logical = new Uint8Array(size), colours = new Uint8ClampedArray(size * 4); // @math four bytes a colour
+      for (let y = 0; y < ch; y++) rgba.set(packPic.subarray(((c.y + y) * art.width + c.x) * 4, ((c.y + y) * art.width + c.x + cw) * 4), y * cw * 4); // @math four bytes a colour
+      let low = -1;
+      for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++) if (rgba[(y * cw + x) * 4 + 3]) low = Math.max(low, y - e.box[1]); // @math the alpha of four bytes
+      for (let y = 0; y < e.height; y++) for (let x = 0; x < e.width; x++) { const i = (c.y + e.box[1] + y * p + (p >> 1)) * art.width + c.x + e.box[0] + x * p + (p >> 1); if (opaque(image, i, 'angles')) { logical[x * e.height + y] = 1; colours.set(packPic.subarray(i * 4, i * 4 + 4), (y * e.width + x) * 4); } } // @math the middle of an original pixel's p x p; four bytes a colour
+      return { rgba, width: cw, height: ch, low, logical, colours };
+    };
+    const draw = () => {
+      if (!caption.isConnected || gone()) return false;
+      const d = Number(dir.value), c = Number(cam.value), heading = (c + d) % M.turn, f = M.frameOf(c, M.compassOf(heading), M.table), base = q * f;
+      const locked = angleIndex(M, f, wrapSigned(d, M.turn), N, 'locked'), free = angleIndex(M, f, wrapSigned(d, M.turn), N, 'free');
+      const drawnAs = i => (art.filled[i] ? i : art.filled[base] ? base : -1); // what the race draws for index i: the cell, else the game's frame from the set, else the archive's
+      const frame = archiveFrame(f), rows = new Uint8Array(size);
+      for (let y = 0; y < e.height; y++) for (let x = 0; x < e.width; x++) rows[y * e.width + x] = frame[x * e.height + y];
+      const archive = indicesRgba(rows, e.width, e.height, p, pal, 0), archiveLow = lowest(frame);
+      const sides = [locked, free].map(i => { const k = drawnAs(i); return k < 0 ? { ...archive, low: archiveLow * p, logical: frame, colours: null, k } : { ...cellOf(k), k }; });
+      const { g, lefts } = sideBySide([archive, ...sides]);
+      const line = (x0, w, row, colour) => { g.fillStyle = colour; g.fillRect(x0, row, w, Math.max(1, p >> 1)); };
+      if (archiveLow >= 0) { line(lefts[0], archive.width, (archiveLow + 1) * p - 1, '#ff5a5a'); for (const n of [1, 2]) line(lefts[n] + (sides[n - 1].k < 0 ? 0 : e.box[0]), e.width * p, (sides[n - 1].k < 0 ? 0 : e.box[1]) + (archiveLow + 1) * p - 1, '#ff5a5a'); } // @math the two set pictures
+      sides.forEach((side, n) => { if (side.k < 0) return; if (side.low >= 0) line(lefts[n + 1], side.width, e.box[1] + side.low, '#5ae0ff'); const declared = e.anchors?.[side.k] ?? e.anchor; line(lefts[n + 1] + e.box[0], e.width * p, e.box[1] + (declared + 1) * p - 1, '#ffd66b'); }); // @math the row under the declared one
+      const label = (i, k) => (k === i ? `${i}` : k < 0 ? `${i} (empty: the archive's frame ${f})` : `${i} (empty: the game's frame, ${k})`);
+      caption.textContent = `d ${d} entries (${((d * 360) / M.turn).toFixed(1)} degrees), camera ${c}: the game's frame ${f} (the set's ${base}), locked ${label(locked, sides[0].k)}, free ${label(free, sides[1].k)}`; // @math degrees in a turn; one decimal
+      if (get('trig.dat') && get('view')) { // the three stood on the ground with their shadows
+        const tables = { trig: get('trig.dat').data, view: get('view').data }, sun = (state.gfx ?? loadSettings()).sunAngle;
+        const crop = st => { const m = Math.max(e.width, e.height), x0 = Math.max(st.left - m, 0), y0 = Math.max(st.top - m, 0), x1 = Math.min(st.left + e.width + m, 320), y1 = Math.min(st.row + m, 200), cw = x1 - x0, ch = y1 - y0, out = new Uint8ClampedArray(cw * ch * 4); for (let y = 0; y < ch; y++) out.set(st.rgba.subarray(((y0 + y) * 320 + x0) * 4, ((y0 + y) * 320 + x1) * 4), y * cw * 4); return { rgba: out, width: cw, height: ch, row: st.row - y0 }; }; // @math the screen's columns and rows, four bytes a colour
+        const stages = [crop(anchorStage(tables, frame, e.width, e.height, pal, { sunAngle: sun, rule: 'racer' })), ...sides.map(side => crop(anchorStage(tables, side.logical, e.width, e.height, pal, { sunAngle: sun, rule: 'racer', colours: side.colours })))];
+        const zoom = Math.max(p, 2), gap = 8, stage = el('canvas'), sg = stage.getContext('2d'), tmp = el('canvas'); // @math a gap of 8
+        stage.width = (stages.reduce((n, st) => n + st.width, 0) + gap * (stages.length - 1)) * zoom; stage.height = Math.max(...stages.map(st => st.height)) * zoom; stage.style.imageRendering = 'pixelated'; stage.style.maxWidth = '100%'; sg.imageSmoothingEnabled = false;
+        let x = 0;
+        for (const st of stages) { tmp.width = st.width; tmp.height = st.height; tmp.getContext('2d').putImageData(new ImageData(st.rgba, st.width, st.height), 0, 0); sg.drawImage(tmp, x * zoom, 0, st.width * zoom, st.height * zoom); sg.fillStyle = '#ff5a5a'; sg.fillRect(x * zoom, st.row * zoom, st.width * zoom, 1); x += st.width + gap; }
+        const wrap = el('div', undefined, 'canvas-wrap'); wrap.append(stage); $('preview').append(wrap);
+      }
+      // The whole set, the cells marked.
+      const whole = el('canvas'), wg = whole.getContext('2d'); whole.width = art.width; whole.height = art.height; whole.style.imageRendering = 'pixelated'; whole.style.maxWidth = '100%';
+      wg.putImageData(new ImageData(packPic, art.width, art.height), 0, 0);
+      for (const [k, colour] of [[base, '#ff5a5a'], [locked, '#ffd66b'], [free, '#5ae0ff']]) { const cc = frameCell(e, k); wg.strokeStyle = colour; wg.lineWidth = Math.max(1, p); wg.strokeRect(cc.x + 0.5, cc.y + 0.5, e.cell[0] - 1, e.cell[1] - 1); } // @math the middle of a pixel
+      const wrap2 = el('div', undefined, 'canvas-wrap'); wrap2.append(whole); $('preview').append(wrap2);
+      note(`Slot ${e.slot}'s set of ${N} directions: left the archive's frame the game shows, then the set's index in locked mode and in free mode; red marks the game's frame's cell, yellow the locked and cyan the free one. Index 0 is the original entry 0, the indices rise as the entries rise (no mirroring), index ${q} f is the original entry f.`);
+      return true;
+    };
+    dir.oninput = draw; cam.oninput = draw;
+    let last = 0;
+    const turn = time => { if (!spin.checked || !draw.alive) return; if (time - last >= 100) { last = time; dir.value = String((Number(dir.value) + M.sector / q / 2) % M.turn); if (!draw()) { draw.alive = false; return; } } state.raf = requestAnimationFrame(turn); }; // @math ten pictures a second, half a direction of the set a step
+    spin.onchange = () => { if (spin.checked) { draw.alive = true; state.raf = requestAnimationFrame(turn); } };
+    draw.alive = true; draw();
   }
   showList(); showCompare();
   $('preview').replaceChildren(el('p', 'Loading your packs…', 'muted'));
