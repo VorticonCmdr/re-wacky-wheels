@@ -108,7 +108,7 @@ export function stepCars(cars) {
 // notice: fade in, wait for a key or 0x7d0; the intro: fade out, the scene (its passes), fade out, BEAVIS (fade in, a key or 0x110, fade out), WINTRO (fade in, 0x3c,
 // the cars), then the menu.
 export function createBoot(members) {
-  return { stage: 'start', since: null, edition: editionOf(members), scene: null, cars: null, key: null, passAt: 0, carsAt: 0, extra: members.has(INTRO().extra) };
+  return { stage: 'noticeIn', since: null, edition: editionOf(members), scene: null, cars: null, key: null, passAt: 0, carsAt: 0, extra: members.has(INTRO().extra) };
 }
 
 // The milliseconds of `counts` of the 136 Hz counter.
@@ -124,7 +124,6 @@ export function stepBoot(boot, now, input) {
   b.key = ['notice', 'scene', 'picture', 'cars'].includes(b.stage) ? key : null; // a key waits for the stage that reads it (the scene reads them at the end of a pass); the fades and the title's wait drop them
   const faded = steps => elapsed >= steps * input.fadeStepMs;
   switch (b.stage) {
-    case 'start': next('scene'); b.scene = createScene(); b.passAt = now; events.push({ song: { name: I.song, loop: false } }); break; // the page leaves the version notice out: the Apogee scene follows at once
     case 'noticeIn': if (faded(input.fadeInSteps)) next('notice'); break; // the keys are not read while the palette fades in, and the routine waits for every button to be up
     case 'notice': if (key || elapsed >= countsMs(N.timeout)) next('noticeOut'); break; // Enter, Space, a fire button or Esc, or the time-out
     case 'noticeOut': if (faded(input.fadeOutSteps)) { next('scene'); b.scene = createScene(); b.passAt = now; events.push({ song: { name: I.song, loop: false } }); } break; // the song starts with the first pass

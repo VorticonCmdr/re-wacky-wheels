@@ -76,11 +76,15 @@ test('the cars start one after another 400 apart with the sound 8, drive 28 a pa
   assert.equal(passes, 140); // the eighth car passes 1000 after 34 passes of its own and is found gone in the next
 });
 
-test('the flow: the page leaves the notice out, the scene starts its song, a key ends it with the menu song, BEAVIS, WINTRO and its cars, then the menu', () => {
+test('the flow: the notice fades in and waits, the scene starts its song, a key ends it with the menu song, BEAVIS, WINTRO and its cars, then the menu', () => {
   const input = over => ({ key: null, music: true, songPlaying: true, menuSong: 'MAINMENU', fadeInSteps: 16, fadeOutSteps: 17, fadeStepMs: 10, world, ...over });
   let b = createBoot(members(['42.GAM'])), t = 0, events = [];
   const step = (dt, over = {}) => { t += dt; const out = stepBoot(b, t, input(over)); b = out.boot; events.push(...out.events); return b.stage; };
-  assert.equal(step(0), 'scene'); // no notice: the first step goes to the scene
+  step(0); assert.equal(b.stage, 'noticeIn');
+  step(100, { key: 'fire' }); assert.equal(step(70), 'notice'); // the key in the fade is dropped
+  assert.equal(step(1000), 'notice');
+  assert.equal(step(10, { key: 'fire' }), 'noticeOut');
+  assert.equal(step(170), 'scene');
   assert.deepEqual(events, [{ song: { name: 'APOGEE', loop: false } }]);
   step(20, { key: 'escape' }); assert.equal(b.stage, 'scene'); // read at the end of the pass
   assert.equal(step(countsMs(7)), 'sceneOut');
@@ -88,18 +92,21 @@ test('the flow: the page leaves the notice out, the scene starts its song, a key
   step(170); step(160); assert.equal(b.stage, 'picture');
   assert.equal(step(countsMs(0x110)), 'pictureOut');
   step(170); step(160); assert.equal(b.stage, 'titleWait');
-  assert.equal(step(countsMs(0x3c) + 1, { key: 'fire' }), 'cars'); // the wait does not read the keys
+  assert.equal(step(countsMs(0x3c), { key: 'fire' }), 'cars'); // the wait does not read the keys
   assert.deepEqual(events.at(-1), { sound: 8 });
   assert.equal(step(100, { key: 'fire' }), 'cars'); // not before the counter reaches 0x3c
   assert.equal(step(countsMs(0x3c), { key: 'fire' }), 'done');
   assert.equal(stageView('done'), null);
 });
 
-test('the scene ends without a key when the song has ended', () => {
+test('the notice ends by itself after 0x7d0 counts and the scene without a key when the song has ended', () => {
   const input = over => ({ key: null, music: true, songPlaying: true, menuSong: 'MAINMENU', fadeInSteps: 1, fadeOutSteps: 1, fadeStepMs: 1, world, ...over });
   let b = createBoot(members([])), t = 0;
   const step = (dt, over) => { t += dt; b = stepBoot(b, t, input(over)).boot; return b.stage; };
-  assert.equal(step(0), 'scene');
+  step(0); step(1);
+  assert.equal(step(countsMs(0x7d0) - 1), 'notice');
+  assert.equal(step(2), 'noticeOut');
+  step(1); assert.equal(b.stage, 'scene');
   assert.equal(step(countsMs(7) * 60), 'scene'); // the song still plays
   assert.equal(step(countsMs(7), { songPlaying: false }), 'sceneOut');
 });
