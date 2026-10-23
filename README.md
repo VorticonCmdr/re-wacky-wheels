@@ -1,6 +1,26 @@
 # Wacky Wheels · browser port
 
-The project includes `viewer.html`, a read-only asset garage, and `track.html`, a track workshop built with HTML, CSS and vanilla JavaScript. Vite handles local development and static builds. The playable racing game is the next milestone; this repository currently contains the viewer and track editor, not a complete gameplay port.
+The project includes `viewer.html`, a read-only asset garage, and `track.html`, a track workshop built with HTML, CSS and vanilla JavaScript. Vite handles local development and static builds. The playable racing game is ported in part (see `docs/next-steps.md` for what is left), alongside the viewer and track editor.
+
+## How to play
+
+The game is not bundled: you bring your own copy of Wacky Wheels (1994, Beavers/Kingsley's Adventure; the shareware release works too).
+
+1. Open the hosted site (the game page, `index.html`) or run it locally with `npm run dev`.
+2. Click **Open WACKY.DAT** and pick the `WACKY.DAT` from your Wacky Wheels folder, or drop the file onto the page. It is read in your browser and never uploaded. (In local development, **Load local game** reads it from `game/`.)
+3. Use the game's own menus to choose a mode, track and engine, then race.
+
+| Key | Action |
+| --- | --- |
+| Left / Right | Steer |
+| Alt, Up or A | Accelerate |
+| Down or Z | Brake |
+| Space | Hand-brake turn |
+| Ctrl | Fire a hog or drop the held item (partly ported) |
+| R | Restart the race |
+| F1-F6 / 1-6 | Taunts |
+
+Keys can be remapped in the game's key setup. For two players over the network, see COMM-BAT PLAY below. Display and graphics options (Original or Enhanced rendering, 2x, wide view, CRT look) are in the game's options menu. Add `?debug` to the page address for the developer side panel. The asset garage (`viewer.html`) and the track workshop (`track.html`) are linked from the page header.
 
 ## Run locally
 
@@ -60,11 +80,9 @@ npm run preview
 
 Unit tests use synthetic binary fixtures, so they run without copyrighted files. `check:assets` validates every archive member handled by a documented decoder and smoke-renders all local songs. The separate `check:tracks` command verifies all local track roundtrips, edit/undo/project restoration, and archive preservation. Both require your own game files; pass a different DAT path as an argument if needed.
 
-## Future GitHub Pages deployment
+## GitHub Pages deployment
 
-`npm run build` produces static `dist/index.html`, `dist/viewer.html`, and `dist/track.html`, plus relative asset links (`base: './'`) that work under a repository subpath. Deploy **only `dist/`** when a GitHub repository is ready. No remote or deployment has been configured yet.
-
-Visitors supply their own originals through **Open files** or **Open folder**. **Load local game** is a development-only convenience; static hosting cannot read the ignored directory on your computer. A future Pages workflow can run `npm ci`, `npm test`, and `npm run build` without needing the original files.
+`.github/workflows/pages.yml` runs `npm ci`, `npm test` and `npm run build` on every push to `main` and publishes `dist/` to GitHub Pages. In the repository settings, set **Pages > Source** to **GitHub Actions** once. The site is then served at `https://<user>.github.io/re-wacky-wheels/`; the relative asset links (`base: './'`) work under that subpath. Nothing from `game/` is built or uploaded, and the workflow needs no original files.
 
 ## Project layout
 
