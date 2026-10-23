@@ -4,7 +4,7 @@ The project includes `viewer.html`, a read-only asset garage, and `track.html`, 
 
 ## How to play
 
-The game is not bundled: you bring your own copy of Wacky Wheels (1994, Beavers/Kingsley's Adventure; the shareware release works too).
+The game is not bundled: you bring your own copy of Wacky Wheels.
 
 1. Open the hosted site (the game page, `index.html`) or run it locally with `npm run dev`.
 2. Click **Open WACKY.DAT** and pick the `WACKY.DAT` from your Wacky Wheels folder, or drop the file onto the page. It is read in your browser and never uploaded. (In local development, **Load local game** reads it from `game/`.)
