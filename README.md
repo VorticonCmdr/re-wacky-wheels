@@ -1,12 +1,14 @@
 # Wacky Wheels · browser port
 
+**Play it: <https://www.decompile.tools/re-wacky-wheels/>** (bring your own `WACKY.DAT`)
+
 The project includes `viewer.html`, a read-only asset garage, and `track.html`, a track workshop built with HTML, CSS and vanilla JavaScript. Vite handles local development and static builds. The playable racing game is ported in part (see `docs/next-steps.md` for what is left), alongside the viewer and track editor.
 
 ## How to play
 
 The game is not bundled: you bring your own copy of Wacky Wheels.
 
-1. Open the hosted site (the game page, `index.html`) or run it locally with `npm run dev`.
+1. Open the hosted game at <https://www.decompile.tools/re-wacky-wheels/> or run it locally with `npm run dev`.
 2. Click **Open WACKY.DAT** and pick the `WACKY.DAT` from your Wacky Wheels folder, or drop the file onto the page. It is read in your browser and never uploaded. (In local development, **Load local game** reads it from `game/`.)
 3. Use the game's own menus to choose a mode, track and engine, then race.
 
@@ -82,7 +84,7 @@ Unit tests use synthetic binary fixtures, so they run without copyrighted files.
 
 ## GitHub Pages deployment
 
-`.github/workflows/pages.yml` runs `npm ci`, `npm test` and `npm run build` on every push to `main` and publishes `dist/` to GitHub Pages. In the repository settings, set **Pages > Source** to **GitHub Actions** once. The site is then served at `https://<user>.github.io/re-wacky-wheels/`; the relative asset links (`base: './'`) work under that subpath. Nothing from `game/` is built or uploaded, and the workflow needs no original files.
+`.github/workflows/pages.yml` runs `npm ci`, `npm test` and `npm run build` on every push to `main` and publishes `dist/` to GitHub Pages. In the repository settings, set **Pages > Source** to **GitHub Actions** once. The site is then served at <https://www.decompile.tools/re-wacky-wheels/>; the relative asset links (`base: './'`) work under that subpath. Nothing from `game/` is built or uploaded, and the workflow needs no original files.
 
 ## Project layout
 
