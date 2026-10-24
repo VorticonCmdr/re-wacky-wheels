@@ -13,6 +13,8 @@
     "test": "node --test test/*.test.js",
     "check:assets": "node scripts/check-assets.js",
     "check:tracks": "node scripts/check-track-editor.js",
+    "check:voxel-tracks": "node scripts/check-voxel-tracks.js",
+    "check:voxel-start": "node scripts/check-voxel-start.js",
     "lint": "node tools/lint/constants.mjs",
     "verify": "node src/verify/run.js --report analysis/verify-report.json",
     "mutate": "node src/verify/mutate.js",

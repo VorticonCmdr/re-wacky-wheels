@@ -304,7 +304,8 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
   const lightPictures = R ? { sun: screenSun(sunDirection(world, opts.sunAngle, camI.heading), R.length), luma: paletteLuma(world) } : null;
   const toOut = b => (soft ? { x0: G.s * b.x0, y0: G.s * b.y0, x1: G.s * b.x1 + G.s - 1, y1: G.s * b.y1 + G.s - 1 } : b); // a box of the soft layers' grid in output pixels
   for (const r of ordered) {
-    if (!r.skip) {
+    // Captured meshes get their own footprint below, without the sprite's shadow.
+    if (!r.skip && !opts.voxels?.capture(r, P, fine, seat, camF, G, { angle: opts.sunAngle, length: opts.sunLength, ground })) {
       const entry = trace ? traceEntry(r, G) : null;
       if (entry) trace.records.push(entry);
       if (R) { collect.count = 0; collect.art = false; }
@@ -331,6 +332,7 @@ export function renderEnhancedScene(P, fine, seat, fb, L, mode, sky, opts, G = I
   clock?.('records');
   const target = soft ?? L, gw = soft ? refW : width, gh = soft ? refH : height; // where the soft layers are drawn
   for (const c of casters) { if (at && !soft) stampShadow(L, c, width, height, G.s); else stampShadow(target, c, gw, gh); }
+  opts.voxels?.stampShadows(target.shade, gw, gh, soft ? 1 / G.s : 1);
   clock?.('contact');
   if (casts.length) { // the sun shadows, softened
     const sun = sunDirection(world, opts.sunAngle, camI.heading, opts.sunLength), box = { x0: gw, x1: -1, y0: gh, y1: -1 };

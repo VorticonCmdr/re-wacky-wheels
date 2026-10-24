@@ -24,7 +24,7 @@ export const LEVEL_STEPS = 40; // levels are kept in fortieths (the sliders move
 // quarter and from full back to off; the sun goes round in eighths of a turn. The sun's names say where it stands with the track map's top as north (the shadows fall
 // the other way): the shadows of the angle 0 fall toward the map's right.
 export const MENU = {
-  presets: { original: 'ORIGINAL', enhanced: 'ENHANCED', custom: 'CUSTOM' },
+  presets: { original: 'ORIGINAL', enhanced: 'ENHANCED', voxel: 'VOXEL', custom: 'CUSTOM' },
   strengthStep: 0.25,
   off: 'OFF',
   percent: 100,

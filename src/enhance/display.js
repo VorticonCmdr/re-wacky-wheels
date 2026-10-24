@@ -1,3 +1,5 @@
+import { createTrackPass } from '../voxel/track-gpu.js';
+import { createVoxelPass } from '../voxel/gpu.js';
 // The display (Stage 1 of docs/enhancements.md): puts the finished 320 x 200 picture on the visitor's screen, after every renderer and for every
 // screen of the game. The page keeps drawing into its canvas exactly as before; this module only decides how that canvas is shown.
 // - The page as it was (square pixels, fit, no CRT look, the HUD in the picture, not in full screen): the canvas itself, scaled by the browser.
@@ -207,6 +209,8 @@ export const textureSizes = (w, h, hw, hh) => ({ src: [w, h], glow: [[w, h], [w,
 function createRenderer(canvas, source) {
   const gl = canvas.getContext('webgl2', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: false });
   if (!gl) throw new Error('no WebGL 2');
+  const voxelPass = createVoxelPass(gl);
+  let trackPass = null;
   let W = source.width, H = source.height, HW = W, HH = H, lines = H, layered = false; // the world's size, the HUD's, the picture's logical rows
   const sizes = textureSizes(W, H, HW, HH), final = program(gl, FINAL), blur = program(gl, BLUR), scale2x = program(gl, SCALE2X), src = texture(gl, ...sizes.src);
   const target = t => { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0); return f; };
@@ -230,6 +234,8 @@ function createRenderer(canvas, source) {
       gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, parts.world);
       if (parts.hud) { sizeHud(parts.hw, parts.hh); gl.bindTexture(gl.TEXTURE_2D, hud[0]); gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, HW, HH, gl.RGBA, gl.UNSIGNED_BYTE, parts.hud); }
       layered = Boolean(parts.hud); lines = parts.logical.h;
+      if (layers.voxelFrame?.scene) { trackPass ??= createTrackPass(gl); trackPass.draw(src, W, H, layers.voxelFrame); }
+      else if (layers.voxelFrame) voxelPass.draw(src, W, H, layers.voxelFrame);
     },
     render(rect, u, hudMode = 'picture') {
       const showHud = layered && hudMode !== 'picture', smooth = showHud && hudMode === 'smooth', scale = H / lines; // the world's pixels a logical row
@@ -258,19 +264,28 @@ function createRenderer(canvas, source) {
 // The display of the page. `source` is the 320 x 200 canvas every screen is drawn into, `host` the element around it (the one that goes full
 // screen), `closeUp` an optional canvas of the panel that shows a part of the screen enlarged. `onChange` is called when full screen comes or goes and
 // when the graphics card's part turns out not to be available, is lost or comes back (the CRT look is then not available, or is again).
-export function createDisplay({ source, host, closeUp = null, onChange = () => {} }) {
+export function createDisplay({ source, host, closeUp = null, onChange = () => {}, onError = () => {} }) {
   const canvas = document.createElement('canvas'); canvas.className = 'display'; canvas.hidden = true; canvas.setAttribute('aria-label', source.getAttribute('aria-label') ?? '');
   host.append(canvas);
   let settings = normalizeDisplay(), renderer = null, tried = false, failure = null, lost = false, observed = null, mode = 'plain', shown = 0, lastCloseUp = -Infinity, ms = 0, frames = 0, scratch = null;
-  let rendering = { scale: 1, wide: false }, logical = null; // the stored rendering choices (setRendering); the logical size of the picture last uploaded
+  let rendering = { scale: 1, wide: false, voxels: false }, logical = null; // the stored rendering choices (setRendering); the logical size of the picture last uploaded
+  let failed = false;
+  // Stop using a broken GPU pipeline for this page session. In particular, do
+  // not retry a lazy shader failure on every frame or after a layout change.
+  function fail(error) {
+    if (failed) return;
+    failed = true; tried = true; failure = String(error?.message ?? error);
+    renderer = null; logical = null;
+    layout(); onChange(); onError(failure);
+  }
   canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); lost = true; layout(); onChange(); });
-  canvas.addEventListener('webglcontextrestored', () => { try { renderer = createRenderer(canvas, source); lost = false; failure = null; } catch (e) { renderer = null; failure = e.message; } layout(); onChange(); });
+  canvas.addEventListener('webglcontextrestored', () => { if (failed) return; try { renderer = createRenderer(canvas, source); lost = false; failure = null; } catch (e) { fail(e); return; } layout(); onChange(); });
 
   // Whether the CRT look can be shown: before the graphics card's part is needed, whether the browser has WebGL 2 at all (the page as it was
   // never makes a WebGL context); after, whether it was made and is not lost.
   const ready = () => (tried ? Boolean(renderer) && !lost : typeof WebGL2RenderingContext === 'function');
   function start() { // the graphics card's part, made the first time a setting needs it
-    if (!tried) { tried = true; try { renderer = createRenderer(canvas, source); } catch (e) { failure = e.message; onChange(); } }
+    if (!tried) { tried = true; try { renderer = createRenderer(canvas, source); } catch (e) { fail(e); } }
     return ready();
   }
   const fullscreen = () => document.fullscreenElement === host;
@@ -282,7 +297,7 @@ export function createDisplay({ source, host, closeUp = null, onChange = () => {
   // The page as it was, for plain settings out of full screen: not while the stored rendering choices draw a world of another size (it could not
   // show one), unless the graphics card cannot be used anyway (`rendered` false: then the world is drawn at 1x and the page is as it was).
   // Decided from the stored choices, not from what a frame drew: the graphics card starts when they need it, and worldReady can become true.
-  const plainFor = (s, full, rendered = true) => (isPlain(s) && !full && (!rendered || (rendering.scale === 1 && !rendering.wide)) ? 'plain' : null);
+  const plainFor = (s, full, rendered = true) => (isPlain(s) && !full && (!rendered || (rendering.scale === 1 && !rendering.wide && !rendering.voxels)) ? 'plain' : null);
   // The screen rows the integer scaling counts whole: s times the picture's rows while the world is drawn at s times the samples.
   const gridOf = l => (mode === 'gl' && rendering.scale > 1 ? rendering.scale * l.h : l.h);
 
@@ -311,13 +326,15 @@ export function createDisplay({ source, host, closeUp = null, onChange = () => {
   // them the canvas is shown whole. Layers with a HUD layer while the HUD is set to be in the picture show the canvas (it has the overlays).
   // The picture's place comes from the frame's logical size.
   function present(upload = true, layers = null) {
+    try {
     if (mode === 'gl' && ready()) {
-      const t0 = performance.now(), use = layers && (settings.hud !== 'picture' || layers.hud === null || layers.hud === undefined) ? layers : null;
+      const t0 = performance.now(), use = layers && (layers.voxelFrame || settings.hud !== 'picture' || layers.hud === null || layers.hud === undefined) ? layers : null;
       if (upload || !shown) { renderer.upload(use); logical = use?.logical ?? size(); }
       const shape = logical ?? size(), rect = pictureRect(canvas.width, canvas.height, settings, shape, gridOf(shape));
-      renderer.render(rect, crtUniforms(settings, rect, shape), settings.hud); shown += 1;
+      renderer.render(rect, crtUniforms(settings, rect, shape), rendering.voxels && settings.hud === 'picture' ? 'crisp' : settings.hud); shown += 1;
       ms += (performance.now() - t0 - ms) / Math.min(++frames, TIMING_FRAMES); // a running mean of the CPU time
     }
+    } catch (error) { fail(error); }
     drawCloseUp();
   }
   const shownRect = () => { const shape = logical ?? size(); return pictureRect(canvas.width, canvas.height, settings, shape, gridOf(shape)); };
@@ -370,9 +387,10 @@ export function createDisplay({ source, host, closeUp = null, onChange = () => {
     // The stored rendering choices of the graphics settings (Stage 4: the scale, and whether the view is wide), told by the page whenever
     // they change and before the first frame: away from 1x and the standard view the graphics card draws (worldReady), even from plain
     // display settings, the integer scaling counts s times the rows, and the element is laid out for the wide view's picture (widest).
-    setRendering({ scale = 1, wide = false } = {}) { const next = { scale: Number.isInteger(scale) && scale > 1 ? scale : 1, wide: Boolean(wide) }; if (next.scale === rendering.scale && next.wide === rendering.wide) return; rendering = next; layout(); },
+    setRendering({ scale = 1, wide = false, voxels = false } = {}) { const next = { scale: Number.isInteger(scale) && scale > 1 ? scale : 1, wide: Boolean(wide), voxels: Boolean(voxels) }; if (next.voxels === rendering.voxels && next.scale === rendering.scale && next.wide === rendering.wide) return; rendering = next; layout(); },
     get rendering() { return { ...rendering }; },
     present,
+    fail,
     layout,
     toggleFullscreen,
     fullscreen,
@@ -381,7 +399,7 @@ export function createDisplay({ source, host, closeUp = null, onChange = () => {
     // its context lost, the page draws at 1x and shows the canvas).
     worldReady: () => mode === 'gl' && ready(),
     // Whether the page should hand race screens over as layers: the graphics card draws and the HUD is a layer of its own.
-    hudLayer: () => mode === 'gl' && ready() && settings.hud !== 'picture',
+    hudLayer: () => mode === 'gl' && ready() && (rendering.voxels || settings.hud !== 'picture'),
     // The way the picture is shown, the display pass's mean time, the canvas's size and the picture's place on it; with the graphics card the
     // sizes of the last frame's world and HUD layer (null for none), its logical size and the logical size the element is laid out for.
     stats: () => { const gl = mode === 'gl' && renderer ? renderer.sizes() : null; return { mode, ms, failure, lost, started: tried, width: canvas.width, height: canvas.height, rect: mode === 'gl' ? shownRect() : null, world: gl?.world ?? null, hud: gl?.hud ?? null, logical: mode === 'gl' ? logical ?? size() : null, element: mode === 'gl' ? widest() : null }; },

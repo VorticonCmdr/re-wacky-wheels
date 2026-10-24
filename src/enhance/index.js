@@ -39,6 +39,7 @@ import { models } from './models.js';
 import { loadAtmospheres, normalizeAtmosphere, sunAngleOf, sunLengthOf, fogTintOf } from './atmosphere.js';
 import { coverClouds, skyRowColours, stripSkyIndices } from './clouds.js';
 import { gradeOf } from './grade.js';
+import { loadTime, saveTime, normalizeTime, timeAtmosphere, randomTime } from '../time-of-day.js';
 import { coverRange, rangeColours } from './ranges.js';
 import { liquidsOf, waterColours } from './water.js';
 import { groundRelief, sunVector } from './relief.js';
@@ -75,10 +76,11 @@ function words(rgba) {
 // pack stored, nothing of this runs: the frame is today's. `blits` (the checks' region recorder) is told every picture drawn (scene.js).
 // The provider's kart angle sets (M4: angles.js) are drawn with the art, their index picked by the settings' `angles` (RENDER.angles: locked,
 // free or off); `angleLog` (the checks' recorder) is told each record drawn from a set (scene.js opts.angleLog).
-export function createEnhancer({ storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false, art = null, blits = null, angleLog = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
+export function createEnhancer({ voxels = null, storage = undefined, atmosphere = null, relief = null, force = null, stages = false, look = HD.look, probes = true, trace = false, art = null, blits = null, angleLog = null } = {}) { // undefined: the browser's storage, looked up where it is read (settings.js, atmosphere.js)
   const F = models().floor, size = F.width * F.height;
   let settings = loadSettings(storage), ramps = new WeakMap(), stored = atmosphere ? null : loadAtmospheres(storage);
-  const atmosphereOf = world => normalizeAtmosphere((atmosphere ? atmosphere(world.name) : stored[world.name]) ?? {});
+  let timeOfDay = atmosphere ? 'track' : loadTime(storage), raceTime = randomTime();
+  const atmosphereOf = world => timeAtmosphere(normalizeAtmosphere((atmosphere ? atmosphere(world.name) : stored[world.name]) ?? {}), timeOfDay, new Date(), raceTime);
   if (look !== 'reference' && look !== 'full') throw new Error(`no look '${look}': 'reference' or 'full'`);
   const motion = createMotion(), particles = createParticles(), marks = createMarks(), wide = createWide(), timing = { sum: 0, count: 0, last: 0, window: null };
   let traced = null, splatted = []; // the last frame's trace and particle discs (`trace`)
@@ -121,7 +123,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     return { provider: art, sky: split ? art.sky(LAYOUT().background) : own.sky, strip: own.strip, stripSky: own.stripSky };
   };
   // Whether the settings draw through the enhanced path: the artwork counts only while a pack is stored (ARTWORK with no pack draws nothing).
-  const enhancedNow = s => enhancedOn(s.art && !(art?.size > 0) ? { ...s, art: false } : s);
+  const enhancedNow = s => Boolean(voxels?.active) || enhancedOn(s.art && !(art?.size > 0) ? { ...s, art: false } : s);
   // The geometry of a frame (Stage 4): the frame context's `geometry` when it gives one (the checks, scripts/spike-2x.mjs), else the settings'
   // scale and view where the caller can show a world of another size (`worldReady`: the page's display.worldReady(), true for the previews and
   // the checks, which show the RGBA world themselves) and 1x in the standard view where it cannot (the stored choices are kept for when it
@@ -159,7 +161,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     const length = sunLengthOf(atmo);
     return { ground: groundRelief(world, relief?.tiles ?? null), sun: sunVector(world, sunAngleOf(atmo, settings.sunAngle), length), length, strength: atmo.relief, frameHeights: relief?.frame ?? null };
   };
-  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0, packs = null) => ({ art: packs, blits, angles: settings.angles, angleLog, subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
+  const opts = (fine, atmo, liquids, lit = null, B = null, rows = B?.rows, soft = B?.R ?? null, from = 0, packs = null) => ({ voxels, art: packs, blits, angles: settings.angles, angleLog, subPixel: settings.smooth, shadows: settings.shadows, sceneryShadows: settings.sceneryShadows, sunShadows: settings.sunShadows, sunAngle: sunAngleOf(atmo, settings.sunAngle), sunLength: sunLengthOf(atmo), band: SHADOW.bottomBand, marks: settings.skidMarks ? marks : null, now: fine.time, sizes: settings.sizes, water: liquids ? { liquids, strength: atmo.water, beach: Boolean(liquids.beach) } : null, relief: lit, collect, force: forced, rows: B ? rows : rowFlags, page: B?.page, soft, from, clock: mark, wide: probes ? wide : null, trace: trace ? (traced = { records: [], marks: [] }) : null });
   // The liquids of a world when its water moves (the switch, the track's water above 0, a liquid on its map), else null.
   const liquidsOn = (world, atmo) => { if (!settings.water || !(atmo.water > 0)) return null; const l = liquidsOf(world); return l.any ? { ...l, beach: world.beach !== null && world.beach !== undefined } : null; };
   const rampOf = (world, strength) => { // the fog's table of a world at a strength (the game setting's times the track's)
@@ -167,8 +169,8 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     let r = byStrength.get(strength); if (!r) { r = fogRamp(world, strength); byStrength.set(strength, r); }
     return r;
   };
-  const effectsOf = (world, cap, atmo) => ({ shadow: settings.shadows || settings.sceneryShadows || settings.sunShadows ? settings.shadowStrength : 0, fog: settings.fog ? { color: fogTintOf(atmo, fogColor(world)), ramp: rampOf(world, settings.fogStrength * atmo.fog), horizon: FOG.horizon * settings.fogStrength * atmo.fog } : null, cap });
-  const view = (state, alpha) => { const fine = motion.view(state, settings.smooth ? alpha : 1, frameMs()); return { fine, P: present(state, fine) }; };
+  const effectsOf = (world, cap, atmo) => ({ shadow: voxels?.active || settings.shadows || settings.sceneryShadows || settings.sunShadows ? settings.shadowStrength : 0, fog: settings.fog ? { color: fogTintOf(atmo, fogColor(world)), ramp: rampOf(world, settings.fogStrength * atmo.fog), horizon: FOG.horizon * settings.fogStrength * atmo.fog } : null, cap });
+  const view = (state, alpha) => { const fine = motion.view(state, (voxels?.active ? voxels.smooth !== false : settings.smooth) ? alpha : 1, frameMs()); return { fine, P: present(state, fine) }; };
   // The overlays over the world, and their mask. In a single view of the track's own sky (`trackSky`), an overlay pixel that only puts back the
   // sky's own index (the overhead map's rectangle, which the game takes from the race's first frame, sky and all) stays sky: the clouds and
   // the lighting reach it as they reach the sky around it. Not in the split screen (its strips are drawn over the strips' picture) nor over a
@@ -273,6 +275,9 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
   };
 
   const api = {
+    beginRace() { raceTime = randomTime(); },
+    get timeOfDay() { return timeOfDay; },
+    set timeOfDay(value) { timeOfDay = normalizeTime(value); saveTime(timeOfDay, storage); },
     get settings() { return settings; },
     active: () => enhancedNow(settings),
     // New settings, kept in this browser; a switch that changed starts a new scene (no snapshot or particle of the old mode is kept). The
@@ -285,13 +290,14 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     },
     // A new scene (a race start, a restart, a round, a mode change): no snapshot, no particle survives it. The stored atmospheres are read
     // again (the track editor may have changed them in another tab).
-    reset() { motion.reset(); particles.clear(); marks.clear(); wide.reset(); if (!atmosphere) stored = loadAtmospheres(storage); },
+    reset() { voxels?.resetCollections(); motion.reset(); particles.clear(); marks.clear(); wide.reset(); if (!atmosphere) stored = loadAtmospheres(storage); },
     // The atmosphere a world is drawn with.
     atmosphereOf,
     // After every completed tick of the race; `sounds` are the tick's sounds when the page has already taken them out of the state.
     afterTick(state, { sounds = state.sounds } = {}) {
       if (!enhancedNow(settings)) return;
       const { prev, cur } = motion.tick(state, frameMs(), sounds);
+      voxels?.afterTick(state, cur.time, prev, cur);
       if (settings.particles) particles.emit(state, prev, cur, settings.particleAmount);
       if (settings.skidMarks) marks.emit(prev, cur);
     },
@@ -308,9 +314,12 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     drawSingle(state, alpha, { index, out, palette, mode, sky = null, overlays, seat = 0, cap = 255, layers = null, worldReady = false, aspect = null, wideAllowed = true, geometry = null, useArt = true, edges = null }) { // @math the brightest 8-bit component
       return timed(() => {
         clock?.start();
+        voxels?.begin(state, worldReady, alpha);
         const { fine, P } = view(state, alpha), G = geometryFor(geometry, worldReady, state.world, aspect, wideAllowed);
         if (seat === 1) swapSeat(P); // @math the second player's seat
         const atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo), packs = useArt ? artFor(P.world) : null;
+        if (voxels) voxels.atmosphere = settings.lighting ? atmo : null;
+        voxels?.trackScene(P, fine, { angle: sunAngleOf(atmo, settings.sunAngle), length: sunLengthOf(atmo) });
         if (G.identity && !forced.pipeline) { // (with the artwork packs too: their art layers beside L, the general caster and blit, compositeAt)
           artLayersAtIdentity(Boolean(packs));
           const camera = renderEnhancedScene(P, fine, seat, index, L, mode, sky, opts(fine, atmo, liquids, lit, null, undefined, null, 0, packs));
@@ -319,7 +328,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
           if (trace) splatted = splats;
           const look = lookOf(P.world, atmo, fine, seat, !sky, cap, liquids);
           compose(out, index, layers, { L, palette, width: F.width, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, rowFlags); mark?.('composite');
-          shown = { G: IDENTITY, out, layers, B: null }; set = null; // back at the reference geometry: the buffers of another are released
+          shown = { G: IDENTITY, out, layers, B: null, voxelFrame: voxels?.frame(L.depth, L.kind, cap, effectsOf(P.world, cap, atmo).fog) }; set = null; // back at the reference geometry: the buffers of another are released
           return P;
         }
         artLayersAtIdentity(false);
@@ -333,7 +342,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
         if (trace) splatted = splats;
         const look = lookOf(P.world, atmo, fine, seat, !sky, cap, liquids, B);
         composeAt(B, out, index, layers, { L: B.L, palette, effects: { ...effectsOf(P.world, cap, atmo), ...look, relief: Boolean(lit) }, splats }, G.sample, place);
-        shown = { G, out, layers, B, placed: place };
+        shown = { G, out, layers, B, placed: place, voxelFrame: voxels?.frame(B.L.depth, B.L.kind, cap, effectsOf(P.world, cap, atmo).fog) };
         return P;
       });
     },
@@ -348,6 +357,7 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     drawSplit(state, alpha, { index, out, palette, mode, overlays, cap = 255, layers = null, worldReady = false, geometry = null, useArt = true }) { // @math the brightest 8-bit component
       return timed(() => {
         clock?.start();
+        voxels?.begin(state, false);
         const { fine, P } = view(state, alpha), Y = LAYOUT(), first = P.versus.viewer, cams = [], atmo = atmosphereOf(P.world), liquids = liquidsOn(P.world, atmo), lit = reliefOf(P.world, atmo), G = geometryFor(geometry, worldReady), packs = useArt ? artFor(P.world, true) : null;
         if (G.identity && !forced.pipeline) {
           artLayersAtIdentity(Boolean(packs));
@@ -416,17 +426,17 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
       over.world.set(world.data); if (hud) over.hud.set(hud.data); else over.hud.fill(0);
       const hud32 = words(over.hud), colours = paintOf(palette);
       for (let i = 0; i < size; i++) if (mask[i]) hud32[place.hud[i]] = colours[index[i]]; // the overlay at its place in the HUD layer (hud-place.js)
-      if (hudLayer) return { world: { data: over.world, w: world.w, h: world.h }, hud: { data: over.hud, w: logical.w, h: F.height }, logical: { ...logical } };
+      if (hudLayer) return { world: { data: over.world, w: world.w, h: world.h }, hud: { data: over.hud, w: logical.w, h: F.height }, logical: { ...logical }, voxelFrame: kept.voxelFrame };
       stampHud(words(over.world), hud32, s, world.w, logical.w);
-      return { world: { data: over.world, w: world.w, h: world.h }, hud: null, logical: { ...logical } };
+      return { world: { data: over.world, w: world.w, h: world.h }, hud: null, logical: { ...logical }, voxelFrame: kept.voxelFrame };
     },
 
     // A copy of the last frame's layers when it was drawn above the reference geometry (the page keeps it for the screens that show the race's
     // last frame: the menu of a lost race, the loading card; the enhancer's own buffers are drawn over by the next frame), else null (at the
     // reference geometry the canvas is the picture).
     keepLayers() {
-      const l = shown?.B ? api.layers() : null;
-      return l ? { world: { data: l.world.data.slice(), w: l.world.w, h: l.world.h }, hud: l.hud ? { data: l.hud.data.slice(), w: l.hud.w, h: l.hud.h } : null, logical: { ...l.logical } } : null;
+      const l = shown?.B || shown?.voxelFrame ? api.layers() : null;
+      return l ? { world: { data: l.world.data.slice(), w: l.world.w, h: l.world.h }, hud: l.hud ? { data: l.hud.data.slice(), w: l.hud.w, h: l.hud.h } : null, logical: { ...l.logical }, voxelFrame: l.voxelFrame ? { ...l.voxelFrame, depth: l.voxelFrame.depth.slice(), kind: l.voxelFrame.kind.slice() } : null } : null;
     },
 
     // The last frame's layers for the display (Stage 4): { world: { data, w, h }, hud: { data, w, h } or null, logical: { w, h } }. Away from the
@@ -435,9 +445,9 @@ export function createEnhancer({ storage = undefined, atmosphere = null, relief 
     // size is the reference grid's, refW x 200. Null before the first frame.
     layers() {
       if (!shown) return null;
-      const { G, out, layers, B } = shown, logical = { w: G.refW, h: F.height };
-      if (!B) return { world: { data: layers ? layers.world : out, w: F.width, h: F.height }, hud: layers ? { data: layers.hud, w: F.width, h: F.height } : null, logical };
-      return { world: { data: B.world, w: G.W, h: G.H }, hud: layers ? { data: B.hud, w: G.refW, h: F.height } : null, logical };
+      const { G, out, layers, B, voxelFrame } = shown, logical = { w: G.refW, h: F.height };
+      if (!B) return { world: { data: layers ? layers.world : out, w: F.width, h: F.height }, hud: layers ? { data: layers.hud, w: F.width, h: F.height } : null, logical, voxelFrame };
+      return { world: { data: B.world, w: G.W, h: G.H }, hud: layers ? { data: B.hud, w: G.refW, h: F.height } : null, logical, voxelFrame };
     },
 
     // The last frame's layers, its overlay mask, its geometry, the kinds of its reference samples, its world's indices before the overlays

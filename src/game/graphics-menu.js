@@ -13,7 +13,7 @@ export const GRAPHICS_MENU = {
     { id: 'gfxShadows', name: 'MOTION AND SHADOWS', effects: [['smooth', 'SMOOTH MOTION'], ['shadows', 'CONTACT SHADOWS'], ['sceneryShadows', 'SCENERY SHADOWS'], ['sunShadows', 'SUN SHADOWS'], ['skidMarks', 'SKID MARKS']] },
     { id: 'gfxParticles', name: 'SURFACE AND SKY', effects: [['particles', 'PARTICLES'], ['water', 'MOVING WATER'], ['fog', 'DISTANCE FOG'], ['clouds', 'SKY LAYERS'], ['lighting', 'TRACK LIGHTING']] }, // SKY LAYERS: the clouds and the far range; the track's own atmosphere (its fog, sky, water and lighting) is set in the track editor
   ],
-  levelsItem: 'EFFECT LEVELS',
+  levelsItem: 'LIGHTING AND TIME',
   levels: [['shadowStrength', 'SHADOWS'], ['fogStrength', 'FOG'], ['particleAmount', 'PARTICLES'], ['sunAngle', 'SUN FROM']],
   defaults: 'DEFAULT LEVELS',
   width: 20, // @math a bar's text: the longest name, SCENERY SHADOWS or SUN FROM, a space and the longest word after it
@@ -40,6 +40,6 @@ export function graphicsMenu(id, view = BLANK, { on, off, leave }) {
   }
   const group = G.groups.find(g => g.id === id);
   if (group) return { items: [...group.effects.map(([key, name]) => line(name, v.on?.[key] ? on : off)), leave], actions: [...group.effects.map(([key]) => ({ graphics: { toggle: key } })), back] };
-  const items = [...G.levels.map(([key, name]) => line(name, v.levels?.[key] ?? '-')), G.defaults, leave];
-  return { items, actions: [...G.levels.map(([key]) => ({ graphics: { cycle: key } })), { graphics: { defaultLevels: true } }, back] };
+  const items = [...G.levels.map(([key, name]) => line(name, v.levels?.[key] ?? '-')), line('TIME OF DAY', v.timeOfDay ?? 'RANDOM'), leave];
+  return { items, actions: [...G.levels.map(([key]) => ({ graphics: { cycle: key } })), { graphics: { timeOfDay: true } }, back] };
 }

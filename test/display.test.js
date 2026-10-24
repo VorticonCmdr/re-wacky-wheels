@@ -137,7 +137,7 @@ test('the lines change the settings: the scaling and the shape go round, the CRT
 
 // A WebGL 2 context that draws nothing and logs every call ([name, ...arguments]): shaders compile, programs link, a uniform's location is its
 // name and a created object is a fresh { id }.
-function recordingGl(log) {
+function recordingGl(log, fault = {}) {
   let made = 0;
   return new Proxy({}, { get(_, k) {
     if (typeof k !== 'string') return undefined;
@@ -145,7 +145,7 @@ function recordingGl(log) {
     if (k === 'getShaderParameter' || k === 'getProgramParameter') return () => true;
     if (k === 'getUniformLocation') return (p, name) => name;
     if (k.startsWith('create')) return () => ({ id: ++made });
-    return (...args) => { log.push([k, ...args]); };
+    return (...args) => { if (fault.method === k) throw new Error(fault.message); log.push([k, ...args]); };
   } });
 }
 // The sizes the log's texImage2D calls gave each texture ([texture id, w, h], in order) and the values of a uniform.
@@ -155,18 +155,49 @@ const uniform = (log, name) => log.filter(([k, at]) => k.startsWith('uniform') &
 // A page made of stubs, enough for createDisplay's choice of how the picture is shown: `webgl` is 'none' (no WebGL 2 in the browser), 'fails'
 // (WebGL 2 is there, but no context can be made) or 'works' (a context that logs its calls into `gl`). Returns the display, the source canvas, how
 // many contexts were asked for, how often onChange was called and the context's log.
-function stubPage({ webgl }) {
+function stubPage({ webgl, fault = {} }) {
   const saved = {}, set = (k, v) => { saved[k] = Object.getOwnPropertyDescriptor(globalThis, k); Object.defineProperty(globalThis, k, { value: v, configurable: true, writable: true }); };
   let asked = 0, changes = 0;
   const gl = [], element = extra => ({ style: {}, hidden: false, width: 300, height: 150, classList: { toggle() {} }, setAttribute() {}, getAttribute: () => null, addEventListener() {}, getBoundingClientRect: () => ({ top: 66, width: 960, height: 600 }), ...extra }); // @math a canvas's default size and a plausible box
-  const canvas = element({ getContext: () => { asked += 1; return webgl === 'works' ? recordingGl(gl) : null; } }); // with 'none' and 'fails' no context is ever made: whether the browser has WebGL 2 at all is WebGL2RenderingContext
+  const canvas = element({ getContext: () => { asked += 1; return webgl === 'works' ? recordingGl(gl, fault) : null; } }); // with 'none' and 'fails' no context is ever made: whether the browser has WebGL 2 at all is WebGL2RenderingContext
   set('document', { createElement: () => canvas, fullscreenElement: null, fullscreenEnabled: true, addEventListener() {} });
   set('addEventListener', () => {}); set('innerHeight', 900); set('scrollY', 0); set('devicePixelRatio', 2); set('ResizeObserver', undefined); // @math a window
   set('WebGL2RenderingContext', webgl === 'none' ? undefined : function WebGL2RenderingContext() {});
   const source = element({ width: 320, height: 200 }), host = element({ append() {}, parentElement: { clientWidth: 1068 } }); // @math the page's canvas and slot
-  const display = createDisplay({ source, host, onChange: () => { changes += 1; } });
-  return { display, source, gl, asked: () => asked, changes: () => changes, restore: () => { for (const [k, d] of Object.entries(saved)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; } } };
+  const errors = [];
+  const display = createDisplay({ source, host, onChange: () => { changes += 1; }, onError: message => errors.push(message) });
+  return { display, source, gl, errors, asked: () => asked, changes: () => changes, restore: () => { for (const [k, d] of Object.entries(saved)) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; } } };
 }
+
+test('failed upload, lazy 3D shader or draw falls back once and allows subsequent frames and settings changes', () => {
+  for (const method of ['texSubImage2D', 'shaderSource', 'drawArrays']) {
+    const fault = {}, page = stubPage({ webgl: 'works', fault });
+    try {
+      page.display.setRendering({ voxels: true });
+      assert.equal(page.display.worldReady(), true);
+      fault.method = method; fault.message = `Forced ${method} failure`;
+      const layers = { world: new Uint8ClampedArray(320 * 200 * 4), voxelFrame: { scene: {} } };
+      assert.doesNotThrow(() => page.display.present(true, method === 'shaderSource' ? layers : null));
+      assert.equal(page.display.worldReady(), false);
+      assert.equal(page.display.hudLayer(), false);
+      assert.equal(page.source.hidden, false);
+      assert.equal(page.display.canvas.hidden, true);
+      assert.equal(page.display.stats().failure, fault.message);
+      assert.deepEqual(page.errors, [fault.message]);
+      const calls = page.gl.length;
+      assert.doesNotThrow(() => {
+        page.display.present(true, layers);
+        page.display.configure(resetDisplay());
+        page.display.setRendering({ voxels: false });
+        page.display.present();
+        page.display.fail(new Error('secondary failure'));
+      });
+      assert.equal(page.gl.length, calls, 'never retries the broken GPU');
+      assert.equal(page.asked(), 1);
+      assert.deepEqual(page.errors, [fault.message], 'keeps the first actionable error');
+    } finally { page.restore(); }
+  }
+});
 
 test('the display: the page as it was never asks for a WebGL context; the default 4:3 or another setting that needs one asks once; a CRT look the browser cannot show leaves the page as it was', () => {
   const plain = { ...resetDisplay(), ...DISPLAY.plain }, page = stubPage({ webgl: 'none' });

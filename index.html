@@ -22,7 +22,22 @@
     <main>
       <p id="message" class="message">Choose your own WACKY.DAT (nothing is uploaded) to drive a track.</p>
       <div class="stage" id="stage" hidden>
-        <div class="screen-box" id="screen-box"><canvas id="screen" width="320" height="200" aria-label="Driver's view"></canvas></div>
+        <div class="time-controls">
+          <label>Time of day <select id="time-of-day" aria-label="Time of day">
+            <option value="random">Random</option><option value="track">Track settings</option><option value="day">Day</option>
+            <option value="dusk">Dusk</option><option value="night">Night</option><option value="now">Now (local time)</option>
+          </select></label>
+          <span>Enhanced and Voxel lighting. Random chooses once per race. Now follows your local clock: dawn 06–08, day 08–18, dusk 18–20, night 20–06.</span>
+        </div>
+        <div class="screen-box" id="screen-box">
+          <canvas id="screen" width="320" height="200" aria-label="Driver's view"></canvas>
+          <div id="render-error" class="render-error" role="alert" hidden>
+            <strong>3D rendering stopped. The game can continue in the fallback view.</strong>
+            <p>Use the original renderer to continue. Reload the page before trying 3D again.</p>
+            <details><summary>Error details</summary><pre id="render-error-detail"></pre></details>
+            <button id="render-original" type="button">Use original renderer</button>
+          </div>
+        </div>
         <div class="panel">
           <label>Track <select id="track"></select></label>
           <label>Detail <select id="detail"><option value="1">High</option><option value="2">Medium</option><option value="3">Low</option></select></label>
@@ -47,7 +62,7 @@
           </fieldset>
           <fieldset class="graphics" id="graphics">
             <legend>Graphics</legend>
-            <label>Preset <select id="gfx-preset"><option value="original">Original</option><option value="enhanced">Enhanced</option><option value="custom" disabled>Custom</option></select></label>
+            <label>Preset <select id="gfx-preset"><option value="original">Sprites original</option><option value="enhanced">Sprites enhanced</option><option value="voxel">Voxel</option><option value="custom" disabled>Custom</option></select></label>
             <label class="check"><input type="checkbox" id="gfx-smooth" /> Smooth motion</label>
             <label class="check"><input type="checkbox" id="gfx-shadows" /> Contact shadows</label>
             <label class="check"><input type="checkbox" id="gfx-sceneryShadows" /> Scenery shadows</label>

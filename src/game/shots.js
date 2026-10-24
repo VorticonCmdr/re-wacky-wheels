@@ -80,7 +80,7 @@ export function fireStep(car0, volley0, fire, env, { shareware = false } = {}) {
 const stepOf = (world, heading, length) => straightMove(world.trig, heading, length);
 
 // The heading a record moves along (obj1+0x15e6c): the types 0 and 5 follow the owner's heading with their lane, the others have their own.
-function headingOf(shot, ownerHeading, turn) {
+export function headingOf(shot, ownerHeading, turn) {
   const R = RULES();
   if (shot.type === R.types.hog || shot.type === R.types.ice) return shot.lane === 0 ? ownerHeading : shot.lane === 1 ? wrap(ownerHeading - R.headings.lane, turn) : wrap(ownerHeading + R.headings.lane, turn); // @math the lane words 1 and 2: less and more than the heading
   return shot.lane;
@@ -170,6 +170,8 @@ export function stepShots(shots0, ctx) {
     }
     if (code !== 0) { // the explosion
       sounds.push(R.sounds.explosion); volleys.push(shot.owner);
+      // Preserve the visual identity before switching to the shared explosion sprite.
+      shot.sourceBlock = shot.block;
       shot.state = EXPLODING; shot.frames = R.frames.explosion; shot.frame = 0; shot.block = R.blocks.explosion;
     }
     shots[i] = shot;

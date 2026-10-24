@@ -23,7 +23,7 @@ test('the page\'s display lists in Stage 4: CRT LOOK leads CRT AND HUD, DEFAULT 
   assert.deepEqual(menuDef('rendering', settings).items.length, 6); // @math RESOLUTION, VIEW (M8), SPRITE SIZES (M7), KART ANGLES (M4), ARTWORK (the packs) and LEAVE THIS MENU: the six-line limit
   const edges = { ...settings, graphics: menuView(normalizeGraphics({ view: 'wide', hudPlace: 'edges' })) }, rendering = menuDef('rendering', edges);
   assert.ok(rendering.items.length === 6 && rendering.items[1] === 'VIEW      WIDE EDGES' && firstBar('rendering', edges) >= gameTopBar(), 'M9: VIEW WIDE EDGES needs no line of its own, and fits its bar'); // @math the six lines; the second, VIEW, with WIDE EDGES in 20 characters
-  assert.ok(menuDef('gfxLevels', settings).items.includes('DEFAULT LEVELS'), 'EFFECT LEVELS keeps its own DEFAULT LEVELS');
+  assert.ok(menuDef('gfxLevels', settings).items.some(t => t.startsWith('TIME OF DAY')), 'LIGHTING AND TIME contains the time setting');
   const long = ['options', 'keysSound', 'keys', 'sound', 'graphics', 'gfxShadows', 'gfxParticles', 'gfxLevels', 'display', 'crtLevels', 'rendering'].filter(id => menuDef(id, settings).items.length > 6); // @math the page's own lists: six lines at most
   assert.deepEqual(long, []);
 });

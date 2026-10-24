@@ -1,3 +1,8 @@
+import { TIME_CHOICES } from './time-of-day.js';
+import { mapping, racerOf } from './enhance/angles.js';
+import { headingVectorAt, projectAt } from './enhance/project.js';
+import { createVoxelKarts } from './voxel/karts.js';
+import { mountVoxelControls } from './voxel/controls.js';
 // The playtest page: the proven renderers and car step of src/render and src/game. Everything is decoded in the browser
 // from the player's own WACKY.DAT; nothing is uploaded or stored.
 import { duckPicture, gone, skipped, duckRules, duckTrack } from './game/duck.js';
@@ -116,12 +121,19 @@ function reloadArt(world = state.world, decode = enh.settings.art && Boolean(wor
   done.then(() => { if (current()) { showArtStatus(); showGraphics(); } });
   return done;
 }
-const enh = createEnhancer({ relief, art, stages: true }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer (the stage times are the panel's readout)
-const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => showDisplay() }); // how the finished picture is put on the screen (docs/enhancements.md, Stage 1): it reads the canvas and never draws into it
+const voxels = createVoxelKarts({ mapping, racerOf, headingVectorAt, projectAt });
+let voxelControls = null;
+const enh = createEnhancer({ relief, art, stages: true, voxels }); // the Enhanced presentation (docs/enhancements.md): it reads the race state and never writes it; with every effect off the page draws the reference renderer (the stage times are the panel's readout)
+voxels.enabled = enh.settings.voxel || new URLSearchParams(location.search).has('voxels');
+const display = createDisplay({ source: screen, host: $('screen-box'), closeUp: $('dsp-closeup'), onChange: () => { voxels.available = display.worldReady(); showDisplay(); }, onError: message => {
+  voxels.available = false;
+  $('render-error-detail').textContent = message;
+  $('render-error').hidden = false;
+} }); // A failed GPU pass falls back to the source canvas without stopping the game clock.
 // A finished picture: into the canvas, then onto the screen through the display (`layers`: a race screen's world and overlays for the HUD layer,
 // or Stage 4's layers of a world drawn at another size). `enhanced`: the picture is a race frame of the enhancer's (snapshotScreen keeps it).
 let lastShow = { enhanced: false, away: false };
-function show(layers = null, enhanced = false) { ctx.putImageData(image, 0, 0); display.present(true, layers); lastShow = { enhanced, away: Boolean(layers?.logical) && layers.world.w !== screen.width }; showDisplayStats(); }
+function show(layers = null, enhanced = false) { ctx.putImageData(image, 0, 0); display.present(true, layers); lastShow = { enhanced, away: Boolean(layers?.logical) && (layers.world.w !== screen.width || Boolean(layers.voxelFrame)) }; showDisplayStats(); }
 // The HUD layer's buffers (docs/enhancements.md, the HUD layer): the world before the overlays, the overlays drawn into sentinels, the two layers.
 const hudUnder = new Uint8Array(320 * 200), hudSentinel = new Uint16Array(320 * 200), hudLayers = { world: new Uint8ClampedArray(320 * 200 * 4), hud: new Uint8ClampedArray(320 * 200 * 4) }; // @math the screen; four bytes a colour
 // A race screen of the reference renderer: `index` holds the world, `overlays(fb)` draws everything over it (the HUD, the map, the menu) and
@@ -218,7 +230,7 @@ function startTrack() {
 function startTrackWith({ name, engine, cls, laps, split = Boolean(state.versusMode) }) {
   state.class = cls.class; state.child = cls.child; state.engine = engine; // the class item of the menu: the computer racers' level and the kid mode (race.class-levels)
   startRace(state, { ...loadTrack(state.dat, name, engine, state.humanSlot ?? null, { split }), lion: lionBytes(archiveMembers(state.dat)) }, laps); // a split game's background is BLANK.PCX (versus.layout)
-  state.accumulator = 0; state.pause = null; beginIntro(state); enh.reset(); showAtmosphere(); loadReliefMaps().then(r => relief.set(r)); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
+  state.accumulator = 0; state.pause = null; beginIntro(state); enh.beginRace(); enh.reset(); showAtmosphere(); loadReliefMaps().then(r => relief.set(r)); // the camera's fly-in before the countdown (race.intro); a new scene for the enhanced presentation
   const loading = reloadArt(); // the artwork packs' list, and with ARTWORK on their pictures decoded before the race runs (not in a link race: the other player does not wait; not with no pack stored when the list was last read)
   state.artWait = enh.settings.art && !state.linkPlay && artInfo.packs > 0 ? { since: performance.now(), done: false } : null;
   if (state.artWait) { const wait = state.artWait; loading.then(() => { wait.done = true; }); }
@@ -531,6 +543,7 @@ function chooseItem(action) {
   if (action.display) { const d = action.display, s = display.settings; if (d.fullscreen || (d.crt && !display.crtReady())) return; if (d.hud && !display.crtReady()) return; setDisplay(d.scaling ? nextScaling(s) : d.aspect ? nextAspect(s) : d.crt ? toggleCrt(s) : d.hud ? nextHud(s) : cycleCrtLevel(s, d.level)); return; } // GAME OPTIONS > DISPLAY AND EFFECTS > DISPLAY OPTIONS and its CRT AND HUD (display-menu.js); FULL SCREEN was done in the key's handler, where the browser allows it; CRT LOOK NONE and the HUD layer without WebGL 2 do nothing
   if (action.graphics) { // GAME OPTIONS > DISPLAY AND EFFECTS (graphics-menu.js) and DISPLAY OPTIONS > RENDERING (display-menu.js): the same settings as the panel's
     const g = action.graphics, s = enh.settings;
+    if (g.timeOfDay) { if (s.preset === 'original') return; const choices = Object.keys(TIME_CHOICES); enh.timeOfDay = choices[(choices.indexOf(enh.timeOfDay) + 1) % choices.length]; setGraphics(change(s, 'lighting', true)); return; }
     if (g.cycle && isRenderChoice(g.cycle)) { if ((g.cycle === 'scale' || g.cycle === 'view') && !display.crtReady()) return; if (g.cycle === 'angles' && !(artInfo.angleSets > 0)) return; setGraphics(cycleRender(s, g.cycle)); return; } // RESOLUTION NONE and VIEW NONE (no WebGL 2) and KART ANGLES NONE (no enabled angle set) do nothing; SPRITE SIZES draws at 1x too
     if (g.toggle === 'art' && !(artInfo.packs > 0)) return; // ARTWORK NONE: no pack stored
     setGraphics(g.preset ? nextPreset(s) : g.toggle ? toggle(s, g.toggle) : g.cycle ? cycleLevel(s, g.cycle) : defaultLevels(s)); return;
@@ -607,7 +620,16 @@ function versusReadout() {
 }
 
 function draw() {
-  if (enh.active()) { drawEnhanced(); return; }
+  if (enh.active()) {
+    const wasVoxel = voxels.active;
+    try { drawEnhanced(); return; }
+    catch (error) {
+      if (!wasVoxel) throw error;
+      display.fail(error);
+      // A CPU-side voxel preparation failure needs a fresh fallback picture too.
+      drawEnhanced(); return;
+    }
+  }
   if (state.linkPlay && state.versus) { drawLinkRace(); return; }
   if (state.versus) { drawVersus(); return; }
   const mode = Number($('detail').value);
@@ -627,7 +649,7 @@ function raceReadout() {
 let gfxShown = 0;
 // The layers the display shows for an enhanced frame: the enhancer's own when the world was drawn at another size than the canvas's (Stage 4:
 // RESOLUTION 2X; the overlays in its HUD layer, or stamped into the world when the display has no HUD layer), else the page's HUD layers as before.
-function frameLayers(layers) { const l = enh.layers(); return l && (l.world.w !== screen.width || l.world.h !== screen.height) ? l : layers; }
+function frameLayers(layers) { const l = enh.layers(); return l && (l.voxelFrame || l.world.w !== screen.width || l.world.h !== screen.height) ? l : layers; }
 // The HUD at the edges of a wide frame (Stage 4, M9: VIEW WIDE EDGES, the panel's HUD place): the HUD art's group map (hud-place.js hudGroups,
 // measured from the game's HUD functions on the first frame that asks and kept with the art), the frame's overlays without the ones that stay
 // centred over the original's picture (`base`), and those (`forced`): the race frame's message and crack, and the in-race menu, drawn last as the
@@ -635,6 +657,7 @@ function frameLayers(layers) { const l = enh.layers(); return l && (l.world.w !=
 const edgesOf = () => (enh.settings.hudPlace === 'edges' && enh.settings.view === 'wide' ? { groups: hudGroups({ art: state.hudArt, mov: state.mov, world: state.world }), base: raceBase, forced: (s, fb) => { raceForced(s, fb); if (state.pause) renderMenuOverlay(fb, state.menuArt, pauseView(state.pause)); } } : null);
 function drawEnhanced() {
   const alpha = Math.min(state.accumulator / frameMs(), 1), palette = raceRgba(), cap = fadeCap(), out = image.data, layers = display.hudLayer() ? hudLayers : null; // the HUD layer: the enhancer hands over the world and the overlays apart
+  voxels.available = display.worldReady();
   const worldReady = display.worldReady(), aspect = display.settings.aspect; // the frame context (Stage 4): the world at the settings' resolution only where the display can show it
   if (state.versus && !state.linkPlay) {
     enh.drawSplit(state, alpha, { index, out, palette, cap, mode: state.menu.settings.detail.split, overlays: versusOverlays, layers, worldReady });
@@ -672,6 +695,8 @@ function showRender(s) {
 const LEVEL_KEYS = Object.keys(LEVELS);
 function showGraphics() {
   const s = enh.settings;
+  $('time-of-day').value = enh.timeOfDay;
+  $('time-of-day').disabled = s.preset === 'original';
   $('gfx-preset').value = s.preset;
   for (const k of EFFECTS) $(`gfx-${k}`).checked = s[k];
   for (const k of LEVEL_KEYS) $(`gfx-${k}`).value = String(s[k]);
@@ -684,14 +709,18 @@ function showGraphics() {
   if (!enh.active()) { $('gfx-stats').textContent = 'The reference renderer draws the race.'; $('gfx-budget').hidden = true; }
   $('gfx-art').checked = s.art && artInfo.packs > 0; $('gfx-art').disabled = !(artInfo.packs > 0); // the artwork switch: NONE (disabled) with no pack stored
   $('gfx-angles').value = s.angles; $('gfx-angles').disabled = !(artInfo.angleSets > 0); // the kart angles: NONE (disabled) without an enabled angle set
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, graphics: menuView(s, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets, timeOfDay: enh.timeOfDay }) } }; // the game menu's DISPLAY AND EFFECTS (and DISPLAY OPTIONS > RENDERING) shows the same settings
 }
 // The track's atmosphere (src/enhance/atmosphere.js), set in the track editor: what the sky's layers, the water, the lighting and the fog draw this track with.
 function showAtmosphere() { if (state.world) $('gfx-atmosphere').textContent = `Track ${state.world.name}'s atmosphere: ${describeAtmosphere(enh.atmosphereOf(state.world))} (set in the track editor's Atmosphere tab).`; }
-function setGraphics(next, control) { const was = enh.settings.art; enh.configure(next); if (enh.settings.art && !was) reloadArt(); display.setRendering(renderingOf(enh.settings)); showGraphics(); control?.blur(); } // ARTWORK switched on: the packs' pictures decoded for the race (they apply from the frame they are ready on); a focused control would take the race's keys (Space toggles a box, the arrows move a slider); the display draws with the graphics card while the resolution is above 1x or the view is wide
+function setGraphics(next, control) { const was = enh.settings.art; voxels.enabled = Boolean(next.voxel); if (next.voxel && !enh.settings.voxel) voxels.track = true; enh.configure(next); voxelControls?.update(); if (enh.settings.art && !was) reloadArt(); display.setRendering(renderingOf(enh.settings)); showGraphics(); control?.blur(); } // ARTWORK switched on: the packs' pictures decoded for the race (they apply from the frame they are ready on); a focused control would take the race's keys (Space toggles a box, the arrows move a slider); the display draws with the graphics card while the resolution is above 1x or the view is wide
 // What the display is told of the stored rendering choices (display.setRendering): the scale, and whether the view is wide (its element is then laid out for the wide picture).
-function renderingOf(s) { return { scale: s.scale, wide: s.view === 'wide' }; }
+function renderingOf(s) { return { scale: s.scale, wide: s.view === 'wide', voxels: voxels.enabled }; }
 $('gfx-preset').addEventListener('change', e => setGraphics(applyPreset(enh.settings, e.target.value), e.target));
+$('time-of-day').addEventListener('change', e => {
+  enh.timeOfDay = e.target.value;
+  setGraphics(change(enh.settings, 'lighting', true), e.target);
+});
 for (const k of EFFECTS) $(`gfx-${k}`).addEventListener('change', e => setGraphics(change(enh.settings, k, e.target.checked), e.target));
 for (const k of LEVEL_KEYS) { $(`gfx-${k}`).addEventListener('input', e => setGraphics(change(enh.settings, k, Number(e.target.value)))); $(`gfx-${k}`).addEventListener('change', e => e.target.blur()); }
 $('gfx-scale').addEventListener('change', e => setGraphics(change(enh.settings, 'scale', Number(e.target.value)), e.target));
@@ -721,7 +750,7 @@ function showDisplay() {
   $('dsp-hud').value = ready ? s.hud : 'picture'; $('dsp-hud').disabled = !ready;
   $('dsp-fullscreen').textContent = full ? 'Leave full screen' : 'Full screen'; $('dsp-fullscreen').disabled = !document.fullscreenEnabled;
   showDisplayStats(true);
-  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
+  if (state.menu) state.menu = { ...state.menu, settings: { ...state.menu.settings, display: displayView(s, { fullscreen: full, crtReady: ready }), graphics: menuView(enh.settings, { worldReady: ready, packs: artInfo.packs, angleSets: artInfo.angleSets, timeOfDay: enh.timeOfDay }) } }; // the game menu's DISPLAY OPTIONS (under DISPLAY AND EFFECTS) shows the same settings, its RENDERING the resolution (NONE once WebGL 2 turns out not to be there)
   showGraphics();
 }
 function showDisplayStats(now = false) {
@@ -737,7 +766,19 @@ $('dsp-hud').addEventListener('change', e => setDisplay(changeDisplay(display.se
 for (const k of CRT_LEVELS) { $(`dsp-${k}`).addEventListener('input', e => setDisplay(changeDisplay(display.settings, k, Number(e.target.value)))); $(`dsp-${k}`).addEventListener('change', e => e.target.blur()); }
 $('dsp-fullscreen').addEventListener('click', e => { display.toggleFullscreen(); e.target.blur(); });
 $('dsp-reset').addEventListener('click', e => setDisplay(resetDisplay(), e.target));
-display.setRendering(renderingOf(enh.settings)); display.configure(loadDisplay()); showDisplay(); // the stored resolution and view before the display's settings are applied: a stored 2x or wide view starts the graphics card even from plain display settings (after the panel's code above, which a failing start calls back)
+display.setRendering(renderingOf(enh.settings)); display.configure(loadDisplay()); showDisplay();
+voxelControls = mountVoxelControls(voxels, () => {
+  display.setRendering(renderingOf(enh.settings));
+  voxels.available = display.worldReady();
+  enh.configure(change(enh.settings, 'voxel', voxels.enabled));
+  showGraphics(); enh.reset();
+}); // the stored resolution and view before the display's settings are applied: a stored 2x or wide view starts the graphics card even from plain display settings (after the panel's code above, which a failing start calls back)
+$('render-original').addEventListener('click', e => {
+  voxels.enabled = false; voxels.track = false;
+  enh.reset(); setGraphics(applyPreset(enh.settings, 'original'), e.target);
+  voxelControls.update();
+  $('render-error').hidden = true;
+});
 
 // ---- the vehicle screen in front of the setup menus (menu.vehicle-screen)
 function enterVehicle(first) {
@@ -1299,7 +1340,7 @@ async function load(vfs) {
     $('track').innerHTML = names.map(n => `<option>${n}</option>`).join('');
     state.audio = createAudio(archiveMembers(state.dat)); state.volumes = storedVolumes(); applyVolumes(); state.musicName = null; state.musicScreen = null;
     state.menuArt = loadMenuArt(archiveMembers(state.dat)); state.menuArt.rgba = rgbaPalette(state.menuArt.title.vga); state.hudArt = loadHudArt(archiveMembers(state.dat)); state.mov = parseMov(archiveMembers(state.dat).get('GIG.MOV'));
-    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady(), packs: artInfo.packs, angleSets: artInfo.angleSets }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
+    state.screen = 'menu'; state.menu = createMenu({ ...defaultSettings(Number($('detail').value), true), keys: loadKeys(), sound: loadDevices(), graphics: menuView(enh.settings, { worldReady: display.crtReady(), packs: artInfo.packs, angleSets: artInfo.angleSets, timeOfDay: enh.timeOfDay }), display: displayView(display.settings, { fullscreen: display.fullscreen(), crtReady: display.crtReady() }) }); // the keyboard layout, the sound devices, the graphics and the display settings of this browser (keys.js, sound-devices.js, enhance/settings.js, enhance/display-settings.js)
     state.audio?.setDevices(state.menu.settings.sound);
     startTrack(); enterBoot(); $('stage').hidden = false; display.layout(); setMessage(''); // the display measures its space once the stage is shown; the start-up screens come before the main menu (boot.intro)
     state.last = performance.now(); if (!state.running) { state.running = true; requestAnimationFrame(frame); }
@@ -1389,4 +1430,22 @@ addEventListener('keyup', e => { state.keys.delete(e.code); if (e.code === state
 addEventListener('blur', () => { state.keys.clear(); state.menuHeld = null; state.menuHeldCode = null; }); // a key released while the page is not focused would stay down
 
 // `index.html?debug` exposes the race state and the frame functions, so that a test (or a browser tab the browser throttles) can step the race by hand.
-if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, art, artCache, artInfo, reloadArt, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('debug')) {
+  const forceError = document.createElement('button');
+  forceError.type = 'button'; forceError.textContent = 'Force 3D error (debug)';
+  forceError.addEventListener('click', () => {
+    forceError.blur();
+    if (state.screen !== 'race' || !voxels.active || !display.worldReady()) {
+      forceError.textContent = 'Start a live 3D race first'; return;
+    }
+    const gl = display.canvas.getContext('webgl2'), drawArrays = gl.drawArrays;
+    // Throw from an actual draw, once, rather than calling recovery directly.
+    gl.drawArrays = function (...args) {
+      gl.drawArrays = drawArrays;
+      throw new Error('Forced 3D draw failure (debug fallback check)');
+    };
+    forceError.disabled = true; forceError.textContent = '3D error armed';
+  });
+  document.querySelector('.voxel-controls').append(forceError);
+}
+if (new URLSearchParams(location.search).has('debug')) window.wackyDebug = { index, enh, display, voxels, art, artCache, artInfo, reloadArt, drawEnhanced, startVersus, startDuck, state, tickOnce, draw, startTrack, beginCup, enterBoard, enterCupBoard, enterVehicle, enterRostrum, stepRostrumClock, drawRostrum, enterNameEntry, enterFamous, finishNameEntry, enterNotice, leaveBoard, startCupRace, enterTrialHall, trialResult, showExit, startDemo, enterCard, chooseItem, persistSave, savedGame, raceOver, freeRace, frame };

@@ -84,6 +84,7 @@ export function stepAi(ai, env) {
   const A = RULES(), events = new Set(), racers = ai.racers.map(copy), { entries, last } = ai, humans = env.humans ?? (env.human ? [env.human] : []), contactsBy = humans.map(() => []);
   for (let n = ai.first ?? A.firstRacer; n <= A.lastRacer; n++) { // the humans of a two player race are the racers before `first`
     const r = racers[n];
+    if (r.hit !== 0 || r.crashed) { r.visualAdvance = undefined; r.visualBrakeUntil = 0; }
     if (r.hit !== 0) { racers[n] = stunStep(r, env.tick, env.clock, env.sounds); continue; } // a hit racer does not move, steer or count its states (obj1+0x18cdb)
     let advance = 0;
     if (r.state === A.states.first) { advance = r.slow; r.first--; if (r.first <= 0) r.state = A.states.second; }
@@ -103,6 +104,9 @@ export function stepAi(ai, env) {
       }
     }
     if (env.child && !env.finished) { advance -= kid().slowdown; if (advance <= kid().floor) advance = kid().floor; } // the kid mode slows every computer racer until the finish (obj1+0x18ebb)
+    // Presentation metadata: route advance measures speed without corner/chord artefacts.
+    if (!r.crashed && r.visualAdvance > advance) r.visualBrakeUntil = env.tick + 3; // @math hold a slowdown indication for three simulation ticks
+    r.visualAdvance = advance;
     for (let s = 1; s <= advance; s++) {
       const e = entries[r.entry], p = e.points[r.index];
       r.x = p[0] + offset; r.y = p[1]; r.index++;

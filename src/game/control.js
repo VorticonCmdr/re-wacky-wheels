@@ -114,7 +114,7 @@ export function sampleKeys(car, keys, env) {
 export function controlStep(car0, keys, env) {
   const C = CTL(), M = MODEL(), L = LEAN(), S = C.states, world = env.world, unproven = [];
   const R = env.duck ? CLASS().steerOverride : steerRate(env.detail), half = R >> 1; // the duck game and the two player race steer at 36 whatever the detail (obj1+0x6ce7); // @math half the rate: the drift's amount (obj1+0x6d09, sar 1)
-  let car = { ...car0 };
+  let car = { ...car0, braking: false };
   const surf = surfaceRecord(world, car.surface), N = surf.slide;
   if (car.jump !== 0) { // the jump branch (obj1+0x191e2 to +0x192e8): no controls, the speed word the table's entry 150
     unproven.push('the pit\'s jump (observed as words in car.pit-observed; its picture and the landing are read, not observed)');
@@ -126,6 +126,8 @@ export function controlStep(car0, keys, env) {
     return { car, left: 0, right: 0, speed, unproven };
   }
   const kb = sampleKeys(car, keys, env);
+  // Presentation only: record accepted brake input, including braking at rest.
+  car.braking = Boolean(kb.brake || kb.spin);
   const resting = () => car.anim === S.straight || car.anim === S.lean;
   // the lean and the held counts (obj1+0x192ed to +0x194db)
   if (!kb.right && !kb.left && resting() && car.row !== L.straight) car = { ...car, anim: S.lean, target: L.straight };

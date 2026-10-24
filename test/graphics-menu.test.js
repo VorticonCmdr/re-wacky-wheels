@@ -57,7 +57,10 @@ test('Enter on a line hands its action to the page and stays in the list; the li
 test('the lines change the settings: the preset, a switch, a strength by quarters, the sun by eighths, the default levels', () => {
   const s = resetSettings();
   assert.equal(nextPreset(s).preset, 'enhanced');
-  assert.equal(nextPreset(nextPreset(s)).preset, 'original');
+  assert.equal(nextPreset(nextPreset(s)).preset, 'voxel');
+  assert.equal(nextPreset(nextPreset(nextPreset(s))).preset, 'original');
+  assert.equal(nextPreset(nextPreset(s)).voxel, true);
+  assert.equal(nextPreset(nextPreset(nextPreset(s))).voxel, false);
   assert.equal(nextPreset(change(applyPreset(s, 'enhanced'), 'fog', false)).preset, 'original'); // from Custom back to Original
   assert.equal(toggle(s, 'skidMarks').skidMarks, true);
   assert.equal(toggle(s, 'skidMarks').preset, 'custom');

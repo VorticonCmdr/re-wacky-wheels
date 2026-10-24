@@ -1,3 +1,4 @@
+import { routeDirections } from './angles.js';
 // Smooth motion: the numbers the draw reads that move between two completed ticks (the cameras, the cars' points, the horizon offset, the
 // computer racers and the shots), captured after every tick and blended for the picture shown between them. Gameplay stays on the ticks:
 // nothing here is written back, the sprite frames, sizes and animation words are the state's own, and a jump larger than any move (a race
@@ -22,9 +23,10 @@ function seatEntries(state) {
 export function capture(state, time = 0, sounds = null) {
   const heard = state.versus ? null : sounds;
   return {
-    world: state.world, tick: state.tick, time,
-    seats: seatEntries(state).map(({ car, pre }) => (car ? { cx: pre?.cx ?? car.cx, cy: pre?.cy ?? car.cy, heading: pre?.heading ?? car.heading, tickHeading: pre?.heading ?? car.heading, dir: car.heading, px: car.px, py: car.py, horizon: car.horizon, sky: car.horizon, surface: car.surface, speed: car.speed, jump: car.jump, special: car.special, specialValue: car.specialValue, spark: car.spark, sparkCount: car.sparkCount, skid: skidding(car, heard), crashed: Boolean(car.crashed || car.wrecked) } : null)),
-    racers: (state.ai?.racers ?? []).map(r => ({ x: r.x, y: r.y, crashed: Boolean(r.crashed) })),
+    world: state.world, tick: state.tick, time, intro: Boolean(state.intro),
+    // @math lean index 2 is the centred steering pose.
+    seats: seatEntries(state).map(({ car, pre }) => (car ? { cx: pre?.cx ?? car.cx, cy: pre?.cy ?? car.cy, heading: pre?.heading ?? car.heading, tickHeading: pre?.heading ?? car.heading, dir: car.heading, lean: car.lean ?? 2, px: car.px, py: car.py, horizon: car.horizon, sky: car.horizon, surface: car.surface, speed: car.speed, jump: car.jump, special: car.special, specialValue: car.specialValue, spark: car.spark, sparkCount: car.sparkCount, skid: skidding(car, heard), crashed: Boolean(car.crashed || car.wrecked) } : null)), // @math lean index 2 is the centred steering pose.
+    racers: (state.ai?.racers ?? []).map(r => ({ x: r.x, y: r.y, crashed: Boolean(r.crashed), ...(state.world?.route && state.world?.trig ? { direction: routeDirections(state.world).directions[r.entry] } : {}) })),
     shots: (state.shots ?? []).map(s => (s.active ? { x: s.x, y: s.y } : null)),
   };
 }
@@ -69,7 +71,7 @@ function pointBlend(p, c, t) {
   if (!p || !c) return c;
   const dx = wrap16(c.x - p.x), dy = wrap16(c.y - p.y);
   if (Math.hypot(dx, dy) > MOTION.snapDistance) return c;
-  return { ...c, x: p.x + dx * t, y: p.y + dy * t };
+  return { ...c, x: p.x + dx * t, y: p.y + dy * t, ...(Number.isFinite(p.direction) && Number.isFinite(c.direction) ? { direction: p.direction + turnDelta(p.direction,c.direction)*t } : {}) };
 }
 
 function seatBlend(p, c, t) {
@@ -77,14 +79,15 @@ function seatBlend(p, c, t) {
   const dx = wrap16(c.cx - p.cx), dy = wrap16(c.cy - p.cy), dh = turnDelta(p.heading, c.heading);
   if (Math.hypot(dx, dy) > MOTION.snapDistance || Math.abs(dh) > MOTION.snapTurn) return c; // a discontinuity of the view: shown at once
   const car = pointBlend({ x: p.px, y: p.py }, { x: c.px, y: c.py }, t);
-  return { ...c, cx: p.cx + dx * t, cy: p.cy + dy * t, heading: p.heading + dh * t, px: car.x, py: car.y, horizon: blendHorizon(p.horizon, c.horizon, t), sky: p.sky + (c.sky - p.sky) * t };
+  // @math lean index 2 is the centred steering pose.
+  return { ...c, cx: p.cx + dx * t, cy: p.cy + dy * t, heading: p.heading + dh * t, dir: Number.isFinite(p.dir) && Number.isFinite(c.dir) ? p.dir + turnDelta(p.dir,c.dir)*t : c.dir, lean: lerp(p.lean ?? 2,c.lean ?? 2,t), px: car.x, py: car.y, horizon: blendHorizon(p.horizon, c.horizon, t), sky: p.sky + (c.sky - p.sky) * t }; // @math lean index 2 is the centred steering pose.
 }
 
 // The picture between two snapshots: t = 0 is `prev`, t = 1 is `cur`. Another world or an earlier tick is a new scene: `cur` alone.
 export function blend(prev, cur, t) {
   if (!prev || prev === cur || prev.world !== cur.world || prev.tick > cur.tick || t >= 1) return cur;
   return {
-    world: cur.world, tick: cur.tick, time: lerp(prev.time, cur.time, t),
+    world: cur.world, tick: cur.tick, time: lerp(prev.time, cur.time, t), intro: Boolean(cur.intro || prev.intro),
     seats: cur.seats.map((c, i) => seatBlend(prev.seats[i], c, t)),
     racers: cur.racers.map((c, i) => pointBlend(prev.racers[i], c, t)),
     shots: cur.shots.map((c, i) => pointBlend(prev.shots[i], c, t)),

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve, relative, sep } from 'node:path';
+import { KART_NAMES } from './src/voxel/mesh.js';
 import { attachSignaling } from './src/net/signal-server.js';
 
 // Only the development server exposes the ignored originals. They never enter dist.
@@ -52,7 +53,18 @@ function localSignaling() {
 
 export default defineConfig({
   base: './',
-  plugins: [localGameFiles(), localSignaling(), {
+  plugins: [{
+    name: 'local-voxel-models', apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        const name = new URL(req.url, 'http://localhost').pathname.replace(/^\/__voxels\//, '');
+        if (!new URL(req.url, 'http://localhost').pathname.startsWith('/__voxels/')) return next();
+        if (!KART_NAMES.some(k => name === `${k}-kart.json`)) { res.statusCode = 404; return res.end(); }
+        try { const data = await readFile(resolve('.local/voxel-karts', name)); res.setHeader('Content-Type', 'application/json'); res.end(data); }
+        catch { res.statusCode = 404; res.end(); }
+      });
+    },
+  }, localGameFiles(), localSignaling(), {
     name: 'third-party-notices',
     async generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'THIRD_PARTY_NOTICES.txt', source: await readFile(resolve('THIRD_PARTY_NOTICES.md'), 'utf8') });
