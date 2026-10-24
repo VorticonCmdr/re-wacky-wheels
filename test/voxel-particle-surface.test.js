@@ -2,6 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { particleMaterial,particleSurfaceAt,PARTICLE_SURFACES } from '../src/voxel/particle-surface.js';
 import { openGameFolder } from '../src/vfs/node.js';
+
+const game = await openGameFolder();
+const archiveTest = { skip: game.has('WACKY.DAT') ? false : 'Requires the optional local WACKY.DAT game archive' };
+
 import { loadTrack } from '../src/game/track-data.js';
 import { trackTerrain } from '../src/voxel/terrain.js';
 
@@ -18,8 +22,8 @@ test('each tyre samples its mask region and keeps a stable material across textu
  assert.equal(particleSurfaceAt(world,1024,1024),'snow');assert.equal(particleSurfaceAt(world,1025,1024),'snow');
  assert.equal(particleSurfaceAt(world,1044,1024),'grass');
 });
-test('real track 1 sandy banks and grassy verges produce their respective materials',async()=>{
- const dat=await(await openGameFolder()).open('WACKY.DAT'),world=loadTrack(dat,'1'),terrain=trackTerrain(world),seen=new Set();
+test('real track 1 sandy banks and grassy verges produce their respective materials',archiveTest,async()=>{
+ const dat=await game.open('WACKY.DAT'),world=loadTrack(dat,'1'),terrain=trackTerrain(world),seen=new Set();
  for(let i=0;i<terrain.types.length;i++)if(!terrain.roadCells[i]&&[1,19].includes(terrain.types[i])){
   const x=1024+(i%256)*8+4,z=1024+Math.floor(i/256)*8+4;
   if(terrain.waterAt(x,z))continue;

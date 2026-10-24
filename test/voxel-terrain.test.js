@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { openGameFolder } from '../src/vfs/node.js';
+
+const game = await openGameFolder();
+const archiveTest = { skip: game.has('WACKY.DAT') ? false : 'Requires the optional local WACKY.DAT game archive' };
+
 import { loadTrack } from '../src/game/track-data.js';
 import { classifyLiquids } from '../src/liquids.js';
 import { terrainAt } from '../src/game/surface.js';
@@ -8,8 +12,8 @@ import { routeEntries } from '../src/game/ai.js';
 import { trackTerrain } from '../src/voxel/terrain.js';
 import { waterSurface } from '../src/voxel/water.js';
 
-test('track 1 terrain preserves its road and route, adds exposed relief and keeps gameplay data unchanged',async()=>{
-  const dat=await(await openGameFolder()).open('WACKY.DAT'),world=loadTrack(dat,'1');
+test('track 1 terrain preserves its road and route, adds exposed relief and keeps gameplay data unchanged',archiveTest,async()=>{
+  const dat=await game.open('WACKY.DAT'),world=loadTrack(dat,'1');
   const original=world.tiles.slice(),terrain=trackTerrain(world);
   assert.equal(trackTerrain(world),terrain);
   assert(terrain.mesh.vertices.every(Number.isFinite));assert(terrain.mesh.count>6);
@@ -28,8 +32,8 @@ test('track 1 terrain preserves its road and route, adds exposed relief and keep
 });
 
 
-test('all 42 layouts preserve dry racing routes, bound their terrain, and retain water/red-liquid classification',async()=>{
-  const dat=await(await openGameFolder()).open('WACKY.DAT');
+test('all 42 layouts preserve dry racing routes, bound their terrain, and retain water/red-liquid classification',archiveTest,async()=>{
+  const dat=await game.open('WACKY.DAT');
   for(let n=1;n<=42;n++) {
     const world=loadTrack(dat,String(n)),terrain=trackTerrain(world),liquids=classifyLiquids(world);
     assert(terrain,`track ${n}`);
@@ -48,8 +52,8 @@ test('all 42 layouts preserve dry racing routes, bound their terrain, and retain
   }
 });
 
-test('beach crossings sit just below the road while diving pools stay recessed',async()=>{
- const dat=await(await openGameFolder()).open('WACKY.DAT'),world=loadTrack(dat,'2'),terrain=trackTerrain(world),water=waterSurface(world,terrain);
+test('beach crossings sit just below the road while diving pools stay recessed',archiveTest,async()=>{
+ const dat=await game.open('WACKY.DAT'),world=loadTrack(dat,'2'),terrain=trackTerrain(world),water=waterSurface(world,terrain);
  let shallow=0,deep=0;
  for(let z=1028;z<3072;z+=8)for(let x=1028;x<3072;x+=8){
   if(!terrain.waterAt(x,z))continue;
